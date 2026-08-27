@@ -88,14 +88,25 @@ def run() -> dict:
     model_gib = sum(p.stat().st_size for p in src.glob("*.safetensors")) / 2**30
     have = free_gib()
     log(f"pruned checkpoint {model_gib:.0f} GiB, {have:.0f} GiB free", STAGE)
-    if have < model_gib * 1.1:
+    # Only the part that does not fit in RAM lands on disk, so the requirement is
+    # (model - usable RAM), not the whole model. offload_state_dict=True would write the ENTIRE
+    # state dict out first and does need the full size - that is the difference between needing
+    # ~173 GiB and ~60 GiB here.
+    ram_gib = 0.0
+    with open("/proc/meminfo") as fh:
+        for line in fh:
+            if line.startswith("MemAvailable"):
+                ram_gib = int(line.split()[1]) / 1048576
+                break
+    need = max(model_gib - ram_gib * 0.8, 0) + 15
+    if have < need:
         raise RuntimeError(
-            f"need ~{model_gib*1.1:.0f} GiB free to disk-offload the pruned model, have "
-            f"{have:.0f} GiB. Surgery should have freed the source; check it completed.")
-    log(f"loading with disk offload -> {OFFLOAD}", STAGE)
+            f"need ~{need:.0f} GiB free to offload the part of the model that will not fit in "
+            f"RAM ({model_gib:.0f} GiB model, {ram_gib:.0f} GiB available), have {have:.0f}.")
+    log(f"loading with disk offload -> {OFFLOAD} (need ~{need:.0f} GiB, have {have:.0f})", STAGE)
     model = Glm5NextForConditionalGeneration.from_pretrained(
         src, device_map="auto", dtype="auto",
-        offload_folder=str(OFFLOAD), offload_state_dict=True)
+        offload_folder=str(OFFLOAD), offload_state_dict=False)
     linearize_moe(model)
     tok = AutoTokenizer.from_pretrained(src)
 

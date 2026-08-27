@@ -87,9 +87,18 @@ rows.append((OK, "s06 reads s04b keys", "ratio/experts_kept/gib - all written by
 # ---- s07 --------------------------------------------------------------------------------
 nvfp4_gib = ((ROUTED - MTP_EXPERTS) * (1 - RATIO) * 4.5 / 8 + NONEXP_FP8 + NONEXP_BF16) / 2**30
 after_surgery = free_gib() + src_gb - pruned_gib
-chk(after_surgery > pruned_gib * 1.1, "s07 can disk-offload the pruned model",
-    f"~{after_surgery:.0f} GiB free after surgery vs {pruned_gib*1.1:.0f} GiB needed",
-    f"only ~{after_surgery:.0f} GiB projected free, needs {pruned_gib*1.1:.0f}")
+# accelerate offloads only the part that does not fit in RAM (offload_state_dict=False),
+# so the disk requirement is (model - usable RAM) + margin, not the whole model.
+ram_avail = 0.0
+with open("/proc/meminfo") as _fh:
+    for _l in _fh:
+        if _l.startswith("MemAvailable"):
+            ram_avail = int(_l.split()[1]) / 1048576
+            break
+s07_need = max(pruned_gib - ram_avail * 0.8, 0) + 15
+chk(after_surgery > s07_need, "s07 can offload what will not fit in RAM",
+    f"~{after_surgery:.0f} GiB free after surgery vs ~{s07_need:.0f} GiB needed",
+    f"only ~{after_surgery:.0f} GiB projected, needs ~{s07_need:.0f}")
 chk(nvfp4_gib < 117, "s07 output fits Thor envelope",
     f"~{nvfp4_gib:.0f} GiB < 117 GiB", f"~{nvfp4_gib:.0f} GiB exceeds 117 GiB")
 
