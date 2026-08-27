@@ -15,7 +15,7 @@ Environment=PYTHONUNBUFFERED=1
 Environment=HF_HUB_ENABLE_HF_TRANSFER=0
 Environment=TOKENIZERS_PARALLELISM=false
 # multi-day run; never let a stage be killed for taking too long
-TimeoutStopSec=300
+TimeoutStopSec=900
 
 [Install]
 WantedBy=default.target

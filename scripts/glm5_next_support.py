@@ -44,3 +44,44 @@ def register():
 
     LinearExperts2D._registry[Glm5NextTextExperts] = Glm5NextLinearExperts
     return Glm5NextLinearExperts
+
+
+class _SaliencyDump:
+    """Where raw REAP saliency accumulators get written. Set before building the modifier."""
+    dir = None
+
+
+def saliency_dumping_reap():
+    """REAPPruningModifier that persists raw saliency accumulators before it prunes.
+
+    Stock REAP writes only `report_path` (the retained-expert list at the chosen sparsity),
+    which cannot be re-ranked at a different ratio. Dumping `sum_saliency` and `count` per
+    layer lets the prune-ratio sweep re-derive any ratio from cached scores instead of
+    re-running the calibration pass -- the L3 lever in wiki/95-walltime.md.
+
+    It also preserves the inputs to the quantile-blended saliency A/B: the accumulators are
+    the conditional mean's numerator and denominator.
+    """
+    import torch
+    from pathlib import Path
+    from llmcompressor.modifiers.pruning.reap import REAPPruningModifier
+
+    class SaliencyDumpingREAP(REAPPruningModifier):
+        def on_sequential_epoch_end(self, state, event, **kwargs):
+            d = _SaliencyDump.dir
+            if d:
+                d = Path(d)
+                d.mkdir(parents=True, exist_ok=True)
+                for name, t in list(self._saliency_trackers.items()):
+                    if getattr(t, "sum_saliency", None) is None:
+                        continue
+                    torch.save(
+                        {"layer": name,
+                         "sum_saliency": t.sum_saliency.detach().cpu(),
+                         "count": t.count.detach().cpu(),
+                         "num_experts": t.num_experts},
+                        d / f"{name.replace('.', '__')}.pt",
+                    )
+            return super().on_sequential_epoch_end(state, event, **kwargs)
+
+    return SaliencyDumpingREAP

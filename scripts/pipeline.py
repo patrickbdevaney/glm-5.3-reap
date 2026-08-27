@@ -34,6 +34,7 @@ class Stage:
     name: str
     module: str
     deps: list[str] = field(default_factory=list)
+    soft_deps: list[str] = field(default_factory=list)   # wait for terminal, tolerate failure
     max_attempts: int = 3
     retry_backoff: int = 300          # seconds, doubled each attempt
     needs_gib: float = 0.0
@@ -41,16 +42,19 @@ class Stage:
 
 
 STAGES: list[Stage] = [
-    Stage("s00_smoke",   "stages.s00_smoke",   [],                        max_attempts=2, needs_gib=5),
-    Stage("s02_corpus",  "stages.s02_corpus",  [],                        max_attempts=4, needs_gib=60),
-    Stage("s01_source",  "stages.s01_source",  ["s00_smoke"],             max_attempts=5, needs_gib=320),
-    Stage("s03_saliency","stages.s03_saliency",["s01_source","s02_corpus"],max_attempts=4, needs_gib=60),
-    Stage("s04_sweep",   "stages.s04_sweep",   ["s03_saliency"],          max_attempts=3, needs_gib=20),
-    Stage("s05_surgery", "stages.s05_surgery", ["s04_sweep"],             max_attempts=3, needs_gib=200),
-    Stage("s06_heal",    "stages.s06_heal",    ["s05_surgery"],           max_attempts=3, needs_gib=60),
-    Stage("s07_emit",    "stages.s07_emit",    ["s06_heal"],              max_attempts=3, needs_gib=40),
-    Stage("s08_quantize","stages.s08_quantize",["s07_emit"],              max_attempts=3, needs_gib=120),
-    Stage("s09_document","stages.s09_document",["s08_quantize"],          max_attempts=2, needs_gib=1),
+    Stage("s00_smoke",    "stages.s00_smoke",     [],                          max_attempts=2, needs_gib=5),
+    Stage("s02_corpus",   "stages.s02_corpus",    [],                          max_attempts=4, needs_gib=60),
+    Stage("s01_source",   "stages.s01_source",    ["s00_smoke"],               max_attempts=5, needs_gib=320),
+    Stage("s01b_load",    "stages.s01b_loadcheck",["s01_source"],              max_attempts=2, needs_gib=20),
+    Stage("s03_saliency", "stages.s03_saliency",  ["s01b_load", "s02_corpus"], max_attempts=3, needs_gib=200),
+    Stage("s04_sweep",    "stages.s04_sweep",     ["s03_saliency"],            max_attempts=3, needs_gib=10),
+    # Healing improves the artifact but must never block it. critical=False + soft dep.
+    Stage("s05_heal",     "stages.s05_heal",      ["s04_sweep"],               max_attempts=2,
+          needs_gib=80, critical=False),
+    Stage("s06_emit",     "stages.s06_emit",      ["s04_sweep"],               max_attempts=3,
+          needs_gib=60, soft_deps=["s05_heal"]),
+    Stage("s07_quantize", "stages.s07_quantize",  ["s06_emit"],                max_attempts=3, needs_gib=140),
+    Stage("s08_document", "stages.s08_document",  ["s07_quantize"],            max_attempts=2, needs_gib=1),
 ]
 BY_NAME = {s.name: s for s in STAGES}
 
@@ -88,6 +92,8 @@ def set_status(name: str, st: str, **kw) -> None:
 
 def bump_attempts(name: str) -> int:
     with db() as con:
+        con.execute("INSERT OR IGNORE INTO stages(name,status,attempts) VALUES(?,?,0)",
+                    (name, "pending"))
         con.execute("UPDATE stages SET attempts=attempts+1 WHERE name=?", (name,))
         return con.execute("SELECT attempts FROM stages WHERE name=?", (name,)).fetchone()[0]
 
@@ -99,7 +105,10 @@ def attempts(name: str) -> int:
 
 
 def ready(s: Stage) -> bool:
-    return all(status(d) in TERMINAL_OK for d in s.deps)
+    if not all(status(d) in TERMINAL_OK for d in s.deps):
+        return False
+    # soft deps only need to be *finished*, however they finished
+    return all(status(d) in TERMINAL_OK | {"failed", "blocked"} for d in s.soft_deps)
 
 
 def blocked_forever(s: Stage) -> bool:
@@ -140,7 +149,9 @@ def run_stage(s: Stage) -> bool:
         log(f"FAILED attempt {n}: {type(e).__name__}: {e}", s.name, "ERROR")
         if n >= s.max_attempts:
             set_status(s.name, "failed", finished_at=now(), error=f"{type(e).__name__}: {e}")
-            log(f"exhausted {s.max_attempts} attempts; marking failed", s.name, "ERROR")
+            lvl = "ERROR" if s.critical else "WARN"
+            log(f"exhausted {s.max_attempts} attempts; marking failed"
+                + ("" if s.critical else " (non-critical; pipeline continues)"), s.name, lvl)
         else:
             set_status(s.name, "retry", error=f"{type(e).__name__}: {e}")
             back = s.retry_backoff * (2 ** (n - 1))
