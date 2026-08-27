@@ -11,3 +11,4 @@ state/*.db*
 state/*.json
 __pycache__/
 *.pyc
+state/

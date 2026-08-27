@@ -55,7 +55,10 @@ STAGES: list[Stage] = [
           needs_gib=40, background=True),
     Stage("s04_sweep",    "stages.s04_sweep",     ["s03_saliency"],            max_attempts=3, needs_gib=10),
     # Healing improves the artifact but must never block it. critical=False + soft dep.
-    Stage("s04b_surgery", "stages.s04b_surgery",  ["s04_sweep"],               max_attempts=6,
+    # s04b CONSUMES AND DELETES source shards, so it must not start until staging is
+    # complete. Depending only on s04_sweep let it run alongside a re-download, each
+    # destroying what the other was fetching - the tree went 52 -> 29 of 62.
+    Stage("s04b_surgery", "stages.s04b_surgery",  ["s04_sweep", "s01_source"], max_attempts=6,
           needs_gib=10, background=True),
     Stage("s05_heal",     "stages.s05_heal",      ["s04b_surgery"],            max_attempts=2,
           needs_gib=10, critical=False),
