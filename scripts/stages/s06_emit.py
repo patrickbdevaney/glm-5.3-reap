@@ -11,6 +11,7 @@ than blocking the deliverable, and says so in the model card.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -108,7 +109,14 @@ def run() -> dict:
         if dst.exists():
             continue
         if p.is_file():
-            shutil.copy2(p, dst)
+            # Hardlink, don't copy. The emit directory is the SAME 157 GiB of weights under a
+            # release name; copying doubles peak usage to 314 GiB and left s07 without room to
+            # offload (preflight: "only ~-9 GiB projected, needs ~78"). A hardlink is instant
+            # and costs nothing; fall back to a copy only across filesystems.
+            try:
+                os.link(p, dst)
+            except OSError:
+                shutil.copy2(p, dst)
     healed = ADAPTERS.exists() and any(ADAPTERS.iterdir())
     if healed:
         shutil.copytree(ADAPTERS, EMIT / "adapters", dirs_exist_ok=True)
