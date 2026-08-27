@@ -34,21 +34,82 @@ LEDGER = ROOT / "state" / "surgery_done.json"
 MTP_LAYER = 45
 
 
-def compute_retained(ratio: float) -> dict[str, list[int]]:
+MIN_KEEP_FRAC, MAX_KEEP_FRAC = 0.30, 0.75
+
+
+def _layer_curves():
+    """Per layer: expert order (best first) and the cumulative saliency-mass fraction."""
     import torch
-    retained = {}
+    out = {}
     for f in sorted(SALIENCY.glob("*.pt")):
         d = torch.load(f, weights_only=False)
         c = d["count"].double()
         m = torch.where(c > 0, d["sum_saliency"].double() / c.clamp(min=1),
                         torch.zeros_like(c))
-        n = m.numel()
-        keep = int(round(n * (1 - ratio)))
-        # Never rank an unobserved expert above an observed one: an expert with zero routed
-        # tokens has an undefined mean, not a low one.
-        m = torch.where(c > 0, m, torch.full_like(m, float("-inf")))
-        idx = sorted(torch.argsort(m, descending=True)[:keep].tolist())
-        retained[d["layer"]] = idx
+        # An expert with zero routed tokens has an UNDEFINED mean, not a low one - rank it
+        # last explicitly rather than letting a 0.0 outrank a genuinely weak observed expert.
+        rank_key = torch.where(c > 0, m, torch.full_like(m, float("-inf")))
+        order = torch.argsort(rank_key, descending=True)
+        contrib = (m * c)[order]
+        total = contrib.sum().clamp(min=1e-12)
+        out[d["layer"]] = (order.tolist(), (contrib.cumsum(0) / total).tolist())
+    return out
+
+
+def compute_retained(ratio: float, uniform: bool = False) -> dict[str, list[int]]:
+    """Allocate the expert budget across layers by EQUALISING retained saliency mass.
+
+    Uniform pruning is badly suboptimal on this model. Measured over all 42 MoE layers at 50%:
+    retained saliency mass ranges from 0.491 (layer 35 - literally no better than random
+    pruning, x0.98) to 0.861 (layer 7, x1.72), with 12 layers below 0.60. Spending the same
+    50% everywhere over-prunes the layers that cannot afford it and under-prunes the ones that
+    can.
+
+    So instead: pick the largest fraction f such that giving every layer just enough experts to
+    retain f of its own saliency mass still fits the global budget. Layers that concentrate
+    their mass in few experts give experts up; layers that spread it keep more. This is the
+    non-uniform-allocation idea from EvoESAP/DiEP, but computed analytically from the cached
+    accumulators rather than searched - no extra forward passes, no evolutionary loop.
+
+    Bounded to [30%, 75%] kept per layer so no layer is pushed far outside REAP's validated
+    territory, and top_k reachability is guaranteed.
+    """
+    curves = _layer_curves()
+    if not curves:
+        raise RuntimeError("no saliency available")
+    n_exp = len(next(iter(curves.values()))[0])
+    n_layers = len(curves)
+    budget = int(round(n_exp * (1 - ratio))) * n_layers
+    lo_k = max(int(n_exp * MIN_KEEP_FRAC), 8)
+    hi_k = int(n_exp * MAX_KEEP_FRAC)
+
+    if uniform:
+        per = {L: int(round(n_exp * (1 - ratio))) for L in curves}
+    else:
+        def keeps_for(f):
+            out = {}
+            for L, (_, cum) in curves.items():
+                k = next((i + 1 for i, v in enumerate(cum) if v >= f), n_exp)
+                out[L] = min(max(k, lo_k), hi_k)
+            return out
+
+        lo, hi = 0.0, 1.0
+        per = keeps_for(0.5)
+        for _ in range(60):                       # bisect on the equalised fraction
+            mid = (lo + hi) / 2
+            cand = keeps_for(mid)
+            if sum(cand.values()) > budget:
+                hi = mid
+            else:
+                lo = mid
+                per = cand
+        log(f"non-uniform allocation: equalised retained saliency fraction f={lo:.4f}; "
+            f"experts kept per layer min={min(per.values())} max={max(per.values())} "
+            f"total={sum(per.values())} vs budget {budget}", STAGE)
+
+    retained = {}
+    for L, (order, _) in curves.items():
+        retained[L] = sorted(order[:per[L]])
     return retained
 
 

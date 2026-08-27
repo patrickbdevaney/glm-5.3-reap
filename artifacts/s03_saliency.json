@@ -1,0 +1,17 @@
+{
+  "layers": 42,
+  "minutes": 83.2,
+  "batches": 149,
+  "expert_audit": {
+    "layers": 42,
+    "min_tokens_per_expert": 190.0,
+    "mean_tokens_per_expert": 12666.7,
+    "experts_below_floor": 501,
+    "expert_slots": 12096,
+    "floor": 2000
+  },
+  "sparsity": 0.5,
+  "calib_samples": 256,
+  "max_len": 2048,
+  "path": "stream"
+}
