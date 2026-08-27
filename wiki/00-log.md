@@ -286,3 +286,36 @@ floor of 2,000 tokens requires only `2000 × 288 / 8 ≈ 72,000` tokens *total*;
 512 × 2048 = 1.05M tokens gives ~29k per expert, roughly 14× the floor. If the measured
 per-layer ETA proves too slow, the sample count can be cut substantially before the estimator
 degrades — the stage reports both, so the decision is made from measurement.
+
+### Corpus complete (03:35) — s03 saliency running
+
+| bucket | collected | quota | |
+|---|---:|---:|---|
+| agentic | 2949 | 2949 | ✅ |
+| code | 2580 | 2580 | ✅ |
+| math | 1843 | 1843 | ✅ |
+| science | 1229 | 1229 | ✅ |
+| ballast | 860 | 860 | ✅ |
+| multimodal | 1802 | 1843 | 98% |
+| finance | 686 | 983 | 70% |
+
+**48,283,959 text tokens.** Finance is the one materially short bucket, for the reasons in
+[85](85-corpus-sources.md): two of its best sources are script-based (dead in `datasets` 5.x)
+and DocFinQA overflows Arrow's int32 offsets. It recovered from 245 to 686 once the
+replacement sources were named correctly.
+
+`s03` drew **431 text + 81 image-text = 512** calibration samples and is streaming layers.
+
+### Recipe bugs caught before they could cost hours
+
+Two in `s07`, both found by constructing the objects rather than waiting for the stage:
+
+1. **`config_groups` takes `QuantizationScheme` objects, not `{"scheme": "NVFP4"}` dicts** —
+   pydantic rejects the dict form outright. `preset_name_to_scheme(name, targets=...)` is the
+   correct constructor, and the resolved schemes were verified to be exactly the intended
+   policy: experts 4-bit float / `tensor_group` / **group_size 16** (NVFP4's blocks) with
+   dynamic local activations; attention 8-bit float / channel weights / token-dynamic. `[EST]`
+2. **`device_map="cpu"` cannot work for the pruned model either** — ~156 GiB against 116 GiB of
+   RAM, the same wall that forced streaming in `s03`. By that point surgery has deleted the
+   source as it wrote, so ~300 GiB of disk is free and accelerate can offload. `s07` now
+   measures free space and refuses with a clear message if surgery did not free it.
