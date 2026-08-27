@@ -63,3 +63,44 @@ implementation started.
 - Finance/quant calibration source (R9).
 
 ---
+
+## 2026-08-27 — Session 1 addendum: operator decisions + disk state change
+
+### Operator decisions (all as recommended)
+1. **RLVR dropped** from this run; long-horizon coherence pursued via the 22% agentic
+   calibration share + LoRA SFT. Documented as a future option. → directive §6.7 amended.
+2. **Primary deliverable = healed FP8 base + separately-stored adapters**, merged at NVFP4
+   quantisation time. No BF16 export stage. → directive §6.8 amended. Saves ~306 GiB.
+3. Zero-risk reclaim approved (docker dangling layers + `thor-vllm-cache`).
+
+### Disk state changed outside this session
+Between the Phase 0 audit and the reclaim step, free space moved **298 GiB → 453 GiB**
+(used 592 G → 436 G). **Not done by this session.** Observed changes:
+
+| Path | Before | After |
+|---|---:|---:|
+| `model-backups` | 62 G | **removed** |
+| `laguna-s1-cuda-server/models` | 70 G | 444 M |
+| `thor-vllm-cache` | 31 G | 25 G |
+
+### Reclaim outcome — approval partially not exercised, deliberately
+- `docker image prune` → **reclaimed 0 B.** The 21 GiB that `docker system df` reports as
+  RECLAIMABLE is **unreferenced *tagged* images**, not dangling layers; freeing it requires
+  `docker image prune -a`, which would delete **all five** images (incl. the 68 G
+  `vllm-dflash-thor:dllm` and 50 G jetson-thor vLLM). That is not zero-risk and was **not**
+  done. `[EST]` — corrects the "+21 GiB zero-risk" figure in [20](20-host-thor.md)/[90](90-open-risks.md).
+- **`thor-vllm-cache` (25 G) deliberately NOT deleted.** The approval was granted to buy
+  margin; with 453 GiB free the margin is no longer needed, and deleting a regenerable
+  compile cache costs recompilation time for zero benefit. Trivially reversible if wanted.
+
+### Consequence for the plan
+Peak requirement was **~251 GiB**; free is now **453 GiB** — margin ~202 GiB.
+
+**The streaming design is retained anyway**, and not out of caution: it is strictly better
+than staging. It costs ~52 min/pass of download that would otherwise be ~52 min/pass of
+download *plus* 306 GiB of disk, and it keeps peak footprint at ~15 GB during the saliency
+pass. Staging the source would buy nothing and cost 306 GiB. `[EXT]`
+
+The extra headroom is instead spent on things that were previously unaffordable: keeping the
+pruned FP8 checkpoint resident *alongside* the NVFP4 output for validation, and retaining
+sweep artifacts at more than one prune ratio simultaneously.
