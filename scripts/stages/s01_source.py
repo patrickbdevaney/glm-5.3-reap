@@ -35,7 +35,11 @@ def run() -> dict:
     if have >= EXPECTED_BYTES:
         log(f"source already staged ({have/1e9:.1f} GB); skipping download", STAGE)
     else:
-        need_gib = (EXPECTED_BYTES - have) / 2**30 + 20
+        # Margin of 5 GiB, not 20. Surgery deletes each source shard right after writing its
+        # (roughly half-size) survivors, so free space GROWS through that stage - staging does
+        # not need to leave room for surgery's output. A 20 GiB margin was failing a download
+        # that fits.
+        need_gib = (EXPECTED_BYTES - have) / 2**30 + 5
         if free_gib() < need_gib:
             raise RuntimeError(f"need {need_gib:.0f} GiB free, have {free_gib():.0f}")
         log(f"staging {MODEL_ID}: have {have/1e9:.1f} GB of {EXPECTED_BYTES/1e9:.1f} GB", STAGE)
