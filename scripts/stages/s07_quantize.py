@@ -63,6 +63,7 @@ def run() -> dict:
     from transformers.models.glm5_next import Glm5NextForConditionalGeneration
     from llmcompressor import oneshot
     from llmcompressor.modifiers.quantization import QuantizationModifier
+    from compressed_tensors.quantization import preset_name_to_scheme
     from llmcompressor.modeling.moe.linearize import linearize_moe
     import glm5_next_support
 
@@ -81,22 +82,37 @@ def run() -> dict:
     OFFLOAD.mkdir(parents=True, exist_ok=True)
     glm5_next_support.register()
 
-    log(f"loading pruned checkpoint from {src} (free disk {free_gib():.0f} GiB)", STAGE)
+    # The pruned model is ~156 GiB against 116 GiB of RAM, so it still cannot sit in memory -
+    # but surgery deletes the source as it goes, so by now there is ~300 GiB of free disk and
+    # accelerate can offload. Decide from measured space rather than assuming.
+    model_gib = sum(p.stat().st_size for p in src.glob("*.safetensors")) / 2**30
+    have = free_gib()
+    log(f"pruned checkpoint {model_gib:.0f} GiB, {have:.0f} GiB free", STAGE)
+    if have < model_gib * 1.1:
+        raise RuntimeError(
+            f"need ~{model_gib*1.1:.0f} GiB free to disk-offload the pruned model, have "
+            f"{have:.0f} GiB. Surgery should have freed the source; check it completed.")
+    log(f"loading with disk offload -> {OFFLOAD}", STAGE)
     model = Glm5NextForConditionalGeneration.from_pretrained(
-        src, device_map="cpu", dtype="auto")
+        src, device_map="auto", dtype="auto",
+        offload_folder=str(OFFLOAD), offload_state_dict=True)
     linearize_moe(model)
     tok = AutoTokenizer.from_pretrained(src)
 
+    # config_groups takes QuantizationScheme objects, NOT a {"scheme": "NVFP4"} dict -
+    # pydantic rejects the latter with extra_forbidden. preset_name_to_scheme resolves the
+    # preset and attaches the targets. Verified to yield: experts 4-bit float, tensor_group,
+    # group_size=16 (NVFP4's 16-element blocks) with dynamic local activations; attention
+    # 8-bit float, channel weights, token-dynamic activations.
     recipe = [QuantizationModifier(
         config_groups={
-            "experts_nvfp4": {
-                "targets": ["re:.*mlp\\.experts\\..*", "re:.*shared_experts\\.(gate|up|down)_proj"],
-                "scheme": "NVFP4",
-            },
-            "attention_fp8": {
-                "targets": ["re:.*self_attn\\.(q_a_proj|q_b_proj|kv_a_proj.*|kv_b_proj|o_proj)"],
-                "scheme": "FP8_DYNAMIC",
-            },
+            "experts_nvfp4": preset_name_to_scheme(
+                "NVFP4",
+                targets=["re:.*mlp\\.experts\\..*",
+                         "re:.*shared_experts\\.(gate|up|down)_proj"]),
+            "attention_fp8": preset_name_to_scheme(
+                "FP8_DYNAMIC",
+                targets=["re:.*self_attn\\.(q_a_proj|q_b_proj|kv_a_proj.*|kv_b_proj|o_proj)"]),
         },
         ignore=IGNORE,
     )]
