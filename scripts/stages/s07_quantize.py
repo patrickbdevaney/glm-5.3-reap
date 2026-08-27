@@ -107,7 +107,14 @@ def run() -> dict:
     recipe = [QuantizationModifier(
         config_groups={
             "experts_nvfp4": preset_name_to_scheme(
-                "NVFP4",
+                # NVFP4A16 (weight-only), not NVFP4 (W4A4). W4A4 needs calibration FORWARD
+                # passes to fit activation scales, and this model's KDA layers cost ~13 GiB of
+                # transient memory per 2048-token sequence - the wall that killed stage 3 six
+                # times. Weight-only needs no forwards at all, so the whole class of failure
+                # disappears. The cost is serving throughput, not accuracy: the weights are
+                # identical NVFP4 either way. Activation scales can be fitted later, cheaply,
+                # against the finished 91 GiB checkpoint rather than the 157 GiB one.
+                "NVFP4A16",
                 targets=["re:.*mlp\\.experts\\..*",
                          "re:.*shared_experts\\.(gate|up|down)_proj"]),
             "attention_fp8": preset_name_to_scheme(
@@ -117,14 +124,16 @@ def run() -> dict:
         ignore=IGNORE,
     )]
 
-    ds = _calib()
-    log(f"NVFP4 oneshot: {len(ds) if ds else 0} calibration samples @ {MAX_LEN}", STAGE)
+    # No calibration data: NVFP4A16 weights are a deterministic per-block transform and
+    # FP8_DYNAMIC computes activation scales at runtime. Neither needs a forward pass.
+    ds = None
+    log("NVFP4A16 oneshot: weight-only, no calibration forwards required", STAGE)
     t0 = time.time()
     oneshot(
         model=model,
         dataset=ds,
         recipe=recipe,
-        num_calibration_samples=len(ds) if ds else 0,
+        num_calibration_samples=0,
         max_seq_length=MAX_LEN,
         pipeline="sequential",
         sequential_offload_device="cpu",
