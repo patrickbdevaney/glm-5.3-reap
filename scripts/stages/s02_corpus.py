@@ -207,8 +207,12 @@ def collect_multimodal(quota: int) -> int:
                     pv, thw = b["pixel_values"], b["image_grid_thw"]
                     if pv.ndim != 2 or thw.ndim != 2:
                         continue
+                    # Store pixel_values at the precision the model actually runs at. The
+                    # processor emits float32, which costs ~30 MB/sample and made the shard
+                    # dir 55 GB; bf16 halves that and loses nothing, since the forward pass
+                    # casts to bf16 anyway.
                     buf.append({"input_ids": b["input_ids"][0],
-                                "pixel_values": pv,
+                                "pixel_values": pv.to(torch.bfloat16),
                                 "image_grid_thw": thw})
                     have += 1
                     got += 1
