@@ -96,3 +96,65 @@ This is the same shared-core / thin-periphery structure the multimodal literatur
    for the §3.6 proxies. Never average vision into a text-dominated mean.
 4. Shard, pre-tokenise, and store the corpus once — every sweep and both healing passes reuse it.
 5. `moe_calibrate_all_experts=False` — REAP needs the *real* routing distribution.
+
+---
+
+## Finance / quant / business / econometrics — bucket resolved (R9 closed)
+
+10% of 12,288 samples ≈ **1,229 samples**. All availability and licences verified against the
+HF API on 2026-08-27.
+
+| Sub-share | Purpose | Source | Licence |
+|---:|---|---|---|
+| **25%** | **Long-context financial documents** | **`kensho/DocFinQA`** — 7,437 FinQA questions re-grounded in *full* documents, average context **123k words** (vs <700 in FinQA) | MIT |
+| 20% | Numerical reasoning over filings | `ibm-research/finqa` — 8,281 expert-annotated QA over S&P 500 earnings, joint table+text | CC-BY-4.0 |
+| 15% | Multi-turn / conversational finance | `TheFinAI/flare-convfinqa` — 3,892 conversations, 3.6 turns avg, requires coreference + context tracking | — (verify) |
+| 15% | **Multimodal finance** | `sujet-ai/Sujet-Finance-QA-Vision-100k`, `TheFinAI/FinMR` — financial charts, tables, statements as images | Apache-2.0 / verify |
+| 15% | **Quantitative / program synthesis** | `kensho/bizbench` — 8 quantitative reasoning tasks, financial QA **via program synthesis** | Apache-2.0 |
+| 5% | Hybrid table+text instruction form | `next-tat/tat-llm-instructions` — curated FinQA + TAT-QA + TAT-DQA | CC-BY-4.0 |
+| 5% | Explicit reasoning traces | `TheFinAI/Fino1_Reasoning_Path_FinQA` | CC-BY-4.0 |
+
+### Why this composition, specifically
+
+**`kensho/DocFinQA` is the highest-value single item in the entire corpus plan, and not for a
+finance reason.** It is the only place where a target domain and *genuine long context*
+coincide — 123k-word average context. Every other bucket tops out in the low thousands of
+tokens. GLM-5.3-Flash's whole architectural bet is the 3:1 KDA/full-attention hybrid for
+long-context efficiency, and **long-context behaviour is the one axis on which the
+Kimi-Linear-REAP-30 reference is flat (LongBench v2 36.8 → 37.2)** — i.e. the axis where we
+have a published expectation to hold ourselves to. Without DocFinQA the corpus would barely
+exercise the layers that make this model what it is. `[EXT]`
+
+**`kensho/bizbench` earns its place by being program synthesis.** It is finance expressed as
+*code*, so it routes through both the finance periphery and the code experts. Given that the
+standing-committee/thin-periphery structure means cross-domain samples protect more experts per
+token than single-domain ones, dual-routing samples are disproportionately efficient calibration.
+
+**`Sujet-Finance-QA-Vision-100k` + `FinMR` do double duty.** They protect finance experts *and*
+vision experts in the same forward pass. Both are periphery, both are what pruning erodes first
+(R1, R3), and financial charts/tables are a genuinely distinct visual domain from the
+screenshots and diagrams in the main multimodal bucket.
+
+**`flare-convfinqa` is the finance analogue of the agentic bucket** — multi-turn with
+coreference and context tracking across turns, which is the long-horizon coherence capability
+that lost its dedicated repair stage when RLVR was dropped ([70](70-healing.md)).
+
+### Deliberately rejected
+
+- **`Josephgflowers/Finance-Instruct-500k`** (500k, Apache-2.0) and
+  **`sujet-ai/Sujet-Finance-Instruct-177k`** (177k, Apache-2.0) — large and permissive, but
+  instruction-shallow and skewed easy. The difficulty evidence above is explicit that easy data
+  biases saliency toward superficially-frequent shallow experts, which is the exact failure
+  mode we are trying to avoid. **Size is not the objective; per-expert signal quality is.**
+  Admit at most a token amount as ballast, if at all.
+- **`eloukas/edgar-corpus`** (raw 10-K filings, Apache-2.0) — excellent *long-context* material
+  but unstructured and unreasoned. Hold as a fallback only if DocFinQA proves too small to fill
+  the 25% long-context sub-share.
+- **`TheFinAI/MultiFinBen`** — **gated (401)**. Would have added multilingual finance.
+
+### Residual gap
+
+**Econometrics proper** (time-series inference, causal identification, panel methods) has no
+strong dedicated instruction dataset. Cover it via **arXiv `econ.EM` and `q-fin` slices** folded
+into the 13% hard-science bucket rather than forcing a weak dataset into the finance bucket.
+Minor, and logged rather than papered over. `[OPEN]`
