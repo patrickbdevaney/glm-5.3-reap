@@ -484,3 +484,29 @@ warn. That warning is worth interpreting rather than obeying:
 > So the ranking is robust exactly where it matters and noisy exactly where it does not. The
 > floor stays as a reported metric, not a hard gate, and the warning should be read as "the
 > tail is thin" rather than "the prune is unsafe". `[EXT]`
+
+### A 40 GB optimisation that cost 148 GB of re-download
+
+Earlier I added a `.cache` cleanup to `s01_source`, reclaiming ~40 GB of download staging once
+the 62 shards verified byte-exact. Disk was the binding constraint, so it looked like free money.
+
+**That directory is `snapshot_download`'s resume metadata.** Without it, a later
+`snapshot_download` cannot confirm the local files against the repo, and it resolves the
+disagreement by **deleting them and re-fetching**. When surgery was stopped to switch to
+non-uniform allocation, 10 shards needed re-fetching — and each retry deleted more than it
+pulled: 52 → 42 → 37 → 34. The stage then failed on a disk check that its own deletions had
+caused.
+
+Fix: enumerate the repo, compare each local file against its published size, and fetch only
+genuine mismatches with `hf_hub_download`. A correct file is skipped rather than re-verified
+against metadata that may not exist. The `.cache` cleanup is gone — **40 GB is not worth making
+a 328 GB download non-resumable.** `[EST]`
+
+Recovery also required reclaiming the multimodal corpus (55 GB → 574 MB, keeping 2 shards =
+128 image-text records, comfortably more than the 42 a re-run draws). That is safe now: saliency
+is computed and persisted, and `s07` needs no calibration data at all.
+
+> **Pattern worth noting.** Three of the worst incidents in this project came from *optimisations
+> I added*, not from the original design: dropping the `.cache`, keeping activations on-device
+> because unified memory made copies look wasteful, and auto-publishing artifacts. Each was
+> locally correct and globally wrong. The original naive version worked in all three cases.
