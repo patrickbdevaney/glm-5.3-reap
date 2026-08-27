@@ -41,8 +41,8 @@ permissively-licensed multi-domain corpus that includes real image-text pairs.
 | | |
 |---|---|
 | Base | `zai-org/GLM-5.3-Flash` (MIT, FP8 E4M3, 128x128 block scales) |
-| Experts | 288 -> {288 - int(288*meta['sparsity'])} per layer, top-8 routing unchanged |
-| Params | 321.3B -> {meta.get('pruned_params', 0):,} |
+| Experts | 288 -> {meta.get('experts_kept', '?')} per layer, top-8 routing unchanged |
+| Size | {meta.get('pruned_gib', '?')} GiB (FP8) |
 | Healed | {'yes' if healed else 'NO - healing stage did not complete'} |
 | MTP block | excluded (see below) |
 
@@ -87,8 +87,10 @@ def run() -> dict:
             f"written by stage 3 IS the deliverable ({nv}). Emitting a card for it.", STAGE)
         nvp = Path(nv)
         s3 = json.loads((ARTIFACTS / "s03_saliency.json").read_text())
-        meta = {"sparsity": s3["sparsity"], "pruned_params": s3["pruned_params"],
-                "healed": True, "calib_samples": s3["calib_samples"]}
+        sg = json.loads((ARTIFACTS / "s04b_surgery.json").read_text())
+        meta = {"sparsity": sg["ratio"], "experts_kept": sg["experts_kept"],
+                "pruned_gib": sg["gib"], "healed": True,
+                "calib_samples": s3.get("calib_samples")}
         (nvp / "README.md").write_text(_card(meta))
         (nvp / "reap_metadata.json").write_text(json.dumps(meta, indent=2))
         kv_set("emit_path", str(nvp))
@@ -116,8 +118,10 @@ def run() -> dict:
             STAGE, "WARN")
 
     s3 = json.loads((ARTIFACTS / "s03_saliency.json").read_text())
-    meta = {"sparsity": s3["sparsity"], "pruned_params": s3["pruned_params"],
-            "healed": healed, "calib_samples": s3["calib_samples"]}
+    sg = json.loads((ARTIFACTS / "s04b_surgery.json").read_text())
+    meta = {"sparsity": sg["ratio"], "experts_kept": sg["experts_kept"],
+            "pruned_gib": sg["gib"], "healed": healed,
+            "calib_samples": s3.get("calib_samples")}
     (EMIT / "README.md").write_text(_card(meta))
     (EMIT / "reap_metadata.json").write_text(json.dumps(meta, indent=2))
 
