@@ -159,8 +159,11 @@ def _build_layer(cfg, i, reader, dtype):
         t = reader.get(name)
         s = name[: -len("weight")] + "weight_scale_inv"
         if s in scales:
-            return dequant_fp8_block(t, reader.get(s), dtype=dtype)
-        return t.to(dtype) if t.is_floating_point() else t
+            return dequant_fp8_block(t, reader.get(s), dtype=dtype)   # already a new tensor
+        # copy=True is required: .to(dtype) on a tensor already in that dtype returns SELF,
+        # a view into the shard mmap. The mapping is released after each layer so its page
+        # cache can be reclaimed, and a live view would then be a use-after-unmap.
+        return t.to(dtype, copy=True) if t.is_floating_point() else t.clone()
 
     sd = {}
     experts: dict[int, dict[str, "torch.Tensor"]] = {}
@@ -243,7 +246,8 @@ def run() -> dict:
             if not name.startswith(prefix) or name.endswith("weight_scale_inv"):
                 continue
             t = reader.get(name)
-            sd[name[len(prefix):]] = t.to(DT) if t.is_floating_point() else t
+            sd[name[len(prefix):]] = (t.to(DT, copy=True) if t.is_floating_point()
+                                      else t.clone())
         missing, _ = mod.load_state_dict(sd, strict=False, assign=True)
         real = [m for m in missing if "inv_freq" not in m and "rotary" not in m]
         if real:
@@ -334,6 +338,7 @@ def run() -> dict:
                     STAGE, "WARN")
         SS.set_current_layer(None)
         del layer
+        reader.release()          # tear down shard mmaps so their pages become reclaimable
         gc.collect()
         torch.cuda.empty_cache()
         _reclaim_page_cache()

@@ -102,6 +102,16 @@ class ShardReader:
     def get(self, name: str) -> torch.Tensor:
         return self._f(self.map[name]).get_tensor(name)
 
+    def release(self) -> None:
+        """Close every open shard handle.
+
+        safe_open holds a live mmap of a ~5.3 GB shard. While the mapping exists its faulted-in
+        pages CANNOT be reclaimed - drop_caches is a no-op against them - so keeping all 62
+        handles open accumulates ~306 GB of unreclaimable page cache across the layer sweep.
+        Callers must ensure no returned tensor still views the mapping (see copy=True below).
+        """
+        self._open.clear()
+
     def load_module(self, prefix: str, dtype=torch.bfloat16) -> dict[str, torch.Tensor]:
         """Return {relative_name: tensor}, dequantising any FP8+scale_inv pair."""
         out: dict[str, torch.Tensor] = {}
@@ -114,11 +124,12 @@ class ShardReader:
             t = self.get(n)
             sname = n + "_scale_inv" if not n.endswith(".weight") else n[:-len("weight")] + "weight_scale_inv"
             if sname in scales:
-                t = dequant_fp8_block(t, self.get(sname), dtype=dtype)
-            elif t.dtype in (torch.float8_e4m3fn,):
-                t = t.to(dtype)
+                t = dequant_fp8_block(t, self.get(sname), dtype=dtype)   # already a new tensor
             else:
-                t = t.to(dtype) if t.is_floating_point() else t
+                # copy=True matters: .to(dtype) on a tensor ALREADY in that dtype returns self,
+                # which is a view into the mmap. Releasing the handle under a live view would
+                # be a use-after-unmap, and keeping the handle open is what pins the cache.
+                t = t.to(dtype, copy=True) if t.is_floating_point() else t.clone()
             out[rel] = t
         return out
 
