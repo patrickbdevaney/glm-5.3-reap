@@ -235,3 +235,32 @@ Two correctness details: routers are sliced to the retained set (a router still 
 logits over 144 experts is simply wrong), and an expert with **zero routed tokens is ranked
 `-inf`, not 0** — its conditional mean is *undefined*, not low, and ranking it 0 would let an
 unobserved expert outrank a genuinely weak observed one.
+
+### Corpus build: three more source-level failures
+
+- **Config auto-correction became a hazard.** The self-healing loader substitutes `configs[0]`
+  on a missing config. `nvidia/Nemotron-VLM-Dataset-v2` has **46 configs whose first
+  alphabetically is `wiki_de`** — German Wikipedia *text*. It silently selected that for the
+  vision bucket. Now: explicit configs for all 15 multimodal sources, and substitution only
+  when *no* config was requested; an explicit config that fails to resolve raises. `[EST]`
+- **Script-based datasets are dead.** `datasets` 5.x dropped loading-script support, which
+  removes `ibm-research/finqa`, `dreamerdeo/finqa`, `bigcode/commitpackft` and `ncbi/pubmed`.
+- **`kensho/DocFinQA` overflows Arrow's int32 offsets** on its ~123k-word contexts. Derated
+  rather than dropped — it is still the only genuine long-context source in the corpus.
+
+Bucket weights now deliberately sum to >1 so that failing sources have fallback capacity.
+
+### Corpus state at 03:03
+
+| bucket | have | quota |
+|---|---:|---:|
+| agentic | 2949 | 2949 ✅ |
+| code | 2580 | 2580 ✅ |
+| math | 1843 | 1843 ✅ |
+| science | 1229 | 1229 ✅ |
+| ballast | 860 | 860 ✅ |
+| multimodal | 1104 | 1843 |
+| finance | 245 | 983 |
+
+Multimodal layout verified on disk: `pixel_values (832, 1176)` 2-D, `image_grid_thw (1, 3)`,
+**208 image tokens** in the record's `input_ids`. The R3 defence is real, not nominal.
