@@ -126,13 +126,30 @@ SOURCES: dict[str, list[tuple]] = {
         
     ],
     "finance": [
-        ("kensho/DocFinQA", "default", "train", 0.15, lambda r: _qa(r, ["context", "question"], ["answer", "program"])),
-        ("ChanceFocus/flare-finqa", None, "train", 0.20, lambda r: _qa(r, ["query", "question", "text"], ["answer", "choices"])),
-        ("G4KMU/t2-ragbench", "finqa", "train", 0.15, lambda r: _qa(r, ["question", "context"], ["answer"])),
-        ("sujet-ai/Sujet-Financial-RAG-EN-Dataset", None, "train", 0.10, lambda r: _qa(r, ["question", "context"], ["answer"])),
-        ("kensho/bizbench", "program_synthesis", "train", 0.20, lambda r: _qa(r, ["question", "context"], ["answer", "program"])),
-        ("next-tat/tat-llm-instructions", None, "train", 0.20, lambda r: _qa(r, ["instruction", "input"], ["output", "response"])),
-        ("TheFinAI/Fino1_Reasoning_Path_FinQA", None, "train", 0.15, lambda r: _qa(r, ["Open-ended Verifiable Question", "question"], ["Complex_CoT", "Response", "answer"])),
+        # DocFinQA is dropped, reluctantly: its ~123k-word contexts overflow Arrow's int32
+        # string offsets on every load attempt. t2-ragbench inherits its long-context role -
+        # its FinQA/ConvFinQA/TAT-DQA configs carry document-level context+table+pre_text.
+        # eloukas/edgar-corpus would have been the other long-context fallback but is
+        # script-based, which datasets 5.x no longer supports.
+        ("G4KMU/t2-ragbench", "FinQA", "train", 0.22,
+         lambda r: _qa(r, ["pre_text", "context", "question"], ["original_answer", "program_answer"])),
+        ("G4KMU/t2-ragbench", "ConvFinQA", "train", 0.15,
+         lambda r: _qa(r, ["pre_text", "context", "question"], ["original_answer", "program_answer"])),
+        ("G4KMU/t2-ragbench", "TAT-DQA", "train", 0.13,
+         lambda r: _qa(r, ["pre_text", "context", "question"], ["original_answer", "program_answer"])),
+        ("kensho/bizbench", "default", "train", 0.20,
+         lambda r: _qa(r, ["question", "context"], ["answer", "program"])),
+        ("ChanceFocus/flare-finqa", None, "train", 0.15,
+         lambda r: _qa(r, ["text", "query"], ["answer"])),
+        ("next-tat/tat-llm-instructions", None, "train", 0.15,
+         lambda r: _qa(r, ["instruction", "input"], ["output", "response"])),
+        ("TheFinAI/Fino1_Reasoning_Path_FinQA", None, "train", 0.10,
+         lambda r: _qa(r, ["Open-ended Verifiable Question", "question"],
+                       ["Complex_CoT", "Response", "answer"])),
+        ("TheFinAI/flare-convfinqa", None, "train", 0.10,
+         lambda r: _qa(r, ["text", "query"], ["answer"])),
+        ("sujet-ai/Sujet-Financial-RAG-EN-Dataset", None, "train", 0.08,
+         lambda r: _qa(r, ["context", "question"], [])),
     ],
     "ballast": [
         ("HuggingFaceFW/fineweb-edu", "sample-10BT", "train", 0.50, lambda r: _first(r, "text")),
