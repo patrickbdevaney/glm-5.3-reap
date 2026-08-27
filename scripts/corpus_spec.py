@@ -16,6 +16,8 @@ wiki/80-calibration.md. Summary of the two decisions encoded here:
 """
 from __future__ import annotations
 
+import json
+
 TOTAL_SAMPLES = 12_288
 MAX_TOKENS = 16_384
 HELDOUT_FRACTION = 0.08          # stratified, per bucket, for the section-8 proxies
@@ -50,8 +52,17 @@ def _first(row, *keys):
 
 
 def _messages(row, key="messages"):
-    """Handle both {role,content} and ShareGPT {from,value} turn formats."""
+    """Handle {role,content} and ShareGPT {from,value}, and columns that hold a JSON *string*.
+
+    CoderForge stores its whole trajectory as a JSON string in `messages`; treating that as a
+    list silently yields nothing, which is how 30,000 rows produced zero samples.
+    """
     msgs = row.get(key)
+    if isinstance(msgs, str):
+        try:
+            msgs = json.loads(msgs)
+        except Exception:
+            return None
     if not isinstance(msgs, list):
         return None
     parts = []
@@ -85,7 +96,7 @@ def _qa(row, q_keys, a_keys):
 # Each entry: (hf_id, config, split, weight_within_bucket, text_fn)
 SOURCES: dict[str, list[tuple]] = {
     "agentic": [
-        ("togethercomputer/CoderForge-Preview", "trajectories", "train", 0.30, lambda r: _any_messages(r) or _first(r, "text", "trajectory")),
+        ("togethercomputer/CoderForge-Preview", "trajectories", "filtered_reward1", 0.30, lambda r: _any_messages(r) or _first(r, "text", "trajectory")),
         ("nebius/SWE-rebench", None, "test", 0.20, lambda r: _qa(r, ["problem_statement", "text"], ["patch", "solution"])),
         ("SWE-bench/SWE-smith-trajectories", None, "tool", 0.20, lambda r: _any_messages(r) or _first(r, "text")),
         ("SWE-Gym/SWE-Gym", None, "train", 0.10, lambda r: _qa(r, ["problem_statement"], ["patch"])),
