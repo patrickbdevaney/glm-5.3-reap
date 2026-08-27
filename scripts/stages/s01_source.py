@@ -61,6 +61,16 @@ def run() -> dict:
     assert t["n_routed_experts"] == 288 and t["num_experts_per_tok"] == 8, "config drift"
     assert cfg.get("quantization_config", {}).get("quant_method") == "fp8", "expected FP8 source"
 
+    # snapshot_download leaves resume metadata and staged blobs under .cache inside the
+    # local_dir. Once the shards verify byte-exact, that is ~40 GB of pure waste, and disk is
+    # the binding constraint for the prune stage (R10).
+    cache_dir = DEST / ".cache"
+    if cache_dir.exists():
+        import shutil
+        freed = sum(p.stat().st_size for p in cache_dir.rglob("*") if p.is_file())
+        shutil.rmtree(cache_dir, ignore_errors=True)
+        log(f"reclaimed {freed/1e9:.1f} GB of download staging", STAGE)
+
     metric(STAGE, "source_bytes", total)
     metric(STAGE, "source_shards", len(shards))
     log(f"source staged and verified: {len(shards)} shards, {total/1e9:.1f} GB", STAGE)
