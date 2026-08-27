@@ -44,7 +44,8 @@ class Stage:
 
 
 STAGES: list[Stage] = [
-    Stage("s00_smoke",    "stages.s00_smoke",     [],                          max_attempts=2, needs_gib=5),
+    Stage("s00_smoke",    "stages.s00_smoke",     [],                          max_attempts=2,
+          needs_gib=5, background=True),
     Stage("s02_corpus",   "stages.s02_corpus",    [],                          max_attempts=12,
           needs_gib=60, background=True),
     Stage("s01_source",   "stages.s01_source",    ["s00_smoke"],               max_attempts=8,
@@ -53,20 +54,22 @@ STAGES: list[Stage] = [
           needs_gib=20, background=True),
     Stage("s03_saliency", "stages.s03_saliency",  ["s01b_load", "s02_corpus"], max_attempts=6,
           needs_gib=40, background=True),
-    Stage("s04_sweep",    "stages.s04_sweep",     ["s03_saliency"],            max_attempts=3, needs_gib=10),
+    Stage("s04_sweep",    "stages.s04_sweep",     ["s03_saliency"],            max_attempts=3,
+          needs_gib=10, background=True),
     # Healing improves the artifact but must never block it. critical=False + soft dep.
     # s04b CONSUMES AND DELETES source shards, so it must not start until staging is
     # complete. Depending only on s04_sweep let it run alongside a re-download, each
     # destroying what the other was fetching - the tree went 52 -> 29 of 62.
     Stage("s04b_surgery", "stages.s04b_surgery",  ["s04_sweep", "s01_source"], max_attempts=6,
           needs_gib=10, background=True),
-    Stage("s05_heal",     "stages.s05_heal",      ["s04b_surgery"],            max_attempts=2,
-          needs_gib=10, critical=False),
+    Stage("s05_heal",     "stages.s05_heal",      ["s04b_surgery"],            max_attempts=3,
+          needs_gib=10, critical=False, background=True),
     Stage("s06_emit",     "stages.s06_emit",      ["s04b_surgery"],            max_attempts=3,
-          needs_gib=20, soft_deps=["s05_heal"]),
+          needs_gib=20, soft_deps=["s05_heal"], background=True),
     Stage("s07_quantize", "stages.s07_quantize",  ["s06_emit"],                max_attempts=3,
           needs_gib=100, background=True),
-    Stage("s08_document", "stages.s08_document",  ["s07_quantize"],            max_attempts=2, needs_gib=1),
+    Stage("s08_document", "stages.s08_document",  ["s07_quantize"],            max_attempts=2,
+          needs_gib=1, background=True),
 ]
 BY_NAME = {s.name: s for s in STAGES}
 
