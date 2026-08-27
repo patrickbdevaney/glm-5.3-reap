@@ -1,0 +1,16 @@
+[Unit]
+Description=GLM-5.3 REAP memguard — page-cache reclaim + last-resort stage kill
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/patrickd/glm-5.3-reap
+ExecStart=/usr/bin/env bash /home/patrickd/glm-5.3-reap/scripts/memguard.sh
+Restart=always
+RestartSec=5
+# The guard must never be what the box sacrifices.
+OOMScoreAdjust=-900
+Nice=-5
+
+[Install]
+WantedBy=default.target

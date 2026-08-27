@@ -29,6 +29,24 @@ from common import (ROOT, ARTIFACTS, MODEL_ID, log, metric, kv_get, kv_set,  # n
                     publish, free_gib)
 
 STAGE = "s03_saliency"
+
+
+def _reclaim_page_cache() -> None:
+    """Drop page cache between layers.
+
+    Each layer read faults in ~7 GB of mmap'd shard; across 45 layers that is 306 GB of page
+    cache that is never re-read. Tegra under-reports it in MemAvailable and will not reclaim it
+    fast enough to satisfy a driver allocation, which is how this stage died six times with no
+    oom-kill line in dmesg. Cheap and safe: these are clean file-backed pages.
+    """
+    import subprocess
+    try:
+        subprocess.run(["sync"], timeout=30, check=False)
+        subprocess.run(["sudo", "-n", "sh", "-c", "echo 1 > /proc/sys/vm/drop_caches"],
+                       timeout=30, check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass                 # the memguard service is the backstop
 SRC = ROOT / "source" / "GLM-5.3-Flash"
 CORPUS = ROOT / "corpus" / "shards"
 SALIENCY = ROOT / "artifacts" / "saliency"
@@ -267,6 +285,7 @@ def run() -> dict:
     gc.collect()
     torch.cuda.empty_cache()
 
+    _reclaim_page_cache()
     act_gib = sum(st["hs"].numel() * st["hs"].element_size() for st in states) / 2**30
     log(f"{len(states)} batches prepared, {act_gib:.1f} GiB of activations resident on device "
         f"(unified memory: no host round-trip)", STAGE)
@@ -302,6 +321,7 @@ def run() -> dict:
         del layer
         gc.collect()
         torch.cuda.empty_cache()
+        _reclaim_page_cache()
         el = time.time() - t0
         log(f"layer {li+1}/{tcfg.num_hidden_layers} ({ltype})  elapsed {el/60:.1f} min  "
             f"eta {(el/(li+1))*(tcfg.num_hidden_layers-li-1)/60:.0f} min", STAGE)
