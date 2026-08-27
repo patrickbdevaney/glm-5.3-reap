@@ -125,13 +125,32 @@ def blocked_forever(s: Stage) -> bool:
     return any(status(d) == "failed" for d in s.deps)
 
 
+# Popen children that are never wait()ed become zombies, and os.kill(pid, 0) SUCCEEDS on a
+# zombie because the PID entry survives until it is reaped. That made the orchestrator believe
+# a finished stage was still running and wait on it forever. Read the actual process state.
+_CHILDREN: dict[str, subprocess.Popen] = {}
+
+
+def _reap() -> None:
+    """Non-blocking reap of any child we spawned, so zombies do not accumulate."""
+    for name, p in list(_CHILDREN.items()):
+        if p.poll() is not None:
+            _CHILDREN.pop(name, None)
+    try:
+        while os.waitpid(-1, os.WNOHANG)[0]:
+            pass
+    except (ChildProcessError, OSError):
+        pass
+
+
 def _pid_alive(pid: int | None) -> bool:
     if not pid:
         return False
     try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
+        with open(f"/proc/{pid}/stat") as fh:
+            state = fh.read().rsplit(")", 1)[1].split()[0]
+        return state != "Z"          # zombie is not alive
+    except (FileNotFoundError, ProcessLookupError, IndexError, PermissionError):
         return False
 
 
@@ -155,6 +174,7 @@ def launch_background(s: Stage) -> bool:
              s.name, s.module],
             stdout=fh, stderr=subprocess.STDOUT, start_new_session=True,
             cwd=str(ROOT), env={**os.environ, "PYTHONUNBUFFERED": "1"})
+    _CHILDREN[s.name] = p
     with db() as con:
         con.execute("UPDATE stages SET status='running', started_at=?, pid=? WHERE name=?",
                     (now(), p.pid, s.name))
@@ -220,6 +240,7 @@ def main() -> int:
     kv_set("pipeline_pid", os.getpid())
     idle_polls = 0
     while not _stop:
+        _reap()
         progressed = False
         for s in STAGES:
             if _stop:
