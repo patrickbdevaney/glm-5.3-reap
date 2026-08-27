@@ -158,3 +158,95 @@ that lost its dedicated repair stage when RLVR was dropped ([70](70-healing.md))
 strong dedicated instruction dataset. Cover it via **arXiv `econ.EM` and `q-fin` slices** folded
 into the 13% hard-science bucket rather than forcing a weak dataset into the finance bucket.
 Minor, and logged rather than papered over. `[OPEN]`
+
+---
+
+## FINAL mixture and licence policy (operator-approved 2026-08-27)
+
+### Correction: the "code and math are robust under pruning" claim was over-read from noise
+
+An earlier revision of this plan cut code and maths calibration on the grounds that the
+Kimi-Linear-REAP-30 table showed them robust. **That reading does not survive scrutiny and is
+withdrawn.** `[EST]`
+
+- **AIME25 30.0 → 40.0** was quoted as "+10.0". AIME 2025 has **30 problems** — that is 9 → 12
+  problems. A 3-problem swing on n=30 is **noise**.
+- **LiveCodeBench +2.6, MBPP+ +2.4, HumanEval +0.6, MBPP −0.5** — small-to-moderate benchmarks,
+  plausibly noise in either direction.
+- **FRAMES −3.4** on **824 questions** ≈ 28 questions. **This one is probably real.**
+
+The table therefore supports exactly one conclusion — **stored knowledge erodes** — and does
+**not** establish that code or maths are robust. It is also measured at **30%**, while we target
+**50%**; extrapolating robustness across that gap is the same unsupported move flagged as R2
+everywhere else in this project.
+
+### The criterion is frequency-invariant — share controls variance, not rank
+
+```
+S_j = (1/|X_j|) · Σ_{x ∈ X_j}  g_j(x) · ‖f_j(x)‖₂
+```
+
+The normaliser is `|X_j|`, **the expert's own active-token count**. An expert firing on 0.1% of
+tokens but firing *strongly* scores the same as one firing on 10% equally strongly.
+
+> **A domain's calibration share does not compete for saliency mass and does not systematically
+> down-rank that domain's experts. It controls the *variance* of their estimates.** `[EST — from
+> the criterion's definition]`
+
+Consequences:
+- Under-representation → noisy scores → experts near the prune threshold deleted **at random**.
+- Zero representation → `S_j` undefined/zero → deletion **certain** (risk R3).
+- **Past a sufficiency floor, extra share buys almost nothing.** World-knowledge domains need a
+  floor, not proportional representation; everything above the floor should go to the target
+  capability.
+
+**The mixture is only a prior. The guarantee is the per-expert sample floor** in the L5
+convergence criterion ([95-walltime.md](95-walltime.md)) — the stop condition cannot fire until
+every expert has enough tokens for a low-variance estimate. If 10% science under-samples science
+specialists, the floor catches it and calibration continues.
+
+### Final mixture
+
+Operator intent: **a strong coder/agent that remains empirically knowledgeable about the world** —
+science and bio exist so it is not "a smart coder that is dumb at the real world", not to make it
+a scientist. Code and maths are the product; maths is instrumental to code. Finance is a live
+commercial use case (markets, crypto).
+
+| Share | Bucket | Was | Δ |
+|---:|---|---:|---:|
+| **24%** | Agentic coding trajectories | 22% | +2 |
+| **21%** | Code — multi-lang, systems, CUDA/kernels, IaC, repo-scale | 18% | +3 |
+| **15%** | Math + algorithm/architecture synthesis | 14% | +1 |
+| **15%** | Multimodal | 15% | 0 |
+| **10%** | Hard science + bio/biotech + biomedical literature | 13% | −3 |
+| **8%** | Finance / quant / markets | 10% | −2 |
+| **7%** | General coherence ballast | 8% | −1 |
+
+Code-adjacent (agentic + code + maths) **54% → 60%**. World knowledge 18% — above floor, not
+competing. **Multimodal held at 15%**: R3 is the one risk where failure is *certain* rather than
+probable, and the directive set that share deliberately.
+
+### Licence policy: permissive-only, one corpus
+
+**Reverses the earlier "NC for calibration, never SFT" split.** The two-corpus design in
+[85-corpus-sources.md](85-corpus-sources.md) is **withdrawn**; there is one corpus.
+
+**GLM-5.3-Flash is MIT** — the most permissive licence a frontier base can carry. A derivative
+*can* be MIT; nothing upstream prevents it. That is a real, valuable, and **irreversible**
+property: you cannot un-train a model.
+
+And the NC data buys almost nothing:
+
+| NC source | Permissive replacement | Verdict |
+|---|---|---|
+| `EricLu/SCP-116K` (274K, CC-BY-NC-SA) | `open-thoughts/OpenThoughts3-1.2M` (1.2M, **Apache-2.0**) | replacement **4× larger** |
+| `camel-ai/{physics,chemistry,biology}` (CC-BY-NC) | `TIGER-Lab/MMLU-Pro` (MIT), `jablonkagroup/ChemBench` (MIT), `nvidia/sft_datablend_v1` (CC-BY-4.0) | covered |
+| `osunlp/UGround-V1-Data` (CC-BY-NC-SA) | `xlangai/aguvis-stage2` (Apache-2.0), `TIGER-Lab/VisualWebInstruct` (Apache-2.0) | covered |
+
+**Also dropped: `tattabio/OG` (CC-BY-SA-4.0).** ShareAlike is *worse* than NC for this purpose —
+NC limits how a derivative may be used, SA can dictate what licence the derivative must carry.
+Genomics coverage moves to biomedical literature instead.
+
+**Terms to read during the corpus build** (tagged `other`, not resolvable from the API):
+`bigcode/the-stack-v2-dedup`, `ncbi/pubmed` (NCBI terms), `thoughtworks/agentic-coding-trajectories`,
+`GPUMODE/KernelBook`. `[OPEN]` — cheap to close before ingest, expensive after.
