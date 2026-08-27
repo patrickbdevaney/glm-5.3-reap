@@ -306,8 +306,8 @@ def run() -> dict:
 
     _reclaim_page_cache()
     act_gib = sum(st["hs"].numel() * st["hs"].element_size() for st in states) / 2**30
-    log(f"{len(states)} batches prepared, {act_gib:.1f} GiB of activations resident on device "
-        f"(unified memory: no host round-trip)", STAGE)
+    log(f"{len(states)} batches prepared, {act_gib:.1f} GiB of activations on HOST "
+        f"(reclaimable; device memory here is driver-pinned and is not)", STAGE)
     metric(STAGE, "activation_gib", act_gib)
     if not states:
         raise RuntimeError("no calibration batches could be prepared")

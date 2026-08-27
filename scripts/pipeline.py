@@ -160,11 +160,33 @@ def stage_pid(name: str) -> int | None:
     return row[0] if row and row[0] else None
 
 
+HEAVY_STAGES = {"s03_saliency", "s04b_surgery", "s05_heal", "s07_quantize"}
+_last_launch: dict[str, float] = {}
+RELAUNCH_COOLDOWN_S = 120
+
+
 def launch_background(s: Stage) -> bool:
     """Spawn the stage in its own process. Returns True if it is now running."""
     pid = stage_pid(s.name)
     if _pid_alive(pid):
         return True
+
+    if s.name in HEAVY_STAGES:
+        # Relaunching a memory-heavy stage immediately compounds the failure: the previous
+        # attempt's mmap page cache is still resident, and the new attempt's own mappings stop
+        # it being reclaimed. Wait, then reclaim, then start clean.
+        since = time.time() - _last_launch.get(s.name, 0.0)
+        if since < RELAUNCH_COOLDOWN_S:
+            return False
+        try:
+            subprocess.run(["sync"], timeout=60, check=False)
+            subprocess.run(["sudo", "-n", "sh", "-c", "echo 3 > /proc/sys/vm/drop_caches"],
+                           timeout=60, check=False,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            log("reclaimed page cache before relaunch", s.name)
+        except Exception:
+            pass
+    _last_launch[s.name] = time.time()
     n = bump_attempts(s.name)
     lf = ROOT / "logs" / f"{s.name}.log"
     log(f"START background (attempt {n}/{s.max_attempts}) -> {lf.name}", s.name)
