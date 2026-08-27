@@ -126,8 +126,10 @@ SOURCES: dict[str, list[tuple]] = {
         
     ],
     "finance": [
-        ("kensho/DocFinQA", None, "train", 0.25, lambda r: _qa(r, ["context", "question"], ["answer", "program"])),
-        ("ibm-research/finqa", None, "train", 0.20, lambda r: _qa(r, ["question", "pre_text"], ["answer", "program_re"])),
+        ("kensho/DocFinQA", "default", "train", 0.15, lambda r: _qa(r, ["context", "question"], ["answer", "program"])),
+        ("ChanceFocus/flare-finqa", None, "train", 0.20, lambda r: _qa(r, ["query", "question", "text"], ["answer", "choices"])),
+        ("G4KMU/t2-ragbench", "finqa", "train", 0.15, lambda r: _qa(r, ["question", "context"], ["answer"])),
+        ("sujet-ai/Sujet-Financial-RAG-EN-Dataset", None, "train", 0.10, lambda r: _qa(r, ["question", "context"], ["answer"])),
         ("kensho/bizbench", "program_synthesis", "train", 0.20, lambda r: _qa(r, ["question", "context"], ["answer", "program"])),
         ("next-tat/tat-llm-instructions", None, "train", 0.20, lambda r: _qa(r, ["instruction", "input"], ["output", "response"])),
         ("TheFinAI/Fino1_Reasoning_Path_FinQA", None, "train", 0.15, lambda r: _qa(r, ["Open-ended Verifiable Question", "question"], ["Complex_CoT", "Response", "answer"])),
@@ -142,13 +144,24 @@ SOURCES: dict[str, list[tuple]] = {
 # Multimodal is handled by a separate loader: rows must carry real images, which are pushed
 # through the real processor. Text descriptions of images route like text and protect nothing.
 MM_SOURCES = [
-    ("nvidia/Nemotron-VLM-Dataset-v2", None, "train", 0.30),
-    ("HuggingFaceM4/the_cauldron", "chartqa", "train", 0.15),
-    ("HuggingFaceM4/the_cauldron", "ai2d", "train", 0.10),
-    ("HuggingFaceM4/Docmatix", "zero-shot-exp", "train", 0.15),
-    ("lmms-lab/LLaVA-OneVision-Data", "CLEVR-Math(MathV360K)", "train", 0.10),
-    ("allenai/pixmo-docs", "charts", "train", 0.10),
-    ("xlangai/aguvis-stage2", "guiact-web-single", "train", 0.10),
+    # Configs are EXPLICIT here. Nemotron-VLM-Dataset-v2 has 46 configs of which the first
+    # alphabetically is `wiki_de` - German Wikipedia text. Letting the loader auto-correct a
+    # missing config would silently calibrate the R3-critical bucket on text.
+    ("nvidia/Nemotron-VLM-Dataset-v2", "chartqa_cot", "train", 0.10),
+    ("nvidia/Nemotron-VLM-Dataset-v2", "docvqa_cot", "train", 0.10),
+    ("nvidia/Nemotron-VLM-Dataset-v2", "llava_cot_100k", "train", 0.10),
+    ("nvidia/Nemotron-VLM-Dataset-v2", "infographicsvqa_cot", "train", 0.06),
+    ("nvidia/Nemotron-VLM-Dataset-v2", "plotqa_cot", "train", 0.06),
+    ("nvidia/Nemotron-VLM-Dataset-v2", "fintabnet_cot", "train", 0.05),
+    ("nvidia/Nemotron-VLM-Dataset-v2", "visual_web_instruct_cot", "train", 0.05),
+    ("HuggingFaceM4/the_cauldron", "chartqa", "train", 0.08),
+    ("HuggingFaceM4/the_cauldron", "ai2d", "train", 0.06),
+    ("HuggingFaceM4/the_cauldron", "docvqa", "train", 0.06),
+    ("HuggingFaceM4/Docmatix", "images", "train", 0.08),
+    ("lmms-lab/LLaVA-OneVision-Data", "CLEVR-Math(MathV360K)", "train", 0.05),
+    ("allenai/pixmo-docs", "charts", "train", 0.05),
+    ("xlangai/aguvis-stage2", "guiact-web-single", "train", 0.05),
+    ("ServiceNow/BigDocs-Bench", None, "train", 0.05),
 ]
 
 EXCLUDED = {

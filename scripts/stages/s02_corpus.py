@@ -60,10 +60,16 @@ def _stream(hf_id, config, split):
     except Exception as e:
         msg = str(e)
         if "Config name is missing" in msg or "BuilderConfig" in msg:
+            # Only substitute when NO config was requested. If an explicit config was given and
+            # is wrong, that is a spec error and must fail loudly: Nemotron-VLM-Dataset-v2 has
+            # 46 configs whose first alphabetically is `wiki_de` (German Wikipedia text), and
+            # silently substituting it would have calibrated the vision bucket on text.
+            if config is not None:
+                raise
             cfgs = get_dataset_config_names(hf_id, token=tok)
             if cfgs:
                 config = cfgs[0]
-                log(f"{hf_id}: config auto-corrected to '{config}'", STAGE, "WARN")
+                log(f"{hf_id}: no config given, defaulting to '{config}'", STAGE, "WARN")
         elif "Bad split" not in msg and "Unknown split" not in msg:
             raise
         try:

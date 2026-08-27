@@ -1,7 +1,13 @@
 .venv/
 source/
-logs/*.log
-state/*.db*
+offload/
+corpus/
+output/
+artifacts/saliency/
 artifacts/*.safetensors
+logs/*.log
+logs/*.traceback.log
+state/*.db*
+state/*.json
 __pycache__/
 *.pyc
