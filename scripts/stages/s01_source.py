@@ -52,16 +52,39 @@ def run() -> dict:
         # a file that exists at the right size is simply skipped.
         from huggingface_hub import hf_hub_download
         import requests
-        api_files = requests.get(
-            f"https://huggingface.co/api/models/{MODEL_ID}?blobs=true", timeout=60).json()
+        import time as _t
+
+        def _retry(fn, what, tries=8, base=5):
+            """Transient network failures must not fail a multi-hour stage.
+
+            The link to HF drops intermittently here (observed: CAS reconstruction errors,
+            SSLError on the API itself). Each such blip previously killed the whole stage and
+            burned one of its attempts; retrying the individual operation costs seconds.
+            """
+            for i in range(1, tries + 1):
+                try:
+                    return fn()
+                except Exception as e:
+                    if i == tries:
+                        raise
+                    wait = min(base * 2 ** (i - 1), 120)
+                    log(f"{what}: {type(e).__name__} (try {i}/{tries}), retrying in {wait}s",
+                        STAGE, "WARN")
+                    _t.sleep(wait)
+
+        api_files = _retry(
+            lambda: requests.get(
+                f"https://huggingface.co/api/models/{MODEL_ID}?blobs=true", timeout=120).json(),
+            "repo listing")
         sizes = {f["rfilename"]: f.get("size", 0) for f in api_files["siblings"]}
         wanted = [n for n in sizes if not n.startswith(".")]
         missing = [n for n in wanted
                    if not (DEST / n).exists() or (DEST / n).stat().st_size != sizes[n]]
         log(f"{len(missing)} of {len(wanted)} files missing or wrong size", STAGE)
         for i, name in enumerate(sorted(missing), 1):
-            hf_hub_download(repo_id=MODEL_ID, filename=name, local_dir=str(DEST),
-                            token=hf_token())
+            _retry(lambda n=name: hf_hub_download(repo_id=MODEL_ID, filename=n,
+                                                  local_dir=str(DEST), token=hf_token()),
+                   f"download {name}")
             if i % 5 == 0 or i == len(missing):
                 log(f"fetched {i}/{len(missing)} ({free_gib():.0f} GiB free)", STAGE)
 
