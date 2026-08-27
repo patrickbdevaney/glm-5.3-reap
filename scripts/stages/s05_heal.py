@@ -119,9 +119,16 @@ def run() -> dict:
             g = gains.get(layer_key)
             if g is None:
                 continue
-            t = tensors[name]
-            orig_dtype = t.dtype
-            tensors[name] = (t.to(torch.float32) * g).to(orig_dtype)
+            # Scale the BLOCK SCALE, not the FP8 values. The dequantised weight is
+            # w_fp8 * weight_scale_inv, so scaling the F32 scale is mathematically identical
+            # and exact, whereas round-tripping E4M3 values through float32 and back would
+            # requantise every weight and lose precision on a correction of only a few percent.
+            sname = name[: -len("weight")] + "weight_scale_inv"
+            if sname in tensors:
+                tensors[sname] = (tensors[sname].to(torch.float32) * g)
+            else:
+                t = tensors[name]
+                tensors[name] = (t.to(torch.float32) * g).to(t.dtype)
             applied += 1
             changed = True
         if changed:
