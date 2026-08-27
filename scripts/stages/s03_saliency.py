@@ -57,7 +57,7 @@ TARGET_SPARSITY = float(kv_get("chosen_ratio", 0.50) or 0.50)
 # re-reads. 512 x 2048 x hc_mult(4) x 4096 x 2B ~= 34 GB.
 # REAP's saliency is a conditional mean, so tokens-per-expert governs, not corpus size:
 # 512 x 2048 x 8/288 ~= 29k tokens per expert, far above the 2k sufficiency floor.
-N_CALIB = int(kv_get("n_calib_samples", 512) or 512)
+N_CALIB = int(kv_get("n_calib_samples", 256) or 256)
 MAX_LEN = int(kv_get("calib_max_len", 2048) or 2048)
 BATCH = int(kv_get("calib_batch", 8) or 8)
 MIN_TOKENS_PER_EXPERT = 2_000
@@ -287,14 +287,14 @@ def run() -> dict:
     with torch.no_grad():
         for i in range(0, len(text_rows), BATCH):
             ids, ie = embeds_for(text_rows[i:i + BATCH], None)
-            states.append({"ids": ids, "hs": ie.unsqueeze(2)
-                           .expand(-1, -1, tcfg.hc_mult, -1).contiguous(), "topk": None})
+            states.append({"ids": ids.cpu(), "hs": ie.unsqueeze(2)
+                           .expand(-1, -1, tcfg.hc_mult, -1).contiguous().cpu(), "topk": None})
             del ie
         for rec in mm_rows:
             try:
                 ids, ie = embeds_for(None, rec)
-                states.append({"ids": ids, "hs": ie.unsqueeze(2)
-                               .expand(-1, -1, tcfg.hc_mult, -1).contiguous(),
+                states.append({"ids": ids.cpu(), "hs": ie.unsqueeze(2)
+                               .expand(-1, -1, tcfg.hc_mult, -1).contiguous().cpu(),
                                "topk": None})
                 del ie
             except Exception as e:
@@ -321,18 +321,21 @@ def run() -> dict:
         for st in states:
             try:
                 with torch.no_grad():
-                    hs = st["hs"]
-                    ids = st["ids"]
+                    hs = st["hs"].to(DEV, non_blocking=False)
+                    ids = st["ids"].to(DEV)
                     am = torch.ones(ids.shape[0], ids.shape[1], dtype=torch.bool, device=DEV)
                     pos = torch.arange(ids.shape[1], device=DEV).unsqueeze(0)
-                    topk = st["topk"]
+                    topk = st["topk"].to(DEV) if st["topk"] is not None else None
                     out, topk = layer(hs, attention_mask=am, position_ids=pos,
                                       position_embeddings=None, input_ids=ids,
                                       past_key_values=None, use_cache=False,
                                       prev_topk_indices=topk)
-                    st["hs"] = out
-                    st["topk"] = topk
-                    del hs, out, am, pos
+                    # Back to host immediately. Device memory here is driver-pinned: the
+                    # kernel cannot see, swap or reclaim it, so anything left resident is
+                    # permanently unavailable until the process exits.
+                    st["hs"] = out.cpu()
+                    st["topk"] = topk.cpu() if topk is not None else None
+                    del hs, out, ids, am, pos, topk
             except Exception as e:
                 log(f"layer {li} batch failed ({type(e).__name__}: {str(e)[:160]})",
                     STAGE, "WARN")
@@ -343,8 +346,18 @@ def run() -> dict:
         torch.cuda.empty_cache()
         _reclaim_page_cache()
         el = time.time() - t0
+        avail = 0.0
+        try:
+            with open("/proc/meminfo") as fh:
+                for line in fh:
+                    if line.startswith("MemAvailable"):
+                        avail = int(line.split()[1]) / 1048576
+                        break
+        except OSError:
+            pass
         log(f"layer {li+1}/{tcfg.num_hidden_layers} ({ltype})  elapsed {el/60:.1f} min  "
-            f"eta {(el/(li+1))*(tcfg.num_hidden_layers-li-1)/60:.0f} min", STAGE)
+            f"eta {(el/(li+1))*(tcfg.num_hidden_layers-li-1)/60:.0f} min  "
+            f"avail {avail:.0f} GiB", STAGE)
         SS.dump(SALIENCY)      # checkpoint per layer: a kill costs at most one layer
 
     n = SS.dump(SALIENCY)
