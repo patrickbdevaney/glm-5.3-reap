@@ -1,7 +1,7 @@
 # PLAN.md — GLM-5.3-Flash REAP + Heal
 
 **Derived from** [`research/FINDINGS.md`](research/FINDINGS.md) · depth in [`wiki/`](wiki/README.md)
-**Date:** 2026-08-27 · **Status:** awaiting operator approval before execution
+**Date:** 2026-08-27 (rev. 2) · **Status:** awaiting operator approval before execution
 
 Amendments to the directive already approved by the operator:
 - **§6.7 RLVR — dropped.** Long-horizon coherence pursued via the 22% agentic calibration share + SFT.
@@ -107,11 +107,17 @@ protect. (Pruning is ~2.3× more difficulty-sensitive than quantisation: spend c
 | **15%** | **Multimodal** | `HuggingFaceM4/the_cauldron`, `allenai/pixmo-docs`, `ServiceNow/BigDocs-Bench`, `lmms-lab/multimodal-open-r1-8k-verified` |
 | 14% | Math + algorithm synthesis | `nvidia/Nemotron-PrismMath`, `allenai/tulu-3-sft-personas-math` |
 | 13% | Hard science & engineering | `nvidia/sft_datablend_v1`, arXiv-derived STEM |
-| 10% | Finance / quant / econometrics | **`[OPEN]` — no verified source (R9), resolve before Phase A** |
+| 10% | Finance / quant / business | **`kensho/DocFinQA`** (25%, ~123k-word contexts), `ibm-research/finqa`, `TheFinAI/flare-convfinqa`, `sujet-ai/Sujet-Finance-QA-Vision-100k` + `TheFinAI/FinMR` (multimodal), `kensho/bizbench` (program synthesis), `next-tat/tat-llm-instructions`, `TheFinAI/Fino1_Reasoning_Path_FinQA` — **R9 closed**, see [wiki/80](wiki/80-calibration.md) |
 | 8% | General ballast | `HuggingFaceFW/fineweb-edu` |
 | — | Tool use (into agentic) | `Salesforce/xlam-function-calling-60k`, `arcee-ai/agent-data` |
 
-`nvidia/Nemotron-CC-Math` is **gated (401)** — PrismMath substitutes.
+`nvidia/Nemotron-CC-Math` is **gated (401)** — PrismMath substitutes. `TheFinAI/MultiFinBen`
+is also gated. **Econometrics proper** has no strong dedicated dataset; covered via arXiv
+`econ.EM`/`q-fin` slices inside the 13% hard-science bucket. `[OPEN]`, minor.
+
+Rejected on purpose: `Josephgflowers/Finance-Instruct-500k` and
+`sujet-ai/Sujet-Finance-Instruct-177k` — large and permissive but instruction-shallow and
+easy-skewed, which is precisely the bias the difficulty policy above exists to avoid.
 
 **Hard build requirements**
 1. Multimodal samples are **real image-text pairs through the real processor**, never text descriptions.
@@ -206,24 +212,40 @@ Block-scale search (Four Over Six 2512.02010 / SOAR 2605.12245 / RaZeR 2501.0405
 
 ## 11. Execution order and wall-clock
 
-| # | Stage | Wall-clock `[EXT]` | Gate |
-|---|---|---|---|
-| 0 | **`glm5_next` × llm-compressor smoke test** (R4) — load config, run `get_moe_attrs`, verify collator emits image tokens | **2–6 h** | **Hard gate.** Cheapest possible early failure |
-| 1 | Stage FP8 source (328.3 GB @ 105 MB/s) | **~55 min** | checksum vs HF |
-| 2 | Build calibration corpus *(parallel with 0–1; long pole)* | **1–2 days** | image-token assertion |
-| 3 | Sensitivity probe @ 10–15% + threshold calibration | **8–24 h** | **§8 go/no-go** |
-| 4 | Full saliency pass, both arms, scores cached | **1–2 days** | scores persisted |
-| 5 | Prune-ratio sweep 30/40/50 on cached scores | **4–12 h** | §8 proxies; pick knee |
-| 6 | Surgery at chosen ratio | **2–4 h** | tensor-count + router-width audit |
-| 7 | Layer-local distillation | **1–2 days** | per-layer recon error |
-| 8 | mHC + router full FT, then LoRA SFT | **2–4 days** | held-out proxies |
-| 9 | **Emit healed FP8 + adapters** ← **primary deliverable** | **2–4 h** | |
-| 10 | NVFP4 quantise, sequential onload + disk offload | **8–24 h** | loads on Thor via cutlass |
-| 11 | Document output format (§6.10) | **4 h** | |
+**Revised from 8–14 days to 4–7 days.** Full derivation and per-lever costing in
+[wiki/95-walltime.md](wiki/95-walltime.md). Applied already: **MAXN + `jetson_clocks`**
+(GPU ceiling 1386→1575 MHz, EMC 2750→**4266 MHz**; the memory controller was at 64% of peak on
+a bandwidth-bound workload). Reversible: `sudo nvpmodel -m 1 && sudo jetson_clocks --restore`.
 
-**Total ≈ 8–14 days.** Ranges are wide because *no forward-pass throughput has been measured
-for `glm5_next` on this box* — stage 0 produces the first real number and every estimate
-downstream should be revised from it.
+| # | Stage | Wall-clock | Gate |
+|---|---|---|---|
+| 0 | **`glm5_next` × llm-compressor smoke test + first throughput measurement** | **2–6 h** | **Hard gate.** Cheapest early failure; produces the number every estimate below depends on |
+| 1 | Stage FP8 source (328.3 GB @ 105 MB/s) | ~55 min *(overlapped)* | checksum vs HF |
+| 2 | Build calibration corpus — **build in first-consumed order** | 1–2 d *(overlapped)* | **image-token assertion** |
+| 3 | **Saliency pass** — chunked running mean. Gate off chunk 1 (~5%), then converge-and-stop | **8–24 h** | **§6.3 go/no-go at chunk 1**; stop on Kendall-τ > 0.99 on the bottom-50% set **and** per-expert sample floor |
+| 4 | Sweep **40/50/55** by runtime masking from cached scores (30% not measured — provably over envelope) | **2–3 h** | §8 proxies; pick knee |
+| 5 | **Surgery + layer-local distillation, fused single streaming pass** (teacher streamed one layer at a time) | **12–24 h** | per-layer reconstruction error; tensor-count + router-width audit |
+| 6 | mHC + router full FT, then LoRA SFT on damaged layers | **1–2 d** | held-out domain-stratified proxies |
+| 7 | **Emit healed FP8 + adapters** ← **primary deliverable** | 2–4 h | |
+| 8 | NVFP4 quantise (weights need **no** calibration; only W4A4 activation scales, few hundred samples) | **3–6 h** | loads on Thor via cutlass |
+| 9 | Document output format (§6.10) | 4 h | |
+
+**Total ≈ 4–7 days.**
+
+**Where the confidence sits.** The savings in stages 3, 4, 5 and 8 are *structural* — they
+remove work that was scheduled twice or never needed — and hold regardless of throughput. The
+MAXN gain is measured at the clock level but **unquantified at the workload level; do not bank
+1.55×.** The one saving that could evaporate is converge-and-stop in stage 3: if the per-expert
+sample floor binds late (likely, given routing imbalance concentrates on exactly the rare
+specialists of risk R1), the saliency pass stays near its original length and the total lands
+at the **top** of the 4–7 day range.
+
+**Deliberately off the critical path:** running calibration forwards through **vLLM** instead of
+HF transformers. Potentially 3–10×, but vLLM's fused MoE kernels do not expose the per-expert
+gate values and output norms REAP needs, so it is a real detour. Decide at stage 0 with a
+measured number. Worth doing regardless, cheaply: generate a tuned fused-MoE config for our
+shape (`E=288,N=2048,device_name=NVIDIA_Thor.json`; `E=144` post-prune) — none can exist
+upstream, and it benefits the downstream serving work either way.
 
 ## 12. Checkpointing and resume
 
@@ -239,6 +261,9 @@ Multi-day single-box run; assume interruption.
 - **Saliency scores are the expensive artifact** (~days). Persist to `artifacts/saliency/`
   immediately; every sweep ratio and both arms are then cheap re-rankings. Never recompute.
 - Source checksums retained after deletion so a re-stage can be verified.
+- **Saliency convergence state** (Kendall-τ history, per-expert token counts) logged per
+  chunk, so a resumed run knows how converged it already was rather than restarting the
+  stopping decision.
 - Commit after every stage.
 
 ## 13. Risk register (ordered)
