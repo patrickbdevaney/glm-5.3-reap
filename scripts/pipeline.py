@@ -47,16 +47,16 @@ STAGES: list[Stage] = [
     Stage("s00_smoke",    "stages.s00_smoke",     [],                          max_attempts=2, needs_gib=5),
     Stage("s02_corpus",   "stages.s02_corpus",    [],                          max_attempts=4,
           needs_gib=60, background=True),
-    Stage("s01_source",   "stages.s01_source",    ["s00_smoke"],               max_attempts=5, needs_gib=320),
+    Stage("s01_source",   "stages.s01_source",    ["s00_smoke"],               max_attempts=5, needs_gib=20),
     Stage("s01b_load",    "stages.s01b_loadcheck",["s01_source"],              max_attempts=2, needs_gib=20),
-    Stage("s03_saliency", "stages.s03_saliency",  ["s01b_load", "s02_corpus"], max_attempts=3, needs_gib=200),
+    Stage("s03_saliency", "stages.s03_saliency",  ["s01b_load", "s02_corpus"], max_attempts=3, needs_gib=40),
     Stage("s04_sweep",    "stages.s04_sweep",     ["s03_saliency"],            max_attempts=3, needs_gib=10),
     # Healing improves the artifact but must never block it. critical=False + soft dep.
     Stage("s05_heal",     "stages.s05_heal",      ["s04_sweep"],               max_attempts=2,
-          needs_gib=80, critical=False),
+          needs_gib=10, critical=False),
     Stage("s06_emit",     "stages.s06_emit",      ["s04_sweep"],               max_attempts=3,
-          needs_gib=60, soft_deps=["s05_heal"]),
-    Stage("s07_quantize", "stages.s07_quantize",  ["s06_emit"],                max_attempts=3, needs_gib=140),
+          needs_gib=20, soft_deps=["s05_heal"]),
+    Stage("s07_quantize", "stages.s07_quantize",  ["s06_emit"],                max_attempts=3, needs_gib=100),
     Stage("s08_document", "stages.s08_document",  ["s07_quantize"],            max_attempts=2, needs_gib=1),
 ]
 BY_NAME = {s.name: s for s in STAGES}

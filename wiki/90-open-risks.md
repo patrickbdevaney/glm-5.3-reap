@@ -88,3 +88,47 @@ re-run never re-derive them.
 | 2026-08-27 | **Target 50%, do not exceed without escalation** | Validated ceiling; 30% does not fit, 40% leaves no headroom |
 | 2026-08-27 | **Recommend dropping RLVR from this run** | ~460 days single-stream; pending operator acknowledgement |
 | 2026-08-27 | **Fully fine-tune mHC + routers rather than LoRA them** | 68.4 M params combined; they are the components whose semantics actually changed |
+
+---
+
+## E. R10 — disk cannot hold source + FP8 intermediate simultaneously (found during execution, 2026-08-27)
+
+**The rev-3 storage plan is wrong**, and it is worth recording exactly how, because the error
+was in an assumption that looked safe at the time.
+
+FINDINGS §2 assumed ~453 GiB free (after the unexplained mid-session cleanup) and derived a
+worst-stage peak of ~251 GiB. Two things changed:
+
+1. Free space at the time of measurement already reflected work-in-progress, and settled at
+   **~314 GiB**, not 453.
+2. The pruned FP8 intermediate is **~161 GiB**, not the ~91 GiB an NVFP4 artifact would be.
+
+Actual arithmetic:
+
+| item | GiB |
+|---|---:|
+| free now | 306 |
+| source still to download | −171 |
+| **free once source is staged** | **~135** |
+| pruned FP8 intermediate (50%) | 161 |
+| **shortfall** | **≈ 26** |
+
+The source cannot be deleted to make room, because the model is **mmap-backed by those very
+shards** while it is being pruned — deleting them mid-run corrupts the model.
+
+### Resolution: do not write the FP8 intermediate under disk pressure
+
+The FP8 intermediate exists only as a staging convenience between prune and quantise. Under
+pressure, `s03` prunes in memory, applies the first-moment correction, and **writes NVFP4
+directly** — ~91 GiB, which fits inside 135 GiB with room to spare.
+
+The FP8 artifact is still written when space allows, because it is the more useful thing to
+keep (it is the healed base the deliverable is defined as). The decision is made from measured
+free space at runtime, not assumed.
+
+**Explicitly NOT done:** deleting any model checkpoint, container image, or prior-art directory
+to make room. The directive requires escalation for destructive disk operations, and the
+operator is asleep. `models/DeepSeek-V4-Flash-0731-REAP` (101 GiB, the §7 eval baseline),
+`s5-capture` (80 GiB), the docker images (102 GiB) and `Qwen3.6-35B-A3B-NVFP4` (24 GiB) are all
+untouched. The only reclaim performed was `thor-vllm-cache` (25 GiB), which the operator had
+already approved and which is a regenerable compile cache. `[EST]`

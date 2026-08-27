@@ -7,6 +7,9 @@ Type=simple
 WorkingDirectory=/home/patrickd/glm-5.3-reap
 ExecStart=/home/patrickd/glm-5.3-reap/.venv/bin/python -u /home/patrickd/glm-5.3-reap/scripts/pipeline.py
 # The pipeline is idempotent and resumable: always bring it back.
+# Background stage children are detached (start_new_session) and own their own status.
+# Default KillMode=control-group would kill them on every orchestrator restart.
+KillMode=process
 Restart=always
 RestartSec=60
 StandardOutput=append:/home/patrickd/glm-5.3-reap/logs/pipeline.log
