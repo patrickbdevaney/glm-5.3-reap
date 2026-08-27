@@ -1,0 +1,12 @@
+{
+  "capacity": {
+    "model_gib": 305.8,
+    "ram_total_gib": 122.8,
+    "ram_available_gib": 116.2,
+    "disk_free_gib": 162.4,
+    "fits_in_ram": false,
+    "fits_disk_offload": false,
+    "verdict": "stream"
+  },
+  "winner": "stream"
+}
