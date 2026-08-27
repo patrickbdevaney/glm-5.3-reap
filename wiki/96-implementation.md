@@ -164,3 +164,52 @@ never retained** and the `0.6·mean + 0.4·p99` arm cannot be computed post hoc.
 a modified `_expert_hook` keeping a sketch, plus a second calibration pass. Given arm B is
 unvalidated and the main path was at risk, it was not worth destabilising. Recorded in the
 `s04` artifact verdict so it stays visible.
+
+---
+
+## The residency problem, and why layer streaming is tractable
+
+**Nothing can hold this model.** 314 GB of FP8 weights against 122 GiB of RAM; and once the
+306 GiB source is staged, only ~170 GB of disk remains — not enough for accelerate to
+disk-offload another 328 GB. All three of RAM, VRAM (unified, same 117 GiB) and spare disk are
+individually insufficient.
+
+Two ways out, probed in order by `s01b_load`.
+
+### Path A — mmap-backed CPU placement (probed first)
+
+`from_pretrained(..., device_map="cpu", dtype="auto")` on a **safetensors** checkpoint returns
+tensors *memory-mapped from the file*. Nothing is written, so the pages are clean and the
+kernel evicts them under pressure: a 328 GB model "on CPU" then costs address space rather
+than resident memory, and llm-compressor's sequential pipeline pages in exactly the layer it is
+onloading. `dtype="auto"` is load-bearing — anything that forces an FP8→BF16 conversion turns
+the mapping into a 642 GB copy. `[EXT — plausible, and cheap to test, which is why it is
+probed rather than assumed]`
+
+### Path B — custom layer-streaming saliency (fallback, and confirmed feasible)
+
+Reading `Glm5NextTextModel.forward` settles the question that decides this:
+
+```python
+hidden_states = inputs_embeds.unsqueeze(2).expand(-1, -1, self.config.hc_mult, -1).contiguous()
+for i, decoder_layer in enumerate(self.layers[: self.config.num_hidden_layers]):
+    hidden_states, topk_indices = decoder_layer(hidden_states, attention_mask=..., ...)
+```
+
+**The entire inter-layer state is one tensor plus `topk_indices`.** mHC's four residual streams
+live in the `hc_mult` axis of that single tensor and are manipulated *inside* each decoder
+layer, not across the loop. There is no hidden cross-layer bookkeeping to replicate.
+
+So a custom pass is mechanical: instantiate on `meta`, materialise layer *i*'s weights from the
+mmap'd shards, run `decoder_layer`, accumulate saliency by hook, free, repeat. Peak residency is
+one layer — 7.25 GB FP8, 14.5 GB dequantised — against 117 GiB. `[EST — read from source]`
+
+**Chunk by samples, sweeping all layers per chunk**, rather than the reverse. The `hc_mult=4`
+expansion makes activations 4× larger than intuition suggests: 1,024 samples × 4,096 tokens ×
+4 × 4,096 × 2 B ≈ **137 GB**, which fits in neither RAM nor the remaining disk. Holding
+activations per layer and re-reading them would cost ~6.3 TB of writes at 487 MB/s — hours.
+Re-reading *weights* instead costs 333 GB per chunk at 3.4 GB/s ≈ 98 s, and much of it is
+served from page cache. At 64-sample chunks that is ~26 min of I/O for the whole pass.
+
+**Read is 7× faster than write on this box (3.4 GB/s vs 487 MB/s), so the design principle is:
+re-read weights freely, never re-write activations.**
