@@ -21,13 +21,18 @@
 # reflect who holds the memory.
 set -u
 ROOT="${ROOT:-/home/patrickd/glm-5.3-reap}"
-CACHE_MB="${CACHE_MB:-6000}"      # tier 1: drop page cache below this
+CACHE_MB="${CACHE_MB:-16000}"     # tier 1: drop page cache below this
 # MEASURED 2026-08-27: this workload's healthy plateau during the layer sweep is 2-3 GiB
 # available, because ~105 GiB is mmap page cache the kernel holds but will release under a
 # host allocation. A 4000 MB floor therefore killed perfectly healthy runs. Same reasoning as
 # the DSpark memguard: the floor cannot be set above the plateau, so the LEVEL test is set
 # below it and the SLOPE test catches genuine runaways.
-FLOOR_MB="${FLOOR_MB:-900}"       # tier 2: kill our stage below this
+# MEASURED AGAIN 2026-08-27: a large model load (s07 places 157 GiB across RAM and disk)
+# legitimately drives MemAvailable to a few hundred MB, and the box does not die there - the
+# earlier real collapse was observed at 317 MB with a 1730 MB/s slope. A 900 MB floor killed
+# a healthy s07 at 866 MB. The LEVEL test keeps moving below the observed plateau; the SLOPE
+# test is what actually distinguishes a load from a runaway.
+FLOOR_MB="${FLOOR_MB:-250}"       # tier 2: kill our stage below this
 # A NORMAL MoE layer build legitimately drops ~28 GiB in ~8 s (~3500 MB/s), so a 900 MB/s
 # slope threshold fires on healthy work - it killed a run at 11 GB available doing exactly
 # that. The slope test only earns its place if it is well above normal operation, and the
@@ -37,7 +42,7 @@ DANGER_MB="${DANGER_MB:-4000}"    # slope only counts below this
 BREACHES="${BREACHES:-3}"
 SLOPE_N="${SLOPE_N:-2}"
 POLL_S="${POLL_S:-0.5}"
-DROP_COOLDOWN_S="${DROP_COOLDOWN_S:-20}"
+DROP_COOLDOWN_S="${DROP_COOLDOWN_S:-10}"
 LOG="${LOG:-$ROOT/logs/memguard.log}"
 mkdir -p "$(dirname "$LOG")"
 say(){ echo "[memguard $(date -Is)] $*" >> "$LOG"; }
