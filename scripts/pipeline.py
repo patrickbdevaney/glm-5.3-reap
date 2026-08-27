@@ -45,7 +45,7 @@ class Stage:
 
 STAGES: list[Stage] = [
     Stage("s00_smoke",    "stages.s00_smoke",     [],                          max_attempts=2, needs_gib=5),
-    Stage("s02_corpus",   "stages.s02_corpus",    [],                          max_attempts=4,
+    Stage("s02_corpus",   "stages.s02_corpus",    [],                          max_attempts=12,
           needs_gib=60, background=True),
     Stage("s01_source",   "stages.s01_source",    ["s00_smoke"],               max_attempts=5, needs_gib=20),
     Stage("s01b_load",    "stages.s01b_loadcheck",["s01_source"],              max_attempts=2, needs_gib=20),
