@@ -166,16 +166,15 @@ def _build_layer(cfg, i, reader, dtype):
         return t.to(dtype, copy=True) if t.is_floating_point() else t.clone()
 
     sd = {}
-    experts: dict[int, dict[str, "torch.Tensor"]] = {}
     convs: dict[str, "torch.Tensor"] = {}
+    expert_names: dict[int, dict[str, str]] = {}
     for n in names:
         if n in scales:
             continue
         rel = n[len(prefix):]
         if rel.startswith("mlp.experts."):
             parts = rel.split(".")
-            e = int(parts[2])
-            experts.setdefault(e, {})[parts[3]] = fetch(n)
+            expert_names.setdefault(int(parts[2]), {})[parts[3]] = n
         elif rel.startswith("self_attn.") and "_conv1d." in rel:
             convs[rel.split(".")[1]] = fetch(n)      # q_conv1d / k_conv1d / v_conv1d
         else:
@@ -185,15 +184,32 @@ def _build_layer(cfg, i, reader, dtype):
         order = [convs[k] for k in ("q_conv1d", "k_conv1d", "v_conv1d") if k in convs]
         if order:
             sd["self_attn.conv1d.weight"] = torch.cat(order, dim=0)
+        convs.clear()
 
-    if experts:
-        idx = sorted(experts)
-        gu = torch.stack([torch.cat([experts[e]["gate_proj"], experts[e]["up_proj"]], dim=0)
-                          for e in idx])
-        dn = torch.stack([experts[e]["down_proj"] for e in idx])
+    if expert_names:
+        # Fill preallocated 3D tensors expert by expert, freeing each source as it is consumed.
+        # Building a list of 288 dequantised experts and then torch.stack()-ing it holds THREE
+        # copies at once (dict + list + stack output) - about 44 GB for one MoE layer, which is
+        # what spiked the box to 800 MB available at layer 5.
+        idx = sorted(expert_names)
+        inter = cfg.moe_intermediate_size
+        hidden = cfg.hidden_size
+        gu = torch.empty(len(idx), 2 * inter, hidden, dtype=dtype)
+        dn = torch.empty(len(idx), hidden, inter, dtype=dtype)
+        for j, e in enumerate(idx):
+            names_e = expert_names[e]
+            g = fetch(names_e["gate_proj"])
+            gu[j, :inter].copy_(g)
+            del g
+            u = fetch(names_e["up_proj"])
+            gu[j, inter:].copy_(u)
+            del u
+            d = fetch(names_e["down_proj"])
+            dn[j].copy_(d)
+            del d
         sd["mlp.experts.gate_up_proj"] = gu
         sd["mlp.experts.down_proj"] = dn
-        experts.clear()
+        expert_names.clear()
 
     missing, unexpected = layer.load_state_dict(sd, strict=False, assign=True)
     real_missing = [m for m in missing if "rotary" not in m and "inv_freq" not in m]
