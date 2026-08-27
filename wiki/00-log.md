@@ -446,3 +446,41 @@ launch. Both corrected. `[EST]`
 Down from 7.4 min/layer pre-fix. ETA at that rate is ~60–85 min for the full 45-layer pass.
 Layer 4's jump to 62 GiB available confirms the mechanism: a **host** allocation forces the
 kernel to release the mmap cache that a **driver** allocation cannot.
+
+### First real saliency (14:35, 10 of 42 MoE layers)
+
+| layer | experts fired | tokens/expert (min/med/max) | saliency (min/med/max) |
+|---|---|---|---|
+| 8 | **288/288** | 854 / 7,183 / 216,385 | 0.286 / 0.832 / 4.125 |
+| 9 | **288/288** | 1,478 / 7,165 / 185,030 | 0.306 / 0.792 / 4.115 |
+| 10 | **288/288** | 1,617 / 7,271 / 213,431 | 0.423 / 0.998 / 7.207 |
+| 11 | **288/288** | 1,501 / 7,160 / 216,505 | 0.370 / 0.813 / 3.964 |
+| 12 | **288/288** | 1,203 / 6,918 / 211,927 | 0.379 / 0.885 / 4.430 |
+
+**Every expert in every layer fired.** That is the strongest available evidence that risk R3 did
+not materialise: no expert has an empty active set, so none is deleted merely for being
+invisible, and the multimodal share is doing its job. `[EST]`
+
+**Routing is extremely imbalanced** — a ~250× spread between the rarest and most-used expert
+(854 vs 216,385 tokens). This is the concrete form of the "standing committee plus thin
+periphery" structure the calibration design was built around, measured on this model rather
+than assumed.
+
+### On the 2,000-token sufficiency floor
+
+The rarest experts land at 854–1,617 tokens, below the floor `s03` asserts, so the audit will
+warn. That warning is worth interpreting rather than obeying:
+
+- The floor was set conservatively, before any measurement. For a **mean**, 854 samples gives a
+  standard error around 3% of σ — the estimate itself is tight.
+- What REAP needs is a *ranking*, and with 288 experts spread over roughly 0.3–7.2, adjacent
+  ranks near the median differ by ~2.5%. At 854 tokens those neighbours genuinely cannot be
+  ordered reliably.
+- **But misordering adjacent experts near the threshold costs almost nothing** — they have
+  near-identical saliency, so keeping either is equivalent. The failure that would matter is a
+  genuinely high-saliency expert falling into the bottom half, which needs an error ~10× the
+  standard error and is very unlikely.
+
+> So the ranking is robust exactly where it matters and noisy exactly where it does not. The
+> floor stays as a reported metric, not a hard gate, and the warning should be read as "the
+> tail is thin" rather than "the prune is unsafe". `[EXT]`
