@@ -250,14 +250,14 @@ def run() -> dict:
     with torch.no_grad():
         for i in range(0, len(text_rows), BATCH):
             ids, ie = embeds_for(text_rows[i:i + BATCH], None)
-            states.append({"ids": ids.cpu(), "hs": ie.unsqueeze(2)
-                           .expand(-1, -1, tcfg.hc_mult, -1).contiguous().cpu(), "topk": None})
+            states.append({"ids": ids, "hs": ie.unsqueeze(2)
+                           .expand(-1, -1, tcfg.hc_mult, -1).contiguous(), "topk": None})
             del ie
         for rec in mm_rows:
             try:
                 ids, ie = embeds_for(None, rec)
-                states.append({"ids": ids.cpu(), "hs": ie.unsqueeze(2)
-                               .expand(-1, -1, tcfg.hc_mult, -1).contiguous().cpu(),
+                states.append({"ids": ids, "hs": ie.unsqueeze(2)
+                               .expand(-1, -1, tcfg.hc_mult, -1).contiguous(),
                                "topk": None})
                 del ie
             except Exception as e:
@@ -268,7 +268,8 @@ def run() -> dict:
     torch.cuda.empty_cache()
 
     act_gib = sum(st["hs"].numel() * st["hs"].element_size() for st in states) / 2**30
-    log(f"{len(states)} batches prepared, {act_gib:.1f} GiB of activations resident", STAGE)
+    log(f"{len(states)} batches prepared, {act_gib:.1f} GiB of activations resident on device "
+        f"(unified memory: no host round-trip)", STAGE)
     metric(STAGE, "activation_gib", act_gib)
     if not states:
         raise RuntimeError("no calibration batches could be prepared")
@@ -282,18 +283,18 @@ def run() -> dict:
         for st in states:
             try:
                 with torch.no_grad():
-                    hs = st["hs"].to(DEV, non_blocking=True)
-                    ids = st["ids"].to(DEV)
+                    hs = st["hs"]
+                    ids = st["ids"]
                     am = torch.ones(ids.shape[0], ids.shape[1], dtype=torch.bool, device=DEV)
                     pos = torch.arange(ids.shape[1], device=DEV).unsqueeze(0)
-                    topk = st["topk"].to(DEV) if st["topk"] is not None else None
-                    hs, topk = layer(hs, attention_mask=am, position_ids=pos,
-                                     position_embeddings=None, input_ids=ids,
-                                     past_key_values=None, use_cache=False,
-                                     prev_topk_indices=topk)
-                    st["hs"] = hs.cpu()
-                    st["topk"] = topk.cpu() if topk is not None else None
-                    del hs, ids, am, pos, topk
+                    topk = st["topk"]
+                    out, topk = layer(hs, attention_mask=am, position_ids=pos,
+                                      position_embeddings=None, input_ids=ids,
+                                      past_key_values=None, use_cache=False,
+                                      prev_topk_indices=topk)
+                    st["hs"] = out
+                    st["topk"] = topk
+                    del hs, out, am, pos
             except Exception as e:
                 log(f"layer {li} batch failed ({type(e).__name__}: {str(e)[:160]})",
                     STAGE, "WARN")

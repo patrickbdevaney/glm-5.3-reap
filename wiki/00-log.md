@@ -348,3 +348,24 @@ Re-validated after the fix on a real MoE layer: **3,461 tok/s**, 281/288 experts
 > **Lesson worth keeping:** the sync cost was invisible at validation scale and only appeared at
 > 135 batches. Timing a hot loop at realistic batch counts, not just at correctness scale, would
 > have caught it before the first pass rather than during it.
+
+### A false alarm worth recording: `MemAvailable` under-reports on Tegra
+
+After killing s03, `free` still showed **107 GiB "used" with ~0.5 GiB of total process RSS**,
+`Cached: 347 MB`, `AnonPages: 0.5 GiB`. That reads unambiguously as a driver-level nvmap leak
+from SIGKILLing CUDA processes, and it is why s03 was stopped a second time — `MemAvailable`
+was reporting **350 MB**.
+
+It was not a leak. `echo 3 > /proc/sys/vm/drop_caches` returned the machine to **3 GiB used,
+119 GiB available** instantly. The ~104 GiB was reclaimable page cache from mmap'ing 306 GB of
+source shards, which Tegra's counters were not attributing to `Cached` or `MemAvailable`.
+
+> **On this box, `free` and `MemAvailable` under-report reclaimable mmap-backed cache by ~100 GiB
+> during the streaming pass. Do not treat them as an OOM signal.** The one real OOM
+> (dmesg-confirmed) was caused by running a second 13.8 GiB job concurrently, not by s03's own
+> footprint. `[EST]`
+
+s03 was stopped unnecessarily on this reading. Two changes came out of it anyway, both genuine
+improvements: activations now stay **on device** (Thor's memory is unified, so round-tripping
+them through "host" doubled residency and fragmented the allocator across 135 differently-shaped
+batches for no benefit), and `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` is set.

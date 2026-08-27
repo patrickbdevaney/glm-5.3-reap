@@ -17,6 +17,8 @@ StandardError=append:/home/patrickd/glm-5.3-reap/logs/pipeline.log
 Environment=PYTHONUNBUFFERED=1
 Environment=HF_HUB_ENABLE_HF_TRANSFER=0
 Environment=TOKENIZERS_PARALLELISM=false
+# 135 differently-shaped batches fragment the caching allocator badly.
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # multi-day run; never let a stage be killed for taking too long
 TimeoutStopSec=900
 
