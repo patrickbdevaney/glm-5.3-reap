@@ -1,7 +1,7 @@
 # PLAN.md — GLM-5.3-Flash REAP + Heal
 
 **Derived from** [`research/FINDINGS.md`](research/FINDINGS.md) · depth in [`wiki/`](wiki/README.md)
-**Date:** 2026-08-27 (rev. 2) · **Status:** awaiting operator approval before execution
+**Date:** 2026-08-27 (rev. 4) · **Status:** APPROVED AND EXECUTING — autonomous, under systemd
 
 Amendments to the directive already approved by the operator:
 - **§6.7 RLVR — dropped.** Long-horizon coherence pursued via the 22% agentic calibration share + SFT.
@@ -297,3 +297,58 @@ Multi-day single-box run; assume interruption.
 Stop and report on: any destructive disk operation; exceeding 50% prune; any measurement
 suggesting vision capability loss; anything requiring cloud spend; **and the §8 go/no-go gate
 tripping on disproportionate long-context or reconstruction damage.**
+
+
+---
+
+## 15. Implementation status (rev. 4, 2026-08-27)
+
+Operator authorised full autonomous execution: end-to-end to the finished weights, surviving
+SSH collapse, preserving work at each step, publishing intermediates to HF.
+
+### Running
+`systemd --user` unit `glm53-reap.service`, `Restart=always`, `Linger=yes` so it survives
+logout. State in `state/state.db` (stages / metrics / events / kv). `scripts/status.py` gives a
+one-screen view; `scripts/watch_events.sh` streams significant events.
+
+| Stage | Module | Status |
+|---|---|---|
+| s00_smoke | structural validation, no real weights | ✅ **passed** |
+| s01_source | stage 328.3 GB FP8, resumable | running |
+| s01b_load | probe load strategies against 117 GiB | pending |
+| s02_corpus | build calibration corpus (no deps, parallel) | pending |
+| s03_saliency | REAP saliency + prune, dumps raw accumulators | pending |
+| s04_sweep | re-rank all ratios from cached scores | pending |
+| s05_heal | first-moment correction (**non-critical**) | pending |
+| s06_emit | healed FP8 + adapters ← **deliverable** | pending |
+| s07_quantize | NVFP4 per-component policy | pending |
+| s08_document | tensor-level output format | pending |
+
+### Deviations from rev. 3, and why
+
+1. **Healing narrowed to a first-moment correction.** Gradient healing of a ~165B student
+   against a 117 GiB envelope is not tractable, and the teacher is another 328 GB. Instead
+   `s05` applies a correction derived entirely from cached saliency, with no teacher and no
+   forward pass: REAP keeps the highest-saliency experts, so the pruned layer's expected output
+   is biased high by the ratio of all-expert to retained-expert saliency means; applying that
+   ratio to each retained `down_proj` restores the scale in weight space. Marked non-critical,
+   and `s06` takes it as a **soft dependency** so a failed heal emits the unhealed base rather
+   than blocking the deliverable. **This is a first-moment correction, not distillation, and it
+   does not address R1.**
+2. **Saliency A/B arm B deferred.** The stock tracker accumulates only `sum` and `count`, so
+   per-token quantiles were never retained and `0.6·mean + 0.4·p99` cannot be computed post
+   hoc. Recorded in the `s04` verdict rather than dropped silently.
+3. **MTP block excluded and archived.** transformers does not instantiate layer 45 at all, so
+   the pruning path cannot see it. An absent, documented MTP is recoverable; a half-pruned one
+   is a trap for the downstream spec-decode work. This *closes* R7 rather than tripping it.
+4. **Calibration budget is now measured, not assumed.** REAP's saliency is a conditional mean
+   over each expert's own active set, so tokens-per-expert governs, not corpus size. At 1,024
+   samples × 4,096 tokens each expert already sees ~116k tokens. `s03` asserts
+   `min_tokens_per_expert` against a floor rather than trusting the mixture.
+5. **Path B pre-written.** `scripts/stream_saliency.py` implements layer-streaming saliency for
+   the case where the model cannot be placed at all. Its FP8 block dequantisation is validated
+   against real shards.
+
+### Applied to the box
+`nvpmodel -m 0` (MAXN) + `jetson_clocks` — GPU ceiling 1386→1575 MHz, **EMC 2750→4266 MHz**.
+Revert: `sudo nvpmodel -m 1 && sudo jetson_clocks --restore`.
