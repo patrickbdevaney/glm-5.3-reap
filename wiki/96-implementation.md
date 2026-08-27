@@ -213,3 +213,40 @@ served from page cache. At 64-sample chunks that is ~26 min of I/O for the whole
 
 **Read is 7× faster than write on this box (3.4 GB/s vs 487 MB/s), so the design principle is:
 re-read weights freely, never re-write activations.**
+
+---
+
+## The KDA forward is the memory wall (measured 2026-08-27)
+
+Five distinct memory bugs killed `s03` repeatedly. Four were mine; this one is inherent to the
+architecture's reference implementation, and it is the one that made every run die at **layer 5**.
+
+Layer 5 (index 4) is the first layer that is **both** `linear_attention` (KDA) *and* MoE.
+Layers 0–2 are dense; layer 4 (index 3) is `deepseek_sparse_attention` + MoE and survives.
+
+With a 20 Hz low-water sampler on a single real layer:
+
+| | MemAvailable |
+|---|---|
+| layer 4 (KDA + MoE) built | 101.6 GiB |
+| **after one forward, B=8 × T=2048** | **0.2 GiB** |
+
+**A KDA forward costs ~13 GiB of transient memory per 2048-token sequence, linear in batch.**
+B=8 → ~104 GiB, which matches the observed collapse exactly. DSA attention has no such cost.
+
+Two consequences for the calibration loop:
+
+1. **Batch size is bounded by KDA, not by the MoE weights.** B=2 puts the transient at ~26 GiB
+   against a 13.8 GiB layer and ~11 GiB of host activations — comfortable. B=8 cannot work at
+   T=2048 on a 122 GiB box regardless of anything else.
+2. **Batch *shape* must be constant.** The measurement showed each distinct sequence length
+   reserving a fresh ~13 GiB arena in the caching allocator while repeated shapes cost nothing.
+   Padding every text batch to a fixed `MAX_LEN` (rather than to the per-batch maximum) lets one
+   block serve the whole sweep.
+
+`[EST — measured directly on real weights]`
+
+> This is worth carrying into the downstream serving work: whatever the KDA kernel does at
+> prefill, the reference PyTorch path is ~13 GiB per 2K-token sequence. Any batching decision
+> for the inference server has to respect that, and it is a strong argument for the custom
+> kernel work the directive defers.
