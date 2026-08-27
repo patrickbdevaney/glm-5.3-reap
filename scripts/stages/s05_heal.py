@@ -47,7 +47,13 @@ SALIENCY = ROOT / "artifacts" / "saliency"
 PRUNED = ROOT / "output" / "pruned-fp8"
 ADAPTERS = ROOT / "output" / "adapters"
 
-GAIN_FLOOR, GAIN_CEIL = 0.5, 1.0   # a gain outside this is a bug, not a correction
+# The gain is E[g*||f||] over ALL experts divided by the same over the RETAINED ones, so it
+# is <= 1 by construction (REAP keeps the most salient). A gain ABOVE 1 really would be a bug.
+# The lower bound is not symmetric: under non-uniform allocation a layer whose saliency is
+# concentrated gets pruned hardest, and its retained experts are then far above the layer
+# average - layer 44 keeps 86 of 288 experts and lands at 0.441. That is a large correction,
+# not a wrong one. A 0.5 floor rejected it and would have failed the stage after surgery.
+GAIN_FLOOR, GAIN_CEIL = 0.25, 1.0
 LEDGER = ROOT / "state" / "heal_done.json"
 
 
@@ -91,11 +97,15 @@ def run() -> dict:
     if not gains:
         raise RuntimeError("no per-layer gains computed; saliency accumulators unusable")
 
-    vals = list(gains.values())
+    vals = sorted(gains.values())
     stats = {"layers": len(gains), "skipped": len(skipped),
-             "gain_min": round(min(vals), 4), "gain_max": round(max(vals), 4),
+             "gain_min": round(vals[0], 4), "gain_max": round(vals[-1], 4),
+             "gain_median": round(vals[len(vals) // 2], 4),
              "gain_mean": round(sum(vals) / len(vals), 4)}
     log(f"first-moment gains: {stats}", STAGE)
+    low = sorted(((v, k) for k, v in gains.items()))[:3]
+    log("largest corrections (most-pruned layers): "
+        + ", ".join(f"{k.split('.')[-2]}:{v:.3f}" for v, k in low), STAGE)
 
     out_of_range = [k for k, v in gains.items() if not (GAIN_FLOOR <= v <= GAIN_CEIL)]
     if out_of_range:
