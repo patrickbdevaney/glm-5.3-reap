@@ -193,8 +193,17 @@ def collect_multimodal(quota: int) -> int:
                     n_img = int((b["input_ids"][0] == 154854).sum())
                     if n_img == 0:
                         continue
-                    buf.append({k: v[0] if hasattr(v, "__getitem__") else v
-                                for k, v in b.items()})
+                    # Store shapes EXPLICITLY. pixel_values is (num_patches, feat) and
+                    # image_grid_thw is (num_images, 3) - neither carries a batch dim - so a
+                    # blanket v[0] would keep a single patch out of ~1024 and silently destroy
+                    # every image. The image tokens would still be present, so the R3
+                    # assertion would pass while the pixels were garbage.
+                    pv, thw = b["pixel_values"], b["image_grid_thw"]
+                    if pv.ndim != 2 or thw.ndim != 2:
+                        continue
+                    buf.append({"input_ids": b["input_ids"][0],
+                                "pixel_values": pv,
+                                "image_grid_thw": thw})
                     have += 1
                     got += 1
                 except Exception:
