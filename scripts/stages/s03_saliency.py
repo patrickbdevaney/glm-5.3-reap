@@ -34,9 +34,14 @@ CORPUS = ROOT / "corpus" / "shards"
 SALIENCY = ROOT / "artifacts" / "saliency"
 
 TARGET_SPARSITY = float(kv_get("chosen_ratio", 0.50) or 0.50)
-N_CALIB = int(kv_get("n_calib_samples", 1024) or 1024)
-MAX_LEN = int(kv_get("calib_max_len", 4096) or 4096)
-BATCH = int(kv_get("calib_batch", 8) or 8)
+# Sized so that ALL activations fit in RAM at once, which lets each layer be loaded exactly
+# once instead of once per batch - the difference between ~6 minutes and ~3 hours of weight
+# re-reads. 512 x 2048 x hc_mult(4) x 4096 x 2B ~= 34 GB.
+# REAP's saliency is a conditional mean, so tokens-per-expert governs, not corpus size:
+# 512 x 2048 x 8/288 ~= 29k tokens per expert, far above the 2k sufficiency floor.
+N_CALIB = int(kv_get("n_calib_samples", 512) or 512)
+MAX_LEN = int(kv_get("calib_max_len", 2048) or 2048)
+BATCH = int(kv_get("calib_batch", 4) or 4)
 MIN_TOKENS_PER_EXPERT = 2_000
 DEV = "cuda"
 DT = None  # set at runtime
@@ -88,6 +93,31 @@ def _load_calib():
     return text_rows, mm_rows
 
 
+# transformers applies a checkpoint conversion mapping at load time; building layers by hand
+# means applying it by hand. Source: transformers.conversion_mapping.get_checkpoint_conversion_mapping("glm5_next").
+# Without these, mHC (attn_hc/ffn_hc) and the KDA forget gate silently fail to load - which
+# would leave randomly-initialised weights in the two components most sensitive to pruning.
+_RENAMES = [
+    ("self_attn.f_a_proj.", "self_attn.forget_gate.f_a_proj."),
+    ("self_attn.f_b_proj.", "self_attn.forget_gate.f_b_proj."),
+    ("self_attn.dt_bias", "self_attn.forget_gate.dt_bias"),
+    ("self_attn.A_log", "self_attn.forget_gate.A_log"),
+    ("hc_attn_fn", "attn_hc.fn"),
+    ("hc_attn_base", "attn_hc.base"),
+    ("hc_attn_scale", "attn_hc.scale"),
+    ("hc_ffn_fn", "ffn_hc.fn"),
+    ("hc_ffn_base", "ffn_hc.base"),
+    ("hc_ffn_scale", "ffn_hc.scale"),
+]
+
+
+def _rename(rel: str) -> str:
+    for a, b in _RENAMES:
+        if a in rel:
+            return rel.replace(a, b)
+    return rel
+
+
 def _build_layer(cfg, i, reader, dtype):
     """Materialise decoder layer i from the source shards.
 
@@ -116,6 +146,7 @@ def _build_layer(cfg, i, reader, dtype):
 
     sd = {}
     experts: dict[int, dict[str, "torch.Tensor"]] = {}
+    convs: dict[str, "torch.Tensor"] = {}
     for n in names:
         if n in scales:
             continue
@@ -124,8 +155,15 @@ def _build_layer(cfg, i, reader, dtype):
             parts = rel.split(".")
             e = int(parts[2])
             experts.setdefault(e, {})[parts[3]] = fetch(n)
+        elif rel.startswith("self_attn.") and "_conv1d." in rel:
+            convs[rel.split(".")[1]] = fetch(n)      # q_conv1d / k_conv1d / v_conv1d
         else:
-            sd[rel] = fetch(n)
+            sd[_rename(rel)] = fetch(n)
+
+    if convs:
+        order = [convs[k] for k in ("q_conv1d", "k_conv1d", "v_conv1d") if k in convs]
+        if order:
+            sd["self_attn.conv1d.weight"] = torch.cat(order, dim=0)
 
     if experts:
         idx = sorted(experts)
@@ -206,53 +244,67 @@ def run() -> dict:
         mask, _ = mm_model.get_placeholder_mask(ids, inputs_embeds=ie, image_features=feats)
         return ids, ie.masked_scatter(mask, feats)
 
-    batches = []
-    for i in range(0, len(text_rows), BATCH):
-        batches.append((text_rows[i:i + BATCH], None))
-    for rec in mm_rows:
-        batches.append((None, rec))
-    log(f"{len(batches)} batches ({len(text_rows)} text @ batch {BATCH} + "
-        f"{len(mm_rows)} image-text singly) x {tcfg.num_hidden_layers} layers", STAGE)
+    # ---- build every batch's layer-0 input once, and keep it in RAM -------------------
+    log("preparing activations for all batches (kept in RAM so each layer loads once)", STAGE)
+    states = []
+    with torch.no_grad():
+        for i in range(0, len(text_rows), BATCH):
+            ids, ie = embeds_for(text_rows[i:i + BATCH], None)
+            states.append({"ids": ids.cpu(), "hs": ie.unsqueeze(2)
+                           .expand(-1, -1, tcfg.hc_mult, -1).contiguous().cpu(), "topk": None})
+            del ie
+        for rec in mm_rows:
+            try:
+                ids, ie = embeds_for(None, rec)
+                states.append({"ids": ids.cpu(), "hs": ie.unsqueeze(2)
+                               .expand(-1, -1, tcfg.hc_mult, -1).contiguous().cpu(),
+                               "topk": None})
+                del ie
+            except Exception as e:
+                log(f"image-text sample skipped ({type(e).__name__}: {str(e)[:120]})",
+                    STAGE, "WARN")
+    del visual, mm_model, shell
+    gc.collect()
+    torch.cuda.empty_cache()
 
+    act_gib = sum(st["hs"].numel() * st["hs"].element_size() for st in states) / 2**30
+    log(f"{len(states)} batches prepared, {act_gib:.1f} GiB of activations resident", STAGE)
+    metric(STAGE, "activation_gib", act_gib)
+    if not states:
+        raise RuntimeError("no calibration batches could be prepared")
+
+    # ---- sweep layers: each layer is built ONCE and every batch passes through it --------
     t0 = time.time()
-    for bi, (tb, mb) in enumerate(batches):
-        try:
-            with torch.no_grad():
-                ids, ie = embeds_for(tb, mb)
-                am = create_recurrent_attention_mask(config=tcfg, inputs_embeds=ie,
-                                                     attention_mask=None, past_key_values=None)
-                if am is None:
-                    am = torch.ones(ie.shape[0], ie.shape[1], dtype=torch.bool, device=DEV)
-                am = am.bool()
-                masks = {"deepseek_sparse_attention": am, "linear_attention": am}
-                pos = torch.arange(ie.shape[1], device=DEV).unsqueeze(0)
-                hs = ie.unsqueeze(2).expand(-1, -1, tcfg.hc_mult, -1).contiguous()
-                topk = None
-                for li in range(tcfg.num_hidden_layers):
-                    layer = _build_layer(tcfg, li, reader, DT)
-                    SS.set_current_layer(f"model.language_model.layers.{li}.mlp")
-                    hs, topk = layer(hs, attention_mask=masks[tcfg.layer_types[li]],
-                                     position_ids=pos, position_embeddings=None,
-                                     input_ids=ids, past_key_values=None,
-                                     use_cache=False, prev_topk_indices=topk)
-                    SS.set_current_layer(None)
-                    del layer
-                    gc.collect()
-                    torch.cuda.empty_cache()
-                del hs, ie, ids
-                gc.collect()
-                torch.cuda.empty_cache()
-        except Exception as e:
-            log(f"batch {bi} failed ({type(e).__name__}: {str(e)[:180]}); continuing",
-                STAGE, "WARN")
-            gc.collect()
-            torch.cuda.empty_cache()
-            continue
-        if (bi + 1) % 5 == 0 or bi == 0:
-            el = time.time() - t0
-            log(f"batch {bi+1}/{len(batches)}  elapsed {el/60:.1f} min  "
-                f"eta {(el/(bi+1))*(len(batches)-bi-1)/60:.0f} min", STAGE)
-            SS.dump(SALIENCY)      # checkpoint: a kill costs at most the current batch
+    for li in range(tcfg.num_hidden_layers):
+        layer = _build_layer(tcfg, li, reader, DT)
+        SS.set_current_layer(f"model.language_model.layers.{li}.mlp")
+        ltype = tcfg.layer_types[li]
+        for st in states:
+            try:
+                with torch.no_grad():
+                    hs = st["hs"].to(DEV, non_blocking=True)
+                    ids = st["ids"].to(DEV)
+                    am = torch.ones(ids.shape[0], ids.shape[1], dtype=torch.bool, device=DEV)
+                    pos = torch.arange(ids.shape[1], device=DEV).unsqueeze(0)
+                    topk = st["topk"].to(DEV) if st["topk"] is not None else None
+                    hs, topk = layer(hs, attention_mask=am, position_ids=pos,
+                                     position_embeddings=None, input_ids=ids,
+                                     past_key_values=None, use_cache=False,
+                                     prev_topk_indices=topk)
+                    st["hs"] = hs.cpu()
+                    st["topk"] = topk.cpu() if topk is not None else None
+                    del hs, ids, am, pos, topk
+            except Exception as e:
+                log(f"layer {li} batch failed ({type(e).__name__}: {str(e)[:160]})",
+                    STAGE, "WARN")
+        SS.set_current_layer(None)
+        del layer
+        gc.collect()
+        torch.cuda.empty_cache()
+        el = time.time() - t0
+        log(f"layer {li+1}/{tcfg.num_hidden_layers} ({ltype})  elapsed {el/60:.1f} min  "
+            f"eta {(el/(li+1))*(tcfg.num_hidden_layers-li-1)/60:.0f} min", STAGE)
+        SS.dump(SALIENCY)      # checkpoint per layer: a kill costs at most one layer
 
     n = SS.dump(SALIENCY)
     dt = time.time() - t0
@@ -261,7 +313,7 @@ def run() -> dict:
 
     audit = _audit()
     kv_set("saliency_ready", True)
-    res = {"layers": n, "minutes": round(dt / 60, 1), "batches": len(batches),
+    res = {"layers": n, "minutes": round(dt / 60, 1), "batches": len(states),
            "expert_audit": audit, "sparsity": TARGET_SPARSITY,
            "calib_samples": len(text_rows) + len(mm_rows), "max_len": MAX_LEN,
            "path": "stream"}
