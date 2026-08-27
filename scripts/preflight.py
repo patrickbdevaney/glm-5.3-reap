@@ -89,11 +89,14 @@ nvfp4_gib = ((ROUTED - MTP_EXPERTS) * (1 - RATIO) * 4.5 / 8 + NONEXP_FP8 + NONEX
 after_surgery = free_gib() + src_gb - pruned_gib
 # accelerate offloads only the part that does not fit in RAM (offload_state_dict=False),
 # so the disk requirement is (model - usable RAM) + margin, not the whole model.
+# Size against MemTotal, not MemAvailable. MemAvailable collapses while a stage is mid-load
+# (mmap page cache), which made this check report "needs ~171 GiB" about a stage that had
+# already passed its own check with "need ~78, have 147".
 ram_avail = 0.0
 with open("/proc/meminfo") as _fh:
     for _l in _fh:
-        if _l.startswith("MemAvailable"):
-            ram_avail = int(_l.split()[1]) / 1048576
+        if _l.startswith("MemTotal"):
+            ram_avail = int(_l.split()[1]) / 1048576 * 0.9
             break
 s07_need = max(pruned_gib - ram_avail * 0.8, 0) + 15
 chk(after_surgery > s07_need, "s07 can offload what will not fit in RAM",
