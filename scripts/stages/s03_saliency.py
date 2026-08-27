@@ -117,6 +117,86 @@ def _audit_expert_counts() -> dict:
     return res
 
 
+def _first_moment_gains_inplace(model) -> dict:
+    """Apply the stage-5 first-moment correction directly to the live model.
+
+    Used only on the disk-pressure path, where there is no FP8 checkpoint on disk for stage 5
+    to rewrite. Same derivation: REAP keeps the highest-saliency experts, so the pruned layer's
+    expected output is biased high by the ratio of all-expert to retained-expert saliency means.
+    """
+    import torch
+    retained = json.loads((ARTIFACTS / "reap_retained_experts.json").read_text())
+    gains = {}
+    for f in sorted(SALIENCY.glob("*.pt")):
+        d = torch.load(f, weights_only=False)
+        layer, keep = d["layer"], retained.get(d["layer"])
+        if not keep:
+            continue
+        c, ssum = d["count"].double(), d["sum_saliency"].double()
+        m = torch.where(c > 0, ssum / c.clamp(min=1), torch.zeros_like(ssum))
+        idx = torch.tensor(keep, dtype=torch.long)
+        if c.sum() <= 0 or c[idx].sum() <= 0:
+            continue
+        e_all = float((c * m).sum() / c.sum())
+        e_keep = float((c[idx] * m[idx]).sum() / c[idx].sum())
+        if e_keep > 0 and 0.5 <= e_all / e_keep <= 1.0:
+            gains[layer] = e_all / e_keep
+    applied = 0
+    with torch.no_grad():
+        for lname, g in gains.items():
+            try:
+                mod = model.get_submodule(lname)
+            except AttributeError:
+                continue
+            for ex in getattr(mod, "experts", []):
+                dp = getattr(ex, "down_proj", None)
+                if dp is not None and hasattr(dp, "weight"):
+                    dp.weight.mul_(g)
+                    applied += 1
+    log(f"first-moment correction applied in-memory to {applied} experts "
+        f"across {len(gains)} layers", STAGE)
+    (ROOT / "output" / "adapters").mkdir(parents=True, exist_ok=True)
+    (ROOT / "output" / "adapters" / "first_moment_gains.json").write_text(
+        json.dumps({"gains": gains, "experts_scaled": applied,
+                    "applied": "in-memory during s03 (disk-pressure path, R10)"}, indent=2))
+    return gains
+
+
+def _prune_to_nvfp4_inplace(model, tok) -> str:
+    """Disk-pressure path: correct and quantise in this process, writing only NVFP4."""
+    from llmcompressor import oneshot
+    from llmcompressor.modifiers.quantization import QuantizationModifier
+    import importlib
+    q = importlib.import_module("stages.s07_quantize")
+
+    _first_moment_gains_inplace(model)
+    out = ROOT / "output" / "glm-5.3-flash-reap50-nvfp4"
+    out.mkdir(parents=True, exist_ok=True)
+    log(f"quantising to NVFP4 in-process -> {out}", STAGE)
+    oneshot(
+        model=model,
+        dataset=None,
+        recipe=[QuantizationModifier(
+            config_groups={
+                "experts_nvfp4": {"targets": ["re:.*mlp\\.experts\\..*",
+                                              "re:.*shared_experts\\.(gate|up|down)_proj"],
+                                  "scheme": "NVFP4A16"},
+                "attention_fp8": {"targets": ["re:.*self_attn\\.(q_a_proj|q_b_proj|kv_a_proj.*|kv_b_proj|o_proj)"],
+                                  "scheme": "FP8_DYNAMIC"},
+            },
+            ignore=q.IGNORE)],
+        num_calibration_samples=0,
+        pipeline="sequential",
+        sequential_offload_device="cpu",
+        output_dir=str(out),
+        save_compressed=True,
+    )
+    tok.save_pretrained(str(out))
+    kv_set("nvfp4_path", str(out))
+    log(f"NVFP4 written directly (R10 path): {out}", STAGE)
+    return str(out)
+
+
 def run() -> dict:
     import torch
     from transformers import AutoTokenizer
@@ -179,19 +259,36 @@ def run() -> dict:
     log(f"pruned model params: {n_after:,}", STAGE)
     metric(STAGE, "pruned_params", n_after)
 
-    log(f"saving pruned model to {PRUNED}", STAGE)
-    model.save_pretrained(str(PRUNED), safe_serialization=True)
-    tok.save_pretrained(str(PRUNED))
+    # --- R10: the FP8 intermediate may not fit alongside the mmap-backed source -------------
+    # The source CANNOT be deleted to make room: the model is memory-mapped from those shards
+    # while it is being pruned. So decide from measured free space, not from a plan.
+    est_bytes = sum(p.numel() * p.element_size() for p in model.parameters())
+    est_gib = est_bytes / 2**30
+    have = free_gib()
+    write_fp8 = have > est_gib + 25
+    kv_set("skip_fp8_intermediate", not write_fp8)
+    log(f"pruned checkpoint would be ~{est_gib:.0f} GiB; {have:.0f} GiB free -> "
+        f"{'writing FP8 intermediate' if write_fp8 else 'SKIPPING FP8, going straight to NVFP4 (R10)'}",
+        STAGE, "INFO" if write_fp8 else "WARN")
+
+    if write_fp8:
+        log(f"saving pruned model to {PRUNED}", STAGE)
+        model.save_pretrained(str(PRUNED), safe_serialization=True)
+        tok.save_pretrained(str(PRUNED))
+        out_path = str(PRUNED)
+    else:
+        out_path = _prune_to_nvfp4_inplace(model, tok)
 
     res = {"sparsity": TARGET_SPARSITY, "calib_samples": len(ds),
            "max_len": MAX_LEN, "minutes": round(dt / 60, 1),
            "pruned_params": n_after, "expert_audit": audit,
-           "pruned_path": str(PRUNED)}
+           "wrote_fp8_intermediate": write_fp8,
+           "pruned_path": out_path}
     out = ARTIFACTS / "s03_saliency.json"
     out.write_text(json.dumps(res, indent=2, default=str))
     publish(out, "artifacts", "stage03/s03_saliency.json", stage=STAGE)
     publish(ARTIFACTS / "reap_retained_experts.json", "artifacts",
             "stage03/reap_retained_experts.json", stage=STAGE)
     publish(SALIENCY, "saliency", "raw", stage=STAGE)
-    kv_set("pruned_model_path", str(PRUNED))
+    kv_set("pruned_model_path", out_path)
     return res

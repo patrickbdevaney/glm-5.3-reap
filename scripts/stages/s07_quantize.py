@@ -66,6 +66,14 @@ def run() -> dict:
     from llmcompressor.modeling.moe.linearize import linearize_moe
     import glm5_next_support
 
+    if kv_get("skip_fp8_intermediate", False):
+        nv = Path(kv_get("nvfp4_path", str(OUT)))
+        total = sum(p.stat().st_size for p in nv.rglob("*") if p.is_file())
+        gib = total / 2**30
+        log(f"NVFP4 was written directly by stage 3 (R10 disk-pressure path): "
+            f"{nv} ({gib:.1f} GiB). Nothing to re-quantise.", STAGE)
+        return {"path": str(nv), "bytes": total, "gib": round(gib, 1),
+                "fits_thor": gib < 117, "produced_by": "s03 (R10 path)"}
     src = Path(kv_get("emit_path", str(ROOT / "output" / "glm-5.3-flash-reap50-fp8")))
     if not src.exists():
         raise RuntimeError(f"emit output not found at {src}")

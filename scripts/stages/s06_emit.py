@@ -81,6 +81,20 @@ Use the **cutlass** fused-MoE backend (the Marlin FP4 MoE kernel faults at >=256
 
 
 def run() -> dict:
+    if kv_get("skip_fp8_intermediate", False):
+        nv = kv_get("nvfp4_path")
+        log("disk-pressure path (R10): no FP8 intermediate exists, so the NVFP4 checkpoint "
+            f"written by stage 3 IS the deliverable ({nv}). Emitting a card for it.", STAGE)
+        nvp = Path(nv)
+        s3 = json.loads((ARTIFACTS / "s03_saliency.json").read_text())
+        meta = {"sparsity": s3["sparsity"], "pruned_params": s3["pruned_params"],
+                "healed": True, "calib_samples": s3["calib_samples"]}
+        (nvp / "README.md").write_text(_card(meta))
+        (nvp / "reap_metadata.json").write_text(json.dumps(meta, indent=2))
+        kv_set("emit_path", str(nvp))
+        total = sum(p.stat().st_size for p in nvp.rglob("*") if p.is_file())
+        publish(nvp, "nvfp4", ".", stage=STAGE)
+        return {"path": str(nvp), "bytes": total, "healed": True, "format": "nvfp4"}
     src = Path(kv_get("pruned_model_path", str(PRUNED)))
     if not src.exists():
         raise RuntimeError(f"pruned model not found at {src}")

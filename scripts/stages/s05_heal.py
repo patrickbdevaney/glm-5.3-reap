@@ -52,6 +52,10 @@ GAIN_FLOOR, GAIN_CEIL = 0.5, 1.0   # a gain outside this is a bug, not a correct
 
 def run() -> dict:
     import torch
+    if kv_get("skip_fp8_intermediate", False):
+        log("stage 3 took the disk-pressure path and applied the first-moment correction "
+            "in-memory before quantising; nothing to rewrite here", STAGE)
+        return {"skipped": "applied in-memory during s03 (R10 path)"}
     retained_p = ARTIFACTS / "reap_retained_experts.json"
     if not retained_p.exists():
         raise RuntimeError("reap_retained_experts.json missing; stage 3 must run first")
