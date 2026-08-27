@@ -319,3 +319,32 @@ Two in `s07`, both found by constructing the objects rather than waiting for the
    RAM, the same wall that forced streaming in `s03`. By that point surgery has deleted the
    source as it wrote, so ~300 GiB of disk is free and accelerate can offload. `s07` now
    measures free space and refuses with a clear message if surgery did not free it.
+
+### s03 first timing, a self-inflicted OOM, and two sync bugs
+
+**Layer 0 (dense): 7.4 min → ETA 324 min.** Layers 0–2 have no MoE (`first_k_dense_replace: 3`),
+so that number did not yet include the 288-expert loop.
+
+**Self-inflicted OOM.** While s03 was running with a 21.3 GiB working set, a 13.78 GiB layer-build
+validation was started alongside it. The kernel OOM-killer took the *pipeline stage*, not the
+ad-hoc job — `dmesg`: `Killed process 223145 (python) ... task_memcg=.../glm53-reap.service`.
+Twelve minutes of a multi-hour pass lost to an entirely avoidable mistake. `scripts/guard.py`
+now refuses to start ad-hoc work while `s03`/`s04b`/`s05`/`s07` are marked running. `[EST]`
+
+**Two synchronisation bugs in the saliency hook**, both invisible in the small validation run
+because they cost per *expert per batch*:
+
+1. `for expert_idx in hit:` iterated a **CUDA** tensor in Python, which syncs on every element
+   access — 288 syncs per batch.
+2. The accumulator update called `.cpu()` per expert, purely to add a scalar to a host tensor —
+   a full device sync for telemetry.
+
+At 135 batches that is ~38,880 syncs each, ~78k per MoE layer, across 42 MoE layers. `hit` is
+now pulled to host once and the accumulators live on the GPU until dump.
+
+Re-validated after the fix on a real MoE layer: **3,461 tok/s**, 281/288 experts fired,
+`tokens = 32,768` for 4,096 tokens × top-8 — exact.
+
+> **Lesson worth keeping:** the sync cost was invisible at validation scale and only appeared at
+> 135 batches. Timing a hot loop at realistic batch counts, not just at correctness scale, would
+> have caught it before the first pass rather than during it.
