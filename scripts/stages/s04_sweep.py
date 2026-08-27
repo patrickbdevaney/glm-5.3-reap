@@ -81,14 +81,21 @@ def run() -> dict:
             "fits_envelope": _size_gib(r, True) < ENVELOPE_GIB,
             "layers": layers,
         }
-        # Primary gate: fraction of the layer's total g*||f|| contribution that survives.
-        entry["gate"] = ("green" if sm > 0.85 else "amber" if sm > 0.70 else "red")
+        # Gate against the RANDOM-PRUNING NULL, not an absolute constant. Removing a
+        # fraction r of experts at random retains (1 - r) of the total g*||f|| contribution by
+        # construction, so "saliency mass retained" alone says nothing without that reference:
+        # 0.729 at a 50% prune sounds poor and is in fact 1.46x better than random.
+        # Absolute thresholds here were guesses; this ratio is anchored.
+        concentration = sm / max(1 - r, 1e-9)
+        entry["concentration_vs_random"] = round(concentration, 3)
+        entry["gate"] = ("green" if concentration > 1.40
+                         else "amber" if concentration > 1.15 else "red")
         sweep[f"{r:.2f}"] = entry
         metric(STAGE, "routing_mass_retained", rm, tag=f"{r:.2f}")
         metric(STAGE, "saliency_mass_retained", sm, tag=f"{r:.2f}")
-        log(f"ratio {r:.0%}: saliency mass {sm:.3f} ({entry['gate']}), routing mass {rm:.3f} "
-            f"(x{rm_ratio:.2f} vs expected), {entry['size_gib_rest_fp8']:.0f} GiB, "
-            f"fits={entry['fits_envelope']}", STAGE)
+        log(f"ratio {r:.0%}: saliency mass {sm:.3f} = x{concentration:.2f} vs random "
+            f"({entry['gate']}), routing mass {rm:.3f} (x{rm_ratio:.2f} vs expected), "
+            f"{entry['size_gib_rest_fp8']:.0f} GiB, fits={entry['fits_envelope']}", STAGE)
 
     chosen = kv_get("chosen_ratio", 0.50)
     c = sweep[f"{chosen:.2f}"]
@@ -105,9 +112,13 @@ def run() -> dict:
                          "dropped."),
     }
     if c["gate"] == "red":
-        log(f"GATE RED at {chosen:.0%}: only {c['saliency_mass_retained']:.3f} of total expert "
-            f"output contribution survives (<0.70). This is the disproportionate-damage signal "
-            f"the directive asks to stop on.", STAGE, "ERROR")
+        msg = (f"GATE RED at {chosen:.0%}: retained saliency mass is only "
+               f"x{c['concentration_vs_random']} better than random pruning. This is the "
+               f"disproportionate-damage signal the directive asks to stop on.")
+        log(msg, STAGE, "ERROR")
+        if not kv_get("override_red_gate", False):
+            # An autonomous pipeline must not push past its own go/no-go gate.
+            raise RuntimeError(msg + " Halting. Set kv override_red_gate=true to proceed.")
     else:
         log(f"gate {c['gate'].upper()} at {chosen:.0%}: saliency mass "
             f"{c['saliency_mass_retained']:.3f}, routing mass "
