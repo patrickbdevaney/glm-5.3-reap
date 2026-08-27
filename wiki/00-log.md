@@ -104,3 +104,60 @@ pass. Staging the source would buy nothing and cost 306 GiB. `[EXT]`
 The extra headroom is instead spent on things that were previously unaffordable: keeping the
 pruned FP8 checkpoint resident *alongside* the NVFP4 output for validation, and retaining
 sweep artifacts at more than one prune ratio simultaneously.
+
+---
+
+## 2026-08-27 — Session 2: build-out and autonomous launch
+
+**Operator instruction:** run the whole thing end-to-end without hand-back, surviving SSH
+collapse, preserving work at each step and publishing intermediates to HF.
+
+### Environment
+Built `.venv` (uv). Resolved the transformers/llmcompressor conflict by installing
+llm-compressor from **git main** (`0.13.1.dev51`) — the pypi release pins
+`transformers<=5.14.1`, and `glm5_next` exists only at **≥5.16.1** (verified against the
+GitHub tree at four tags). torch **2.13.0+cu130**, `arch_list` includes **sm_110**, reports
+`NVIDIA Thor`. torchvision silently upgraded torch 2.10→2.13; re-validated everything and
+pinned both.
+
+### Power
+Box was in **120 W mode with no clock lock**. Applied MAXN + `jetson_clocks`:
+GPU ceiling 1386→**1575 MHz**, **EMC 2750→4266 MHz**. The memory controller was at 64% of
+peak on a bandwidth-bound workload. Reversible.
+
+### Stage 0 — PASSED
+Found and fixed three real `glm5_next` × llm-compressor gaps, and discovered the MTP block is
+invisible to transformers (313.89B meta params vs 321.34B in the checkpoint — the gap is
+exactly MTP's 7.45B). Measured ~1,994 tok/s full-model estimate. Verified the processor emits
+**256 image tokens** for a 448×448 image, so the R3 assertion holds. See
+[96-implementation.md](96-implementation.md).
+
+### Pipeline
+Nine stages under `systemd --user` (`Linger=yes`), SQLite state, per-stage retry, resume across
+kills, HF publishing. Launched; source staging in progress.
+
+### The residency problem
+314 GB of FP8 against 122 GiB RAM, with only ~170 GB of disk left once the source is staged —
+RAM, unified VRAM and spare disk are each individually insufficient. Two paths:
+**A** mmap-backed CPU placement (probed by `s01b_load`), **B** custom layer streaming.
+
+Reading `Glm5NextTextModel.forward` confirmed **B is mechanical, not a reimplementation**: the
+whole inter-layer state is one tensor plus `topk_indices`. Path B was pre-written
+(`scripts/stream_saliency.py`) rather than left as an overnight dead-end, and its FP8 block
+dequantisation was **validated against real downloaded shards** — scale shape `(32,16)` for a
+`(4096,2048)` weight, block (0,0) exact.
+
+### Scope changes taken autonomously
+- **Healing narrowed** to a first-moment correction computable from cached saliency alone
+  (no teacher, no forward pass). Gradient healing of a 165B student is not tractable here.
+  Marked non-critical; `s06` takes it as a soft dependency so a failed heal cannot block the
+  deliverable.
+- **Saliency A/B arm B deferred** — the stock tracker keeps only `sum` and `count`, so
+  quantiles cannot be recovered post hoc. Recorded in the `s04` verdict rather than dropped
+  silently.
+- **MTP excluded and archived** rather than inconsistently pruned.
+
+### Open at end of session
+- `s01b_load` outcome decides Path A vs Path B.
+- Whether the ~1,024-sample calibration budget clears the per-expert sufficiency floor
+  (asserted in `s03`, not assumed).
