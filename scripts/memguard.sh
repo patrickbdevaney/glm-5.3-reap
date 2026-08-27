@@ -21,8 +21,13 @@
 # reflect who holds the memory.
 set -u
 ROOT="${ROOT:-/home/patrickd/glm-5.3-reap}"
-CACHE_MB="${CACHE_MB:-24000}"     # tier 1: drop page cache below this
-FLOOR_MB="${FLOOR_MB:-4000}"      # tier 2: kill our stage below this
+CACHE_MB="${CACHE_MB:-6000}"      # tier 1: drop page cache below this
+# MEASURED 2026-08-27: this workload's healthy plateau during the layer sweep is 2-3 GiB
+# available, because ~105 GiB is mmap page cache the kernel holds but will release under a
+# host allocation. A 4000 MB floor therefore killed perfectly healthy runs. Same reasoning as
+# the DSpark memguard: the floor cannot be set above the plateau, so the LEVEL test is set
+# below it and the SLOPE test catches genuine runaways.
+FLOOR_MB="${FLOOR_MB:-900}"       # tier 2: kill our stage below this
 RATE_MB_S="${RATE_MB_S:-900}"     # tier 2 slope trigger
 DANGER_MB="${DANGER_MB:-12000}"   # slope only counts below this
 BREACHES="${BREACHES:-3}"
@@ -75,7 +80,8 @@ while true; do
   [ "$bad" -ge "$BREACHES" ] && trip="MemAvailable ${avail}MB < floor ${FLOOR_MB}MB x${bad}"
 
   if [ -n "$trip" ]; then
-    pid=$(pgrep -f "$ROOT/scripts/run_stage.py" | head -1)
+    # match both absolute and relative launches of our stage runner
+    pid=$(pgrep -f "run_stage\.py" | head -1)
     if [ -n "$pid" ]; then
       stg=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | awk '{print $3}')
       say "!!! $trip — killing stage ${stg:-?} pid $pid (orchestrator will retry)"
