@@ -1,0 +1,21 @@
+[Unit]
+Description=GLM-5.3-Flash REAP + heal pipeline (autonomous, resumable)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/patrickd/glm-5.3-reap
+ExecStart=/home/patrickd/glm-5.3-reap/.venv/bin/python -u /home/patrickd/glm-5.3-reap/scripts/pipeline.py
+# The pipeline is idempotent and resumable: always bring it back.
+Restart=always
+RestartSec=60
+StandardOutput=append:/home/patrickd/glm-5.3-reap/logs/pipeline.log
+StandardError=append:/home/patrickd/glm-5.3-reap/logs/pipeline.log
+Environment=PYTHONUNBUFFERED=1
+Environment=HF_HUB_ENABLE_HF_TRANSFER=0
+Environment=TOKENIZERS_PARALLELISM=false
+# multi-day run; never let a stage be killed for taking too long
+TimeoutStopSec=300
+
+[Install]
+WantedBy=default.target

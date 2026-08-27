@@ -1,0 +1,7 @@
+.venv/
+source/
+logs/*.log
+state/*.db*
+artifacts/*.safetensors
+__pycache__/
+*.pyc

@@ -1,0 +1,62 @@
+{
+  "model": "zai-org/GLM-5.3-Flash",
+  "config": {
+    "n_routed_experts": 288,
+    "num_local_experts": 288,
+    "num_experts_per_tok": 8,
+    "num_hidden_layers": 45,
+    "hidden_size": 4096,
+    "moe_intermediate_size": 2048,
+    "vocab_size": 154880,
+    "n_group": 1,
+    "topk_group": 1,
+    "image_token_id": 154854,
+    "video_token_id": 154855,
+    "linear_attention_layers": 34,
+    "sparse_attention_layers": 11,
+    "num_nextn_predict_layers": 1,
+    "mhc": true
+  },
+  "class_derivation": {
+    "pre_registered": false,
+    "derived_cls": "Glm5NextLinearExperts",
+    "has_gate": true,
+    "is_transposed": false
+  },
+  "tiny_e2e": {
+    "fused_moe_before": 3,
+    "fused_moe_after": 0,
+    "detected_experts": 16,
+    "detected_top_k": 4,
+    "detected_moe_layers": 3,
+    "router_attr": "gate",
+    "experts_attr": "experts",
+    "n_group": 1,
+    "group_size": 16,
+    "params_before": 38377048,
+    "params_after": 36011608,
+    "param_reduction": 0.0616,
+    "forward_after_prune_ok": true
+  },
+  "processor": {
+    "processor": "Glm5NextProcessor",
+    "seq_len": 272,
+    "image_tokens": 256,
+    "keys": [
+      "attention_mask",
+      "image_grid_thw",
+      "input_ids",
+      "mm_token_type_ids",
+      "pixel_values"
+    ]
+  },
+  "throughput": {
+    "layer_gib_bf16": 13.55,
+    "tok_s_1layer_n512": 62315.1,
+    "est_tok_s_full_n512": 1483.7,
+    "tok_s_1layer_n2048": 83752.1,
+    "est_tok_s_full_n2048": 1994.1
+  },
+  "mtp_note": "transformers Glm5NextForConditionalGeneration does not instantiate the MTP block at layer index 45 (7.45B params, its own 288-expert MoE). The llm-compressor path therefore cannot see or prune it. Decision: exclude MTP from this run, archive its original tensors verbatim so the downstream speculative-decoding project can re-derive it. Prevents R7 (inconsistently-pruned MTP poisoning later spec-decode work).",
+  "saliency_pass_estimate_hours_at_200M_tok": 27.9
+}
