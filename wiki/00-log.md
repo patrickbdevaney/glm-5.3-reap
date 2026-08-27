@@ -369,3 +369,80 @@ s03 was stopped unnecessarily on this reading. Two changes came out of it anyway
 improvements: activations now stay **on device** (Thor's memory is unified, so round-tripping
 them through "host" doubled residency and fragmented the allocator across 135 differently-shaped
 batches for no benefit), and `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` is set.
+
+---
+
+## 2026-08-27 — Session 3: the six silent deaths, diagnosed
+
+s03 failed six times, exhausted its budget at 04:20, and idled the pipeline for seven hours.
+No traceback, no exception, **no `oom-kill` line in dmesg**.
+
+### Why it was invisible — this box already had the answer
+
+From `deepseek-v4-flash-0731-cuda/scripts/memguard.sh`, measured by the DSpark project
+2026-08-20: **a touched 2048 MiB `cudaMalloc` charges 42 MiB to the calling cgroup.** Tegra
+unified memory comes from the driver's allocator, not the page allocator, so:
+
+- the OOM killer scores by RSS and **never selects the real consumer** — hence no dmesg line
+- the pages are driver-pinned: not page cache, not swappable, not reclaimable
+- `memory.max` cannot bound it, and this kernel has no PSI so `systemd-oomd` cannot run
+
+`dsv4-oomsentry` watched it happen and correctly did nothing — its ALLOW list names DSpark
+binaries, ours is `python`. Its log is the evidence: **MemAvailable 317 MB falling 1730 MB/s**
+at 03:57, and the sentry itself restarted six times despite `OOMScoreAdjust=-900`. `[EST]`
+
+### Four bugs, in order of how much they cost
+
+1. **`shell.to_empty(device="cpu")` materialised all 321B parameters** (~642 GB at bf16) when
+   only the embeddings and vision tower were needed. 116 GiB → 1.5 GiB in seconds.
+   Now materialising just those two submodules: **2.23 GiB measured.**
+2. **`_build_layer` held three copies of every MoE layer.** It dequantised 288 experts into a
+   dict, built a list comprehension of 288 concatenated gate/up tensors, then `torch.stack()`-ed
+   it — dict + list + stack output all live at once, ~44 GB transient for a layer whose final
+   size is 13.8 GiB. This is why the run cleared three dense layers and the *first* MoE layer,
+   then collapsed **62 GiB → 800 MB in eight seconds** at layer 5. Now fills preallocated 3D
+   tensors expert by expert, freeing each source as consumed. Measured with a 10 Hz low-water
+   sampler: **low-water 89.9 GiB**, build ~8 s. `[EST]`
+3. **`ShardReader` never closed its `safe_open` handles.** A live mmap's faulted-in pages cannot
+   be reclaimed, so `drop_caches` was a no-op while s03 ran but worked instantly once it was
+   killed. Released per layer — which required forcing `copy=True`, since `.to(dtype)` on a
+   tensor already in that dtype returns `self`, a view into the mapping.
+4. **The orchestrator relaunched on its next 60 s poll**, compounding rather than retrying:
+   each attempt inherited the previous one's unreclaimable cache and started with less memory.
+   Now a 120 s cooldown plus a cache drop before any heavy-stage relaunch.
+
+### Two false alarms worth recording
+
+- **`MemAvailable` under-reports by ~100 GiB during the streaming pass.** After one kill, `free`
+  showed 107 GiB used with under 1 GiB of process RSS; `drop_caches` returned it to 119 GiB
+  instantly. It was mmap page cache Tegra does not attribute to `Cached`. **s03 was stopped once
+  on this misreading.**
+- **I caused one of the OOMs myself** by running a 13.8 GiB validation alongside the running
+  stage. `scripts/guard.py` now refuses that.
+
+### The memguard, and why its floor had to go *down*
+
+`glm53-memguard.service` — `OOMScoreAdjust=-900`, 0.5 s spawn-free poll. It leads with
+**reclaim**, not killing: tier 1 drops page cache, tier 2 kills only this project's own
+`run_stage.py` children. It never picks the biggest RSS, for the reason the DSpark guard states —
+RSS is precisely the number proven not to reflect who holds the memory.
+
+Its first floor (4000 MB) **killed healthy runs**: this workload's measured plateau during the
+layer sweep is **2–3 GiB available**, because ~105 GiB is mmap cache the kernel holds but
+releases under a host allocation. That is the same trap DSpark documents ("the healthy plateau
+is 2389 MB"), and the same fix applies — level test *below* the plateau, slope test for
+runaways. Its victim pattern also required an absolute path and matched nothing on a relative
+launch. Both corrected. `[EST]`
+
+### Layer timings after the fixes
+
+| layer | type | time | avail after |
+|---|---|---|---|
+| 1 | linear_attention | 2.4 min | 2 GiB |
+| 2 | linear_attention | 1.5 min | 3 GiB |
+| 3 | linear_attention | 1.4 min | 3 GiB |
+| 4 | **deepseek_sparse_attention (first MoE)** | 0.9 min | **62 GiB** |
+
+Down from 7.4 min/layer pre-fix. ETA at that rate is ~60–85 min for the full 45-layer pass.
+Layer 4's jump to 62 GiB available confirms the mechanism: a **host** allocation forces the
+kernel to release the mmap cache that a **driver** allocation cannot.
