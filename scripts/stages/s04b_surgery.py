@@ -131,11 +131,30 @@ def run() -> dict:
                 kept_t += 1
 
         out_name = f"model-{si+1:05d}-of-{len(shards):05d}.safetensors"
+        n_written = len(out_t)
         if out_t:
             save_file(out_t, str(OUT / out_name), metadata={"format": "pt"})
             for k in out_t:
                 weight_map[k] = out_name
         del out_t
+
+        # Deleting the source is irreversible within this run (re-download is ~23 min), so
+        # verify the output is on disk and actually readable before dropping the input. A
+        # truncated or unreadable output plus a deleted source would lose the shard silently.
+        if n_written:
+            outp = OUT / out_name
+            if not outp.exists() or outp.stat().st_size == 0:
+                raise RuntimeError(f"output {out_name} missing or empty; refusing to delete "
+                                   f"source {shard.name}")
+            try:
+                with safe_open(str(outp), framework="pt", device="cpu") as vf:
+                    got = len(vf.keys())
+            except Exception as e:
+                raise RuntimeError(f"output {out_name} unreadable ({type(e).__name__}); "
+                                   f"refusing to delete source {shard.name}") from e
+            if got != n_written:
+                raise RuntimeError(f"output {out_name} has {got} tensors, expected "
+                                   f"{n_written}; refusing to delete source {shard.name}")
 
         shard.unlink()                            # free space as we go (R10)
         done.add(shard.name)
