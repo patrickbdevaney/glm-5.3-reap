@@ -92,40 +92,52 @@ Fits throughout with ≥117 GiB spare. **No further deletion required.**
 
 ## 5. Calibration corpus
 
-**12,288 samples @ up to 16,384 tokens (~200M tokens)** — the REAP paper's own ≥110B setting,
-and a floor rather than a ceiling: at 288 experts each expert sees ~2.8% of tokens vs 5.0% for
-Qwen3-Coder-480B, i.e. **1.8× thinner per-expert statistics at equal count**.
+**12,288 samples @ up to 16,384 tokens (~200M tokens)** as a *floor* — REAP's own ≥110B setting.
+At 288 experts each sees ~2.8% of tokens vs 5.0% for Qwen3-Coder-480B: **1.8× thinner per-expert
+statistics at equal count.**
 
-Difficulty **60% medium / 30% hard / 10% easy** per bucket — hard-only degrades general
-perplexity 6.2–12.1% vs 1.5–4.2% mixed, which would damage the ballast the mixture exists to
-protect. (Pruning is ~2.3× more difficulty-sensitive than quantisation: spend curation here.)
+Difficulty **60% medium / 30% hard / 10% easy** per bucket. Hard-only degrades general perplexity
+6.2–12.1% vs 1.5–4.2% mixed. Pruning is ~2.3× more difficulty-sensitive than quantisation.
 
-| Share | Domain | Sources (HF availability verified 2026-08-27) |
+### Mixture (operator-approved, final)
+
+Intent: **a strong coder/agent that remains empirically knowledgeable about the world.** Code and
+maths are the product; maths is instrumental to code. Science/bio exist as a world-knowledge floor,
+not to make it a scientist. Finance is a live commercial use case.
+
+| Share | Bucket | Primary sources (all permissive) |
 |---:|---|---|
-| 22% | Agentic coding trajectories | `thoughtworks/agentic-coding-trajectories`, `SWE-bench/SWE-smith-trajectories`, operator hermes-max / Claude Code logs |
-| 18% | Code — multi-lang, systems, CUDA, IaC, repo-scale | `theblackcat102/evol-codealpaca-v1` + local prior-art repos for long-context |
-| **15%** | **Multimodal** | `HuggingFaceM4/the_cauldron`, `allenai/pixmo-docs`, `ServiceNow/BigDocs-Bench`, `lmms-lab/multimodal-open-r1-8k-verified` |
-| 14% | Math + algorithm synthesis | `nvidia/Nemotron-PrismMath`, `allenai/tulu-3-sft-personas-math` |
-| 13% | Hard science & engineering | `nvidia/sft_datablend_v1`, arXiv-derived STEM |
-| 10% | Finance / quant / business | **`kensho/DocFinQA`** (25%, ~123k-word contexts), `ibm-research/finqa`, `TheFinAI/flare-convfinqa`, `sujet-ai/Sujet-Finance-QA-Vision-100k` + `TheFinAI/FinMR` (multimodal), `kensho/bizbench` (program synthesis), `next-tat/tat-llm-instructions`, `TheFinAI/Fino1_Reasoning_Path_FinQA` — **R9 closed**, see [wiki/80](wiki/80-calibration.md) |
-| 8% | General ballast | `HuggingFaceFW/fineweb-edu` |
-| — | Tool use (into agentic) | `Salesforce/xlam-function-calling-60k`, `arcee-ai/agent-data` |
+| **24%** | Agentic coding trajectories | `togethercomputer/CoderForge-Preview` (258K traj, **128K ctx**), `nebius/SWE-rebench` (CC-BY-4.0), `SWE-bench/SWE-smith-trajectories` (MIT), `SWE-Gym/SWE-Gym` (MIT), `Salesforce/xlam-function-calling-60k` (CC-BY-4.0), **operator hermes-max / Claude Code logs**; sample from `AlienKevin/SWE-ZERO-12M` + `open-thoughts/AgentTrove` (both Apache-2.0) |
+| **21%** | Code — multi-lang, systems, **CUDA/kernels**, IaC, repo-scale | `nvidia/OpenCodeReasoning-2` + `OpenCodeInstruct` (CC-BY-4.0), **`GPUMODE/KernelBook`**, **`SakanaAI/AI-CUDA-Engineer-Archive`** (CC-BY-4.0), `bigcode/commitpackft` (MIT), `bigcode/the-stack-v2-dedup` (repo-scale + IaC by path filter) |
+| **15%** | Math + algorithm synthesis | `nvidia/OpenMathReasoning` (CC-BY-4.0), `zwhe99/DeepMath-103K` (MIT), `open-r1/OpenR1-Math-220k` (Apache-2.0), `AI-MO/NuminaMath-1.5` (Apache-2.0), `internlm/Lean-Workbook` (Apache-2.0, formal proofs) |
+| **15%** | Multimodal | **`nvidia/Nemotron-VLM-Dataset-v2`** (CC-BY-4.0), `HuggingFaceM4/the_cauldron`, `Docmatix` (MIT), `lmms-lab/LLaVA-OneVision-Data` (Apache-2.0), `allenai/pixmo-docs`/`-cap` (ODC-BY), **`xlangai/aguvis-stage2`** (Apache-2.0, GUI/screenshots), `TIGER-Lab/VisualWebInstruct` (Apache-2.0), `ServiceNow/BigDocs-Bench` (CC-BY-4.0) |
+| **10%** | Hard science + bio/biotech + biomedical **literature** | **`open-thoughts/OpenThoughts3-1.2M`** (Apache-2.0), `nvidia/sft_datablend_v1` (CC-BY-4.0), `TIGER-Lab/MMLU-Pro` (MIT), `jablonkagroup/ChemBench` (MIT), `ncbi/pubmed` (abstracts, sampled), arXiv `physics`/`cond-mat`/`q-bio`/`econ.EM` |
+| **8%** | Finance / quant / markets | `kensho/DocFinQA` (MIT, **~123k-word ctx**), `ibm-research/finqa` (CC-BY-4.0), `kensho/bizbench` (Apache-2.0), `TheFinAI/flare-convfinqa`, `sujet-ai/Sujet-Finance-QA-Vision-100k` + `TheFinAI/FinMR`, `next-tat/tat-llm-instructions` (CC-BY-4.0) |
+| **7%** | General ballast | `HuggingFaceFW/fineweb-edu` (ODC-BY), `allenai/tulu-3-sft-mixture` (ODC-BY), `HuggingFaceTB/finemath` (ODC-BY) |
 
-`nvidia/Nemotron-CC-Math` is **gated (401)** — PrismMath substitutes. `TheFinAI/MultiFinBen`
-is also gated. **Econometrics proper** has no strong dedicated dataset; covered via arXiv
-`econ.EM`/`q-fin` slices inside the 13% hard-science bucket. `[OPEN]`, minor.
+Code-adjacent = **60%**. World knowledge = 18% (above the sufficiency floor, not competing).
+Multimodal held at 15% — R3 is the only risk where failure is *certain*.
 
-Rejected on purpose: `Josephgflowers/Finance-Instruct-500k` and
-`sujet-ai/Sujet-Finance-Instruct-177k` — large and permissive but instruction-shallow and
-easy-skewed, which is precisely the bias the difficulty policy above exists to avoid.
+### Licence policy: permissive-only, one corpus
 
-**Hard build requirements**
+**GLM-5.3-Flash is MIT.** A derivative can be MIT, and that property is irreversible if lost —
+you cannot un-train a model. Every NC source has a permissive replacement (the main one, 
+`OpenThoughts3-1.2M`, is **4× larger** than the NC set it replaces), so NC buys almost nothing.
+
+**Excluded on licence:** `EricLu/SCP-116K`, `camel-ai/*` (CC-BY-NC); `osunlp/UGround-V1-Data`,
+**`tattabio/OG`** (CC-BY-SA — ShareAlike can dictate the derivative's licence, worse than NC here).
+**Excluded on scope** (directive + operator): `qiaojin/PubMedQA`, `bigbio/pubmed_qa`, MedQA-style
+clinical QA. Biomedical *literature* is in; clinical QA is not.
+**Gated (401):** `nvidia/Nemotron-CC-Math`, `TheFinAI/MultiFinBen`, `mlfoundations/MINT-1T`.
+**Terms to read before ingest** `[OPEN]`: `bigcode/the-stack-v2-dedup`, `ncbi/pubmed`,
+`thoughtworks/agentic-coding-trajectories`, `GPUMODE/KernelBook`.
+
+### Hard build requirements
 1. Multimodal samples are **real image-text pairs through the real processor**, never text descriptions.
-2. **Assert non-zero image-token count** (`154854`/`154855`) in the tokenised stream before any
-   run. A collator silently dropping images degenerates calibration to text-only, which deletes
-   vision experts **with certainty**. Highest-value assertion in the pipeline.
+2. **Assert non-zero image-token count** (`154854`/`154855`) before any run. Highest-value assertion in the pipeline.
 3. Held-out stratified eval split per domain **including a separate image-text slice**.
 4. Pre-tokenise and shard once; every sweep and both healing passes reuse it.
+5. Build in **first-consumed order** so the corpus overlaps stages 0–1.
 
 ## 6. Saliency configuration — the A/B
 
