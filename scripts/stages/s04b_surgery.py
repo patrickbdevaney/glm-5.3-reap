@@ -56,7 +56,7 @@ def _layer_curves():
     return out
 
 
-def compute_retained(ratio: float, uniform: bool = False) -> dict[str, list[int]]:
+def compute_retained(ratio: float, uniform: bool = True) -> dict[str, list[int]]:
     """Allocate the expert budget across layers by EQUALISING retained saliency mass.
 
     Uniform pruning is badly suboptimal on this model. Measured over all 42 MoE layers at 50%:
@@ -73,6 +73,16 @@ def compute_retained(ratio: float, uniform: bool = False) -> dict[str, list[int]
 
     Bounded to [30%, 75%] kept per layer so no layer is pushed far outside REAP's validated
     territory, and top_k reachability is guaranteed.
+
+    DEFAULT IS UNIFORM, and that is not a preference - it is forced by the architecture.
+    `Glm5NextTextExperts.__init__` and `Glm5NextTextTopkRouter.__init__` both read a single
+    scalar `config.num_local_experts` and apply it to EVERY layer. There is no per-layer expert
+    count in glm5_next, and vLLM and the GGUF converters read the same field. A non-uniform
+    checkpoint is therefore unloadable by anything that does not carry a patched model
+    definition, which makes it worthless as a deliverable however good its saliency numbers
+    look. Measured on the real model: non-uniform lifted the worst layer from 0.491 to 0.649
+    retained saliency mass and cleared all 12 layers that sat below 0.60 - a real gain, and
+    unusable. Keep the code; it becomes deployable the day the config grows a per-layer field.
     """
     curves = _layer_curves()
     if not curves:

@@ -1,0 +1,12 @@
+{
+  "ratio": 0.5,
+  "experts_kept": 125,
+  "routers_sliced": 84,
+  "experts_original": 288,
+  "tensors_kept": 38060,
+  "tensors_dropped": 38048,
+  "bytes": 168573368683,
+  "gib": 157.0,
+  "path": "/home/patrickd/glm-5.3-reap/output/pruned-fp8",
+  "free_gib_after": 303.3
+}

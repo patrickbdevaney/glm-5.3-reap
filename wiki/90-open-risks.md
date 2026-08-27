@@ -132,3 +132,44 @@ operator is asleep. `models/DeepSeek-V4-Flash-0731-REAP` (101 GiB, the §7 eval 
 `s5-capture` (80 GiB), the docker images (102 GiB) and `Qwen3.6-35B-A3B-NVFP4` (24 GiB) are all
 untouched. The only reclaim performed was `thor-vllm-cache` (25 GiB), which the operator had
 already approved and which is a regenerable compile cache. `[EST]`
+
+---
+
+## F. R11 — non-uniform per-layer allocation is unloadable on this architecture (2026-08-27)
+
+The measured case for non-uniform allocation was strong. At an identical 6,048-expert budget:
+
+| | uniform | non-uniform |
+|---|---:|---:|
+| worst layer, retained saliency mass | **0.491** (×0.98 vs random — no better than chance) | **0.649** |
+| layers below 0.60 | 12 / 42 | **0 / 42** |
+| experts per layer | 144 flat | 86 – 187 |
+
+It was implemented, it ran, and it produced a 157 GiB checkpoint. **That checkpoint cannot be
+loaded.**
+
+`Glm5NextTextExperts.__init__` and `Glm5NextTextTopkRouter.__init__` both read a single scalar
+`config.num_local_experts` and apply it to every layer:
+
+```python
+self.num_experts = config.num_local_experts
+self.gate_up_proj = nn.Parameter(torch.empty(self.num_experts, 2 * intermediate, hidden))
+...
+self.weight = nn.Parameter(torch.zeros(self.num_experts, self.hidden_dim))
+```
+
+There is no per-layer expert count in `glm5_next`, and vLLM and the GGUF converters read the
+same field. A checkpoint whose layers hold 86–187 experts can only be loaded by something
+carrying a patched model definition. `[EST — read from the modeling source]`
+
+> **The EvoESAP/DiEP line of work assumes an architecture that can express what it produces.**
+> On a scalar-expert-count model the gain is real and undeliverable. This is not a reason to
+> discard the code — it is a reason to keep it behind a flag and note the precondition.
+
+**Decision: uniform allocation.** An unloadable checkpoint is worth nothing regardless of its
+saliency numbers, and the directive's priority is a usable model. The non-uniform path stays in
+`compute_retained(uniform=False)` for the day the config grows a per-layer field.
+
+**Cost of finding this late:** the non-uniform output was discarded and the source re-staged.
+It would have been caught before surgery by one question — *can the target config express a
+per-layer expert count?* — which is now the first thing to ask of any allocation scheme.
