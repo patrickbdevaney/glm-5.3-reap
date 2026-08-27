@@ -150,10 +150,12 @@ def run() -> dict:
         STAGE)
 
     OUT.mkdir(parents=True, exist_ok=True)
-    done = _load_ledger()
+    # The output file existing IS the resume record now that names are 1:1 - a separate
+    # ledger could disagree with what is actually on disk, and did.
     shards = sorted(SRC.glob("*.safetensors"))
-    if not shards and done:
-        log("all source shards already consumed (resuming a completed pass)", STAGE)
+    done = {p.name for p in OUT.glob("*.safetensors")}
+    if done:
+        log(f"resuming: {len(done)} output shards already present", STAGE)
 
     pos = {lname: {e: i for i, e in enumerate(keep)} for lname, keep in retained.items()}
     exp_re = re.compile(r"^(?P<pre>.*\.layers\.(?P<layer>\d+)\.mlp)\.experts\.(?P<e>\d+)\.(?P<rest>.+)$")
@@ -203,7 +205,11 @@ def run() -> dict:
                 out_t[name] = t
                 kept_t += 1
 
-        out_name = f"model-{si+1:05d}-of-{len(shards):05d}.safetensors"
+        # Name the output after its SOURCE shard, 1:1. Deriving the name from the count of
+        # REMAINING shards meant every resumed run used a different name-space - a single
+        # output dir ended up holding shards labelled of-00029, of-00035, of-00052 and
+        # of-00062 from four partial runs, none of them a complete model.
+        out_name = shard.name
         n_written = len(out_t)
         if out_t:
             save_file(out_t, str(OUT / out_name), metadata={"format": "pt"})
@@ -231,7 +237,6 @@ def run() -> dict:
 
         shard.unlink()                            # free space as we go (R10)
         done.add(shard.name)
-        _save_ledger(done)
         (OUT / "model.safetensors.index.json").write_text(
             json.dumps({"metadata": {"total_size": 0}, "weight_map": weight_map}))
         if (si + 1) % 5 == 0 or si == 0:
@@ -259,13 +264,29 @@ def run() -> dict:
     metric(STAGE, "pruned_bytes", total)
     metric(STAGE, "tensors_kept", kept_t)
     metric(STAGE, "tensors_dropped", dropped_t)
-    # Two routers per MoE layer (weight + e_score_correction_bias); if that count is wrong the
-    # model routes over an expert set that no longer exists.
+    # Verify routers by INSPECTING THE OUTPUT, not by counting what this run happened to
+    # touch. A per-run counter is wrong on any resume: it fired at "sliced 8, expected 84"
+    # on a run that had legitimately done the other 76 earlier.
+    from safetensors import safe_open as _so
+    seen_routers, wrong = 0, []
+    for outp in sorted(OUT.glob("*.safetensors")):
+        with _so(str(outp), framework="pt", device="cpu") as f:
+            for k in f.keys():
+                if k.endswith("mlp.gate.weight") or k.endswith("e_score_correction_bias"):
+                    seen_routers += 1
+                    base = k.split(".mlp.")[0] + ".mlp"
+                    want = len(retained.get(base, []))
+                    got = f.get_slice(k).get_shape()[0]
+                    if want and got != want:
+                        wrong.append((k, got, want))
     expected_routers = 2 * len(retained)
-    if routers_sliced != expected_routers:
-        raise RuntimeError(f"sliced {routers_sliced} router tensors, expected "
-                           f"{expected_routers} (2 per MoE layer). Routers must shrink with "
-                           f"the expert set or routing is silently wrong.")
+    if wrong:
+        raise RuntimeError(f"{len(wrong)} router tensors have the wrong width, e.g. {wrong[:2]}")
+    if seen_routers != expected_routers:
+        raise RuntimeError(f"found {seen_routers} router tensors in the output, expected "
+                           f"{expected_routers} (2 per MoE layer). The output is incomplete.")
+    log(f"verified {seen_routers} router tensors, all sized to their layer's expert count",
+        STAGE)
     res = {"ratio": ratio, "experts_kept": n_keep, "routers_sliced": routers_sliced,
            "experts_original": n_orig, "tensors_kept": kept_t,
            "tensors_dropped": dropped_t, "bytes": total,
