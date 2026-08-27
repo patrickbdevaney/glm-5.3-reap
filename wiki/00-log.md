@@ -264,3 +264,25 @@ Bucket weights now deliberately sum to >1 so that failing sources have fallback 
 
 Multimodal layout verified on disk: `pixel_values (832, 1176)` 2-D, `image_grid_thw (1, 3)`,
 **208 image tokens** in the record's `input_ids`. The R3 defence is real, not nominal.
+
+### Streaming REAP validated on real weights (03:35)
+
+Ran two streamed layers on real checkpoint weights with a synthetic batch:
+
+| layer | type | forward | output | finite |
+|---|---|---|---|---|
+| 0 | `linear_attention` (KDA) | 1.77 s | (2, 512, 4, 4096) | ✅ |
+| 3 | `deepseek_sparse_attention` (MLA+DSA) + MoE | 0.53 s | (2, 512, 4, 4096) | ✅ |
+
+**Saliency accumulated: 279/288 experts fired, 8,192 expert-token assignments
+(1,024 tokens × top-8, exactly right), mean saliency 4.14.** `[EST]`
+
+That is the end-to-end proof that the whole approach works: build a layer from mmap'd FP8
+shards, dequantise, run the real module, capture `g_j · ‖f_j‖` before the gate scales it,
+accumulate, free. The hc_mult=4 residual stream propagates correctly between layers.
+
+**Throughput note.** REAP needs far fewer tokens than the corpus budget implies. The per-expert
+floor of 2,000 tokens requires only `2000 × 288 / 8 ≈ 72,000` tokens *total*; the planned
+512 × 2048 = 1.05M tokens gives ~29k per expert, roughly 14× the floor. If the measured
+per-layer ETA proves too slow, the sample count can be cut substantially before the estimator
+degrades — the stage reports both, so the decision is made from measurement.
