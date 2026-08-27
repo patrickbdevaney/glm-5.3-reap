@@ -160,7 +160,7 @@ def stage_pid(name: str) -> int | None:
     return row[0] if row and row[0] else None
 
 
-HEAVY_STAGES = {"s03_saliency", "s04b_surgery", "s05_heal", "s07_quantize"}
+HEAVY_STAGES = {"s01_source", "s03_saliency", "s04b_surgery", "s05_heal", "s07_quantize"}
 _last_launch: dict[str, float] = {}
 RELAUNCH_COOLDOWN_S = 120
 
