@@ -28,8 +28,12 @@ CACHE_MB="${CACHE_MB:-6000}"      # tier 1: drop page cache below this
 # the DSpark memguard: the floor cannot be set above the plateau, so the LEVEL test is set
 # below it and the SLOPE test catches genuine runaways.
 FLOOR_MB="${FLOOR_MB:-900}"       # tier 2: kill our stage below this
-RATE_MB_S="${RATE_MB_S:-900}"     # tier 2 slope trigger
-DANGER_MB="${DANGER_MB:-12000}"   # slope only counts below this
+# A NORMAL MoE layer build legitimately drops ~28 GiB in ~8 s (~3500 MB/s), so a 900 MB/s
+# slope threshold fires on healthy work - it killed a run at 11 GB available doing exactly
+# that. The slope test only earns its place if it is well above normal operation, and the
+# level floor remains the real backstop.
+RATE_MB_S="${RATE_MB_S:-6000}"    # tier 2 slope trigger
+DANGER_MB="${DANGER_MB:-4000}"    # slope only counts below this
 BREACHES="${BREACHES:-3}"
 SLOPE_N="${SLOPE_N:-2}"
 POLL_S="${POLL_S:-0.5}"
