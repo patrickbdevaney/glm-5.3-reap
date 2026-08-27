@@ -96,15 +96,34 @@ def hf_token() -> str | None:
     return p.read_text().strip() if p.exists() else None
 
 
+MAX_AUTO_PUBLISH_GIB = float(os.environ.get("MAX_AUTO_PUBLISH_GIB", "8"))
+
+
 def publish(local: Path, repo_suffix: str, path_in_repo: str = ".",
-            private: bool = True, stage: str | None = None) -> str | None:
+            private: bool = True, stage: str | None = None,
+            allow_large: bool = False) -> str | None:
     """Push an intermediate artifact to HF. Never fatal: a failed upload must not lose work
-    that is already safely on local disk."""
+    that is already safely on local disk.
+
+    Large weight directories are SKIPPED by default. The link measures ~105 MB/s, so the
+    157 GiB pruned checkpoint would take ~7 hours and the 91 GiB NVFP4 one ~4 - blocking the
+    pipeline on bandwidth for longer than the compute it is publishing. Small artifacts
+    (reports, configs, cards, saliency) publish automatically; weights are opt-in via
+    allow_large, so uploading them is a decision rather than an accident.
+    """
     tok = hf_token()
     if not tok:
         log("no HF token; skipping publish", stage, "WARN")
         return None
     repo = f"{HF_PREFIX}-{repo_suffix}" if repo_suffix else HF_PREFIX
+    if local.is_dir() and not allow_large:
+        gib = sum(p.stat().st_size for p in local.rglob("*") if p.is_file()) / 2**30
+        if gib > MAX_AUTO_PUBLISH_GIB:
+            log(f"NOT auto-publishing {local.name} ({gib:.0f} GiB > "
+                f"{MAX_AUTO_PUBLISH_GIB:.0f} GiB): at ~105 MB/s that is ~{gib*1024/105/3600:.1f} h. "
+                f"Push explicitly when wanted:  huggingface-cli upload {repo} {local}",
+                stage, "WARN")
+            return None
     try:
         from huggingface_hub import HfApi
         api = HfApi(token=tok)
