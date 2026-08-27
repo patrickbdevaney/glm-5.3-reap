@@ -177,8 +177,8 @@ MM_SOURCES = [
     ("HuggingFaceM4/Docmatix", "images", "train", 0.08),
     ("lmms-lab/LLaVA-OneVision-Data", "CLEVR-Math(MathV360K)", "train", 0.05),
     ("allenai/pixmo-docs", "charts", "train", 0.05),
-    ("xlangai/aguvis-stage2", "guiact-web-single", "train", 0.05),
-    ("ServiceNow/BigDocs-Bench", None, "train", 0.05),
+    ("xlangai/aguvis-stage2", "default", "train", 0.05),
+    ("ServiceNow/BigDocs-Bench", "GUI-VQA", "train", 0.05),
 ]
 
 EXCLUDED = {
