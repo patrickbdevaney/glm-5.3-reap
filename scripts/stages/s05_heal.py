@@ -48,6 +48,7 @@ PRUNED = ROOT / "output" / "pruned-fp8"
 ADAPTERS = ROOT / "output" / "adapters"
 
 GAIN_FLOOR, GAIN_CEIL = 0.5, 1.0   # a gain outside this is a bug, not a correction
+LEDGER = ROOT / "state" / "heal_done.json"
 
 
 def run() -> dict:
@@ -108,8 +109,23 @@ def run() -> dict:
     # and needs no runtime support.
     from safetensors.torch import load_file, save_file
     src = Path(kv_get("pruned_model_path", str(PRUNED)))
+
+    # This stage MUTATES the checkpoint in place, so it must be idempotent. Without a ledger a
+    # retry after a partial pass would apply the gain a SECOND time to already-scaled shards -
+    # silently, since a doubly-scaled expert is still a valid tensor. Track completed shards.
+    done: set[str] = set()
+    if LEDGER.exists():
+        try:
+            done = set(json.loads(LEDGER.read_text()))
+        except Exception:
+            done = set()
+    if done:
+        log(f"resuming: {len(done)} shards already healed, skipping them", STAGE)
+
     applied, touched_files = 0, 0
     for shard in sorted(src.glob("*.safetensors")):
+        if shard.name in done:
+            continue
         tensors = load_file(str(shard))
         changed = False
         for name in list(tensors):
@@ -132,9 +148,15 @@ def run() -> dict:
             applied += 1
             changed = True
         if changed:
-            save_file(tensors, str(shard), metadata={"format": "pt"})
+            # Write to a sibling temp then rename: an interrupted save_file over the live path
+            # leaves a truncated shard and loses those weights outright.
+            tmp = shard.with_suffix(".safetensors.tmp")
+            save_file(tensors, str(tmp), metadata={"format": "pt"})
+            tmp.replace(shard)
             touched_files += 1
-            log(f"applied gains in {shard.name}", STAGE)
+        done.add(shard.name)
+        LEDGER.write_text(json.dumps(sorted(done)))
+        del tensors
 
     ADAPTERS.mkdir(parents=True, exist_ok=True)
     (ADAPTERS / "first_moment_gains.json").write_text(json.dumps(
