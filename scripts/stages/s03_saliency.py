@@ -59,7 +59,11 @@ TARGET_SPARSITY = float(kv_get("chosen_ratio", 0.50) or 0.50)
 # 512 x 2048 x 8/288 ~= 29k tokens per expert, far above the 2k sufficiency floor.
 N_CALIB = int(kv_get("n_calib_samples", 256) or 256)
 MAX_LEN = int(kv_get("calib_max_len", 2048) or 2048)
-BATCH = int(kv_get("calib_batch", 8) or 8)
+# MEASURED 2026-08-27: the KDA (linear_attention) forward costs ~13 GiB of transient memory
+# per 2048-token sequence and scales linearly with batch, so B=8 needed ~104 GiB and took the
+# box to 0.2 GiB available. That is why every run died at layer 5 - the first layer that is
+# BOTH linear_attention and MoE. B=2 puts the transient at ~26 GiB.
+BATCH = int(kv_get("calib_batch", 2) or 2)
 MIN_TOKENS_PER_EXPERT = 2_000
 DEV = "cuda"
 DT = None  # set at runtime
@@ -283,9 +287,14 @@ def run() -> dict:
 
     def embeds_for(batch_ids, mm_batch):
         if mm_batch is None:
-            ids = torch.nn.utils.rnn.pad_sequence(
-                [b.long() for b in batch_ids], batch_first=True,
-                padding_value=tcfg.pad_token_id).to(DEV)
+            # Pad every text batch to the SAME length. Variable shapes make the caching
+            # allocator reserve a fresh ~13 GiB arena per distinct length; one shape lets it
+            # reuse a single block for the whole sweep.
+            ids = torch.full((len(batch_ids), MAX_LEN), tcfg.pad_token_id, dtype=torch.long)
+            for r, b in enumerate(batch_ids):
+                n = min(len(b), MAX_LEN)
+                ids[r, :n] = b[:n].long()
+            ids = ids.to(DEV)
             return ids, embed(ids)
         rec = mm_batch
         ids = rec["input_ids"].long().unsqueeze(0).to(DEV)
@@ -334,6 +343,7 @@ def run() -> dict:
         layer = _build_layer(tcfg, li, reader, DT)
         SS.set_current_layer(f"model.language_model.layers.{li}.mlp")
         ltype = tcfg.layer_types[li]
+        bi_seen = 0
         for st in states:
             try:
                 with torch.no_grad():
@@ -355,6 +365,11 @@ def run() -> dict:
             except Exception as e:
                 log(f"layer {li} batch failed ({type(e).__name__}: {str(e)[:160]})",
                     STAGE, "WARN")
+                gc.collect()
+                torch.cuda.empty_cache()
+            bi_seen += 1
+            if bi_seen % 25 == 0:
+                torch.cuda.empty_cache()
         SS.set_current_layer(None)
         del layer
         reader.release()          # tear down shard mmaps so their pages become reclaimable
