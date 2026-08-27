@@ -23,8 +23,13 @@ print(f"disk    : {free_gib():.0f} GiB free")
 
 src = ROOT / "source" / "GLM-5.3-Flash"
 if src.exists():
-    b = sum(p.stat().st_size for p in src.rglob("*.safetensors"))
-    print(f"source  : {b/1e9:.1f} / 328.3 GB ({100*b/328_337_455_672:.1f}%)")
+    # snapshot_download stages into .incomplete files before renaming, so counting only
+    # finished shards under-reports progress badly on a multi-hour download.
+    done = sum(p.stat().st_size for p in src.rglob("*.safetensors"))
+    part = sum(p.stat().st_size for p in src.rglob("*.incomplete"))
+    tot = done + part
+    print(f"source  : {tot/1e9:.1f} / 328.3 GB ({100*tot/328_337_455_672:.1f}%)"
+          f"  [{done/1e9:.0f} complete + {part/1e9:.0f} in flight]")
 for d, label in [(ROOT / "corpus", "corpus"), (ROOT / "output", "output"),
                  (ROOT / "artifacts" / "saliency", "saliency")]:
     if d.exists():
