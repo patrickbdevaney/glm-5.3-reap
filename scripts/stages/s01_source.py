@@ -39,14 +39,27 @@ def run() -> dict:
         if free_gib() < need_gib:
             raise RuntimeError(f"need {need_gib:.0f} GiB free, have {free_gib():.0f}")
         log(f"staging {MODEL_ID}: have {have/1e9:.1f} GB of {EXPECTED_BYTES/1e9:.1f} GB", STAGE)
-        from huggingface_hub import snapshot_download
-        snapshot_download(
-            repo_id=MODEL_ID,
-            local_dir=str(DEST),
-            token=hf_token(),
-            max_workers=8,
-            resume_download=True,
-        )
+        # Fetch ONLY the files that are actually missing, one at a time.
+        #
+        # snapshot_download is not used here. It re-verifies the whole local_dir against its
+        # own metadata under .cache, and when that metadata is absent it resolves the
+        # disagreement by DELETING local shards and re-fetching them - which is how a
+        # 52/62 tree walked backwards to 34/62. Per-file download has no such failure mode:
+        # a file that exists at the right size is simply skipped.
+        from huggingface_hub import hf_hub_download
+        import requests
+        api_files = requests.get(
+            f"https://huggingface.co/api/models/{MODEL_ID}?blobs=true", timeout=60).json()
+        sizes = {f["rfilename"]: f.get("size", 0) for f in api_files["siblings"]}
+        wanted = [n for n in sizes if not n.startswith(".")]
+        missing = [n for n in wanted
+                   if not (DEST / n).exists() or (DEST / n).stat().st_size != sizes[n]]
+        log(f"{len(missing)} of {len(wanted)} files missing or wrong size", STAGE)
+        for i, name in enumerate(sorted(missing), 1):
+            hf_hub_download(repo_id=MODEL_ID, filename=name, local_dir=str(DEST),
+                            token=hf_token())
+            if i % 5 == 0 or i == len(missing):
+                log(f"fetched {i}/{len(missing)} ({free_gib():.0f} GiB free)", STAGE)
 
     shards = sorted(DEST.glob("*.safetensors"))
     total = sum(p.stat().st_size for p in shards)
@@ -60,16 +73,6 @@ def run() -> dict:
     t = cfg["text_config"]
     assert t["n_routed_experts"] == 288 and t["num_experts_per_tok"] == 8, "config drift"
     assert cfg.get("quantization_config", {}).get("quant_method") == "fp8", "expected FP8 source"
-
-    # snapshot_download leaves resume metadata and staged blobs under .cache inside the
-    # local_dir. Once the shards verify byte-exact, that is ~40 GB of pure waste, and disk is
-    # the binding constraint for the prune stage (R10).
-    cache_dir = DEST / ".cache"
-    if cache_dir.exists():
-        import shutil
-        freed = sum(p.stat().st_size for p in cache_dir.rglob("*") if p.is_file())
-        shutil.rmtree(cache_dir, ignore_errors=True)
-        log(f"reclaimed {freed/1e9:.1f} GB of download staging", STAGE)
 
     metric(STAGE, "source_bytes", total)
     metric(STAGE, "source_shards", len(shards))
