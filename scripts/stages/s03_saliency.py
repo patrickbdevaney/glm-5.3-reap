@@ -226,25 +226,40 @@ def run() -> dict:
     text_rows, mm_rows = _load_calib()
 
     # The small, permanently-resident parts: embeddings and the vision tower (~2.5 GB bf16).
-    log("materialising embeddings + vision tower (small, stays resident)", STAGE)
+    #
+    # CRITICAL: build the shell on meta and materialise ONLY these two submodules. Calling
+    # shell.to_empty(device="cpu") on the whole model allocates all 321B parameters (~642 GB at
+    # bf16) and takes the box from 116 GiB available to 1.5 GiB in seconds - that is what killed
+    # this stage six times. Everything else stays on meta and costs nothing; the decoder layers
+    # are streamed in one at a time later.
+    log("materialising embeddings + vision tower ONLY (rest stays on meta)", STAGE)
     with init_empty_weights():
         shell = Glm5NextForConditionalGeneration._from_config(cfg)
-    shell = shell.to_empty(device="cpu")
-    small = {}
-    for name in reader.map:
-        if (name.startswith("model.visual.") or "embed_tokens" in name
-                or name.startswith("model.language_model.norm")
-                or "hc_head" in name):
-            if name.endswith("weight_scale_inv"):
+
+    def _materialise(mod, prefix):
+        mod.to_empty(device="cpu")
+        sd = {}
+        for name in reader.map:
+            if not name.startswith(prefix) or name.endswith("weight_scale_inv"):
                 continue
-            small[name] = reader.get(name).to(DT) if reader.get(name).is_floating_point() \
-                else reader.get(name)
-    shell.load_state_dict(small, strict=False, assign=True)
-    del small
+            t = reader.get(name)
+            sd[name[len(prefix):]] = t.to(DT) if t.is_floating_point() else t
+        missing, _ = mod.load_state_dict(sd, strict=False, assign=True)
+        real = [m for m in missing if "inv_freq" not in m and "rotary" not in m]
+        if real:
+            log(f"{prefix}: {len(real)} params missing (e.g. {real[:2]})", STAGE, "WARN")
+        del sd
+        return mod
+
+    _materialise(shell.model.visual, "model.visual.")
+    _materialise(shell.model.language_model.embed_tokens, "model.language_model.embed_tokens.")
     embed = shell.model.language_model.embed_tokens.to(DEV)
     visual = shell.model.visual.to(DEV, DT).eval()
     mm_model = shell.model
     gc.collect()
+    resident = (sum(p.numel() * p.element_size() for p in visual.parameters())
+                + sum(p.numel() * p.element_size() for p in embed.parameters())) / 2**30
+    log(f"resident small parts: {resident:.2f} GiB", STAGE)
 
     def embeds_for(batch_ids, mm_batch):
         if mm_batch is None:

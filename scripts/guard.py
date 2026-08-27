@@ -16,9 +16,21 @@ from common import db
 
 HEAVY = {"s03_saliency", "s04b_surgery", "s07_quantize", "s05_heal"}
 
+def _alive(pid):
+    if not pid:
+        return False
+    try:
+        with open(f"/proc/{pid}/stat") as fh:
+            return fh.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except OSError:
+        return False
+
+
+# A status of 'running' can be stale if the process was killed; check the pid too.
 with db() as con:
-    running = [n for n, in con.execute(
-        "SELECT name FROM stages WHERE status='running'") if n in HEAVY]
+    running = [n for n, pid in con.execute(
+        "SELECT name, pid FROM stages WHERE status='running'")
+        if n in HEAVY and _alive(pid)]
 
 if running:
     print(f"REFUSING: heavy stage(s) running: {running}. "
