@@ -161,3 +161,77 @@ dequantisation was **validated against real downloaded shards** — scale shape 
 - `s01b_load` outcome decides Path A vs Path B.
 - Whether the ~1,024-sample calibration budget clears the per-expert sufficiency floor
   (asserted in `s03`, not assumed).
+
+---
+
+## 2026-08-27 — Session 2b: the run goes autonomous, and what broke
+
+`s01_source` DONE in **23.1 min** (62 shards, 328,337,455,672 bytes, byte-exact). 40 GB of
+download staging reclaimed after verification.
+
+### The decisive result: the model cannot be placed
+
+`s01b_load` verdict: **`stream`**.
+
+| | |
+|---|---:|
+| model | 305.8 GiB |
+| RAM available | 116.2 GiB |
+| free disk | 162.4 GiB |
+
+Neither RAM placement nor disk offload can hold it. **Path B is not a contingency, it is the
+path.** `[EST]`
+
+**Near-miss worth recording.** The first version of `s01b` simply *tried*
+`device_map="cpu", dtype="auto"`, on the theory that safetensors would stay mmap-backed and the
+kernel would page it. It does not — transformers materialises into RAM. The probe reached
+**119 GB RSS with 5 GB available** and had to be killed; an OOM there would have taken the
+orchestrator and the corpus build with it. `s01b` now decides by arithmetic and never attempts
+a placement it knows cannot fit.
+
+### Five real bugs, all found by running rather than by reading
+
+1. **Disk precheck was absolute, not remaining.** Failed a download that was 44% complete
+   because it demanded 320 GiB free rather than 320 − already-downloaded.
+2. **The orchestrator loop was single-threaded.** The multi-hour corpus build *blocked* the
+   source download; total time became the sum rather than the max. Long stages now run as
+   detached children.
+3. **Difficulty-band starvation.** The band mix was treated as a hard constraint, so once a
+   band filled every subsequent row in it was skipped — a source whose rows all land in one
+   band scans forever. CoderForge (128K-context trajectories, uniformly "hard") produced zero
+   samples for ten minutes. Bands are now a preference, relaxed after a bounded scan.
+4. **JSON-string columns.** CoderForge stores an entire trajectory as a JSON *string* in
+   `messages`, so `isinstance(msgs, list)` was False and the extractor returned `None` —
+   **0 accepted from 35,000 scanned rows.** Fixed generically.
+5. **Zombie children read as alive.** Popen children are never `wait()`ed, so on exit they
+   become zombies — and `os.kill(pid, 0)` **succeeds** on a zombie, because the PID entry
+   survives until reaped. The orchestrator reported a stage healthy for three minutes after it
+   had died. `_pid_alive` now reads `/proc/<pid>/stat` and treats state `Z` as dead, and the
+   loop reaps children each iteration.
+
+### Streaming path built and validated
+
+- **Checkpoint conversion mapping applied by hand.** Building layers manually means applying
+  `get_checkpoint_conversion_mapping("glm5_next")` manually. Without it, `load_state_dict`
+  silently missed 11 params in a KDA layer and 6 in an MoE layer — and those were **mHC**
+  (`hc_attn_*` → `attn_hc.*`) and the **KDA forget gate** (`dt_bias`, `A_log`, `f_a/f_b_proj`),
+  plus a `q/k/v_conv1d` fusion. Leaving them missing would have left randomly-initialised
+  weights in exactly the two components most sensitive to pruning, and the saliency would have
+  looked plausible while being meaningless. `[EST]`
+- **Each layer is now built once, not once per batch.** Activations are sized to fit in RAM
+  (512 × 2048 × hc_mult 4 × 4096 × 2 B ≈ 34 GB), so the pass costs 45 layer builds rather than
+  ~8,000 — the difference between ~6 minutes and ~18 hours of weight re-reads.
+- Layer build verified: KDA layer 0.54 GiB in 0.9 s, MoE layer **13.78 GiB in 6.2 s**, no
+  missing params.
+
+### Surgery designed around the disk constraint (R10)
+
+`s04b` prunes at the **tensor level** — no model object — and **deletes each source shard once
+its survivors are written**, so free space grows monotonically through the pass. Safe because
+the source is public and re-downloadable in 23 min, and a completed-shard ledger makes it
+resumable.
+
+Two correctness details: routers are sliced to the retained set (a router still emitting 288
+logits over 144 experts is simply wrong), and an expert with **zero routed tokens is ranked
+`-inf`, not 0** — its conditional mean is *undefined*, not low, and ranking it 0 would let an
+unobserved expert outrank a genuinely weak observed one.
