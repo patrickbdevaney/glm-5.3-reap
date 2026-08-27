@@ -52,6 +52,13 @@ def compute_retained(ratio: float) -> dict[str, list[int]]:
     return retained
 
 
+def _original_expert_count() -> int:
+    import torch
+    for f in sorted(SALIENCY.glob("*.pt")):
+        return int(torch.load(f, weights_only=False)["num_experts"])
+    raise RuntimeError("no saliency files; cannot determine original expert count")
+
+
 def _load_ledger() -> set[str]:
     if LEDGER.exists():
         try:
@@ -77,7 +84,8 @@ def run() -> dict:
         raise RuntimeError("no saliency available; stage 3 must run first")
     (ARTIFACTS / "reap_retained_experts.json").write_text(json.dumps(retained))
     n_keep = len(next(iter(retained.values())))
-    log(f"ratio {ratio:.0%}: keeping {n_keep} of 288 experts in {len(retained)} MoE layers",
+    n_orig = _original_expert_count()
+    log(f"ratio {ratio:.0%}: keeping {n_keep} of {n_orig} experts in {len(retained)} MoE layers",
         STAGE)
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -96,7 +104,7 @@ def run() -> dict:
         except Exception:
             weight_map = {}
 
-    kept_t = dropped_t = 0
+    kept_t = dropped_t = routers_sliced = 0
     t0 = time.time()
     for si, shard in enumerate(shards):
         if shard.name in done:
@@ -122,11 +130,15 @@ def run() -> dict:
                 t = f.get_tensor(name)
                 # Routers emit logits over the expert set; they must shrink with it.
                 if name.endswith("mlp.gate.weight") or name.endswith("e_score_correction_bias"):
-                    lname = name.rsplit(".gate.", 1)[0] if ".gate." in name else None
                     base = name.split(".mlp.")[0] + ".mlp"
                     keep = retained.get(base)
-                    if keep is not None and t.shape[0] == 288:
+                    # Compare against the ORIGINAL expert count read from the saliency, not a
+                    # hardcoded 288. A router left emitting logits over the full expert set
+                    # while only half the experts exist does not crash - it silently produces
+                    # garbage routing, which is the worst way for this to fail.
+                    if keep is not None and t.shape[0] == n_orig:
                         t = t[torch.tensor(keep, dtype=torch.long)].contiguous()
+                        routers_sliced += 1
                 out_t[name] = t
                 kept_t += 1
 
@@ -186,7 +198,15 @@ def run() -> dict:
     metric(STAGE, "pruned_bytes", total)
     metric(STAGE, "tensors_kept", kept_t)
     metric(STAGE, "tensors_dropped", dropped_t)
-    res = {"ratio": ratio, "experts_kept": n_keep, "tensors_kept": kept_t,
+    # Two routers per MoE layer (weight + e_score_correction_bias); if that count is wrong the
+    # model routes over an expert set that no longer exists.
+    expected_routers = 2 * len(retained)
+    if routers_sliced != expected_routers:
+        raise RuntimeError(f"sliced {routers_sliced} router tensors, expected "
+                           f"{expected_routers} (2 per MoE layer). Routers must shrink with "
+                           f"the expert set or routing is silently wrong.")
+    res = {"ratio": ratio, "experts_kept": n_keep, "routers_sliced": routers_sliced,
+           "experts_original": n_orig, "tensors_kept": kept_t,
            "tensors_dropped": dropped_t, "bytes": total,
            "gib": round(total / 2**30, 1), "path": str(OUT),
            "free_gib_after": round(free_gib(), 1)}
