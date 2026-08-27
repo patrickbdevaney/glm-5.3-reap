@@ -51,11 +51,11 @@ STAGES: list[Stage] = [
           needs_gib=20, background=True),
     Stage("s01b_load",    "stages.s01b_loadcheck",["s01_source"],              max_attempts=2,
           needs_gib=20, background=True),
-    Stage("s03_saliency", "stages.s03_saliency",  ["s01b_load", "s02_corpus"], max_attempts=3,
+    Stage("s03_saliency", "stages.s03_saliency",  ["s01b_load", "s02_corpus"], max_attempts=6,
           needs_gib=40, background=True),
     Stage("s04_sweep",    "stages.s04_sweep",     ["s03_saliency"],            max_attempts=3, needs_gib=10),
     # Healing improves the artifact but must never block it. critical=False + soft dep.
-    Stage("s04b_surgery", "stages.s04b_surgery",  ["s04_sweep"],               max_attempts=3,
+    Stage("s04b_surgery", "stages.s04b_surgery",  ["s04_sweep"],               max_attempts=6,
           needs_gib=10, background=True),
     Stage("s05_heal",     "stages.s05_heal",      ["s04b_surgery"],            max_attempts=2,
           needs_gib=10, critical=False),
