@@ -104,15 +104,20 @@ def collect_bucket(bucket: str, quota: int) -> int:
                 break
             want = int(quota * weight)
             got = 0
+            scanned = 0
             t0 = time.time()
             try:
                 ds = _stream(hf_id, config, split)
                 for row in ds:
                     if have >= quota or got >= want:
                         break
-                    if time.time() - t0 > 1800:      # never let one source stall the build
-                        log(f"{bucket}/{hf_id}: 30 min cap hit at {got}", STAGE, "WARN")
+                    if time.time() - t0 > 600:       # never let one source stall the build
+                        log(f"{bucket}/{hf_id}: 10 min cap hit at {got} "
+                            f"(scanned {scanned})", STAGE, "WARN")
                         break
+                    scanned += 1
+                    if scanned % 5000 == 0:
+                        log(f"{bucket}/{hf_id}: scanned {scanned}, accepted {got}", STAGE)
                     try:
                         text = text_fn(row)
                     except Exception:
@@ -120,8 +125,13 @@ def collect_bucket(bucket: str, quota: int) -> int:
                     if not text or len(text) < MIN_CHARS:
                         continue
                     band = _band(len(text))
-                    if seen_bands[band] >= band_quota.get(band, 0) and have < quota * 0.95:
-                        continue          # band already satisfied; keep looking
+                    # Band balancing is a preference, not a constraint. A source whose rows all
+                    # land in one already-full band would otherwise skip every row and spin
+                    # until the time cap, which is exactly what CoderForge (128K-context
+                    # trajectories, all "hard") did. Relax after a bounded scan.
+                    if (scanned < 3000 and seen_bands[band] >= band_quota.get(band, 0)
+                            and have < quota * 0.95):
+                        continue
                     fh.write(json.dumps({"text": text[:80_000], "band": band,
                                          "src": hf_id, "bucket": bucket}) + "\n")
                     seen_bands[band] += 1
@@ -163,7 +173,7 @@ def collect_multimodal(quota: int) -> int:
         try:
             ds = _stream(hf_id, config, split)
             for row in ds:
-                if have >= quota or got >= want or time.time() - t0 > 2400:
+                if have >= quota or got >= want or time.time() - t0 > 900:
                     break
                 img = row.get("image") or row.get("images")
                 if isinstance(img, list):
