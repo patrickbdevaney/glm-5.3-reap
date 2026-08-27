@@ -50,18 +50,28 @@ def _first(row, *keys):
 
 
 def _messages(row, key="messages"):
+    """Handle both {role,content} and ShareGPT {from,value} turn formats."""
     msgs = row.get(key)
     if not isinstance(msgs, list):
         return None
     parts = []
     for m in msgs:
-        if isinstance(m, dict):
-            c = m.get("content")
-            if isinstance(c, list):
-                c = " ".join(str(x.get("text", "")) for x in c if isinstance(x, dict))
-            if c:
-                parts.append(f"{m.get('role','user')}: {c}")
+        if not isinstance(m, dict):
+            continue
+        c = m.get("content", m.get("value"))
+        if isinstance(c, list):
+            c = " ".join(str(x.get("text", "")) for x in c if isinstance(x, dict))
+        if c:
+            parts.append(f"{m.get('role', m.get('from', 'user'))}: {c}")
     return "\n\n".join(parts) or None
+
+
+def _any_messages(row):
+    for k in ("messages", "conversations", "conversation", "turns"):
+        v = _messages(row, k)
+        if v:
+            return v
+    return None
 
 
 def _qa(row, q_keys, a_keys):
@@ -75,33 +85,34 @@ def _qa(row, q_keys, a_keys):
 # Each entry: (hf_id, config, split, weight_within_bucket, text_fn)
 SOURCES: dict[str, list[tuple]] = {
     "agentic": [
-        ("togethercomputer/CoderForge-Preview", None, "train", 0.30, lambda r: _messages(r) or _first(r, "text", "trajectory")),
+        ("togethercomputer/CoderForge-Preview", "trajectories", "train", 0.30, lambda r: _any_messages(r) or _first(r, "text", "trajectory")),
         ("nebius/SWE-rebench", None, "test", 0.20, lambda r: _qa(r, ["problem_statement", "text"], ["patch", "solution"])),
-        ("SWE-bench/SWE-smith-trajectories", None, "train", 0.20, lambda r: _messages(r) or _first(r, "text")),
+        ("SWE-bench/SWE-smith-trajectories", None, "tool", 0.20, lambda r: _any_messages(r) or _first(r, "text")),
         ("SWE-Gym/SWE-Gym", None, "train", 0.10, lambda r: _qa(r, ["problem_statement"], ["patch"])),
-        ("Salesforce/xlam-function-calling-60k", None, "train", 0.10, lambda r: _qa(r, ["query"], ["answers", "tools"])),
-        ("open-thoughts/AgentTrove", None, "train", 0.10, lambda r: _messages(r) or _first(r, "text")),
+        ("arcee-ai/agent-data", None, "train", 0.10, lambda r: _any_messages(r) or _qa(r, ["query", "instruction"], ["answers", "output"])),
+        ("open-thoughts/AgentTrove", None, "train", 0.10, lambda r: _any_messages(r) or _first(r, "text")),
     ],
     "code": [
-        ("nvidia/OpenCodeReasoning-2", "python", "train", 0.35, lambda r: _qa(r, ["input", "question", "problem"], ["output", "solution", "r1_generation"])),
+        ("nvidia/OpenCodeReasoning-2", "train", "python", 0.30, lambda r: _qa(r, ["input", "question", "problem"], ["output", "solution", "r1_generation"])),
+        ("nvidia/OpenCodeReasoning-2", "train", "cpp", 0.15, lambda r: _qa(r, ["input", "question", "problem"], ["output", "solution", "r1_generation"])),
         ("nvidia/OpenCodeInstruct", None, "train", 0.25, lambda r: _qa(r, ["input", "instruction"], ["output", "response"])),
         ("GPUMODE/KernelBook", None, "train", 0.15, lambda r: _first(r, "python_code", "triton_code", "code", "text")),
         ("SakanaAI/AI-CUDA-Engineer-Archive", None, "level_1", 0.10, lambda r: _first(r, "CUDA_Code", "Kernel_Code", "cuda_code")),
-        ("bigcode/commitpackft", "python", "train", 0.15, lambda r: _qa(r, ["message", "subject"], ["new_contents", "content"])),
+        
     ],
     "math": [
-        ("nvidia/OpenMathReasoning", "cot", "train", 0.35, lambda r: _qa(r, ["problem", "question"], ["generated_solution", "solution", "answer"])),
+        ("nvidia/OpenMathReasoning", "default", "cot", 0.35, lambda r: _qa(r, ["problem", "question"], ["generated_solution", "solution", "answer"])),
         ("zwhe99/DeepMath-103K", None, "train", 0.25, lambda r: _qa(r, ["question", "problem"], ["r1_solution_1", "final_answer", "solution"])),
         ("open-r1/OpenR1-Math-220k", None, "train", 0.20, lambda r: _qa(r, ["problem", "question"], ["solution", "answer"])),
         ("AI-MO/NuminaMath-1.5", None, "train", 0.10, lambda r: _qa(r, ["problem"], ["solution"])),
         ("internlm/Lean-Workbook", None, "train", 0.10, lambda r: _qa(r, ["natural_language_statement", "problem"], ["formal_statement", "answer"])),
     ],
     "science": [
-        ("open-thoughts/OpenThoughts3-1.2M", None, "train", 0.45, lambda r: _messages(r, "conversations") or _messages(r) or _qa(r, ["problem", "question"], ["solution", "answer"])),
-        ("nvidia/sft_datablend_v1", None, "train", 0.20, lambda r: _messages(r, "conversations") or _messages(r)),
+        ("open-thoughts/OpenThoughts3-1.2M", None, "train", 0.45, lambda r: _any_messages(r) or _qa(r, ["problem", "question"], ["solution", "answer"])),
+        ("nvidia/sft_datablend_v1", None, "train", 0.25, lambda r: _any_messages(r)),
         ("TIGER-Lab/MMLU-Pro", None, "test", 0.15, lambda r: _qa(r, ["question"], ["cot_content", "answer"])),
-        ("jablonkagroup/ChemBench", None, "train", 0.10, lambda r: _qa(r, ["question", "input"], ["answer", "target"])),
-        ("ncbi/pubmed", None, "train", 0.10, lambda r: None),   # handled specially (nested XML-ish)
+        ("jablonkagroup/ChemBench", "organic_chemistry", "train", 0.15, lambda r: _qa(r, ["question", "input"], ["answer", "target"])),
+        
     ],
     "finance": [
         ("kensho/DocFinQA", None, "train", 0.25, lambda r: _qa(r, ["context", "question"], ["answer", "program"])),

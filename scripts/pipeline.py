@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import subprocess
 import signal
 import sys
 import time
@@ -39,11 +40,13 @@ class Stage:
     retry_backoff: int = 300          # seconds, doubled each attempt
     needs_gib: float = 0.0
     critical: bool = True            # False -> pipeline continues past a hard failure
+    background: bool = False         # run in its own process so it cannot block the loop
 
 
 STAGES: list[Stage] = [
     Stage("s00_smoke",    "stages.s00_smoke",     [],                          max_attempts=2, needs_gib=5),
-    Stage("s02_corpus",   "stages.s02_corpus",    [],                          max_attempts=4, needs_gib=60),
+    Stage("s02_corpus",   "stages.s02_corpus",    [],                          max_attempts=4,
+          needs_gib=60, background=True),
     Stage("s01_source",   "stages.s01_source",    ["s00_smoke"],               max_attempts=5, needs_gib=320),
     Stage("s01b_load",    "stages.s01b_loadcheck",["s01_source"],              max_attempts=2, needs_gib=20),
     Stage("s03_saliency", "stages.s03_saliency",  ["s01b_load", "s02_corpus"], max_attempts=3, needs_gib=200),
@@ -114,6 +117,42 @@ def ready(s: Stage) -> bool:
 def blocked_forever(s: Stage) -> bool:
     """A dep that has permanently failed blocks this stage permanently."""
     return any(status(d) == "failed" for d in s.deps)
+
+
+def _pid_alive(pid: int | None) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def stage_pid(name: str) -> int | None:
+    with db() as con:
+        row = con.execute("SELECT pid FROM stages WHERE name=?", (name,)).fetchone()
+    return row[0] if row and row[0] else None
+
+
+def launch_background(s: Stage) -> bool:
+    """Spawn the stage in its own process. Returns True if it is now running."""
+    pid = stage_pid(s.name)
+    if _pid_alive(pid):
+        return True
+    n = bump_attempts(s.name)
+    lf = ROOT / "logs" / f"{s.name}.log"
+    log(f"START background (attempt {n}/{s.max_attempts}) -> {lf.name}", s.name)
+    with lf.open("ab") as fh:
+        p = subprocess.Popen(
+            [str(ROOT / ".venv" / "bin" / "python"), str(ROOT / "scripts" / "run_stage.py"),
+             s.name, s.module],
+            stdout=fh, stderr=subprocess.STDOUT, start_new_session=True,
+            cwd=str(ROOT), env={**os.environ, "PYTHONUNBUFFERED": "1"})
+    with db() as con:
+        con.execute("UPDATE stages SET status='running', started_at=?, pid=? WHERE name=?",
+                    (now(), p.pid, s.name))
+    return True
 
 
 def run_stage(s: Stage) -> bool:
@@ -190,6 +229,16 @@ def main() -> int:
                     log("blocked: an upstream dependency failed permanently", s.name, "ERROR")
                 continue
             if not ready(s):
+                continue
+            if s.background:
+                if st == "running" and _pid_alive(stage_pid(s.name)):
+                    continue                      # still going; do not block on it
+                if st == "running":               # process died without recording an outcome
+                    set_status(s.name, "retry", error="background process vanished")
+                    log("background process vanished; will relaunch", s.name, "WARN")
+                if attempts(s.name) < s.max_attempts:
+                    launch_background(s)
+                    progressed = True
                 continue
             if run_stage(s):
                 progressed = True

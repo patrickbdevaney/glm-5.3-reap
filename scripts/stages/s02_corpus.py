@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from common import ROOT, MODEL_ID, log, metric, kv_set, kv_get, publish, hf_token  # noqa: E402
 import corpus_spec as SPEC  # noqa: E402
+import importlib
 
 STAGE = "s02_corpus"
 CORPUS = ROOT / "corpus"
@@ -46,8 +47,34 @@ def _quota_by_band(total: int) -> dict[str, int]:
 
 
 def _stream(hf_id, config, split):
-    from datasets import load_dataset
-    return load_dataset(hf_id, config, split=split, streaming=True, token=hf_token())
+    """Self-healing loader.
+
+    Config/split names drift and are easy to get wrong from a model card. Rather than failing a
+    source outright, recover the two mistakes that account for nearly all of them: a missing
+    config name, and a split that does not exist under the chosen config.
+    """
+    from datasets import load_dataset, get_dataset_config_names, get_dataset_split_names
+    tok = hf_token()
+    try:
+        return load_dataset(hf_id, config, split=split, streaming=True, token=tok)
+    except Exception as e:
+        msg = str(e)
+        if "Config name is missing" in msg or "BuilderConfig" in msg:
+            cfgs = get_dataset_config_names(hf_id, token=tok)
+            if cfgs:
+                config = cfgs[0]
+                log(f"{hf_id}: config auto-corrected to '{config}'", STAGE, "WARN")
+        elif "Bad split" not in msg and "Unknown split" not in msg:
+            raise
+        try:
+            return load_dataset(hf_id, config, split=split, streaming=True, token=tok)
+        except Exception:
+            splits = get_dataset_split_names(hf_id, config, token=tok)
+            if not splits:
+                raise
+            log(f"{hf_id}({config}): split auto-corrected '{split}' -> '{splits[0]}'",
+                STAGE, "WARN")
+            return load_dataset(hf_id, config, split=splits[0], streaming=True, token=tok)
 
 
 def collect_bucket(bucket: str, quota: int) -> int:
@@ -218,6 +245,7 @@ def tokenize_text() -> dict:
 
 
 def run() -> dict:
+    importlib.reload(SPEC)   # pick up spec fixes on retry without a service restart
     quotas = {b: round(SPEC.TOTAL_SAMPLES * f) for b, f in SPEC.MIXTURE.items()}
     res: dict = {"quotas": quotas}
 
