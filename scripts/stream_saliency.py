@@ -50,13 +50,17 @@ def patch_experts_for_saliency():
         final = torch.zeros_like(hidden_states)
         with torch.no_grad():
             mask = F.one_hot(top_k_index, num_classes=self.num_experts).permute(2, 1, 0)
-            hit = torch.greater(mask.sum(dim=(-1, -2)), 0).nonzero()
+            # ONE host sync for the hit list. Iterating a CUDA tensor in Python syncs on every
+            # element - 288 syncs per batch, ~39k per layer.
+            hit = torch.greater(mask.sum(dim=(-1, -2)), 0).nonzero().flatten().tolist()
         lname = _CUR_LAYER["name"]
+        dev = hidden_states.device
         if lname is not None and lname not in SAL_SUM:
-            SAL_SUM[lname] = torch.zeros(self.num_experts, dtype=torch.float64)
-            SAL_CNT[lname] = torch.zeros(self.num_experts, dtype=torch.float64)
+            # Accumulators live on the GPU. The previous version called .cpu() per expert,
+            # forcing another ~39k syncs per layer purely for telemetry.
+            SAL_SUM[lname] = torch.zeros(self.num_experts, dtype=torch.float64, device=dev)
+            SAL_CNT[lname] = torch.zeros(self.num_experts, dtype=torch.float64, device=dev)
         for expert_idx in hit:
-            expert_idx = expert_idx[0]
             if expert_idx == self.num_experts:
                 continue
             top_k_pos, token_idx = torch.where(mask[expert_idx])
@@ -66,10 +70,10 @@ def patch_experts_for_saliency():
             g_j = top_k_weights[token_idx, top_k_pos]                 # router gate
             if lname is not None:
                 with torch.no_grad():
-                    s = (g_j.to(torch.float32) *
-                         f_j.to(torch.float32).norm(dim=-1)).sum().double().cpu()
-                    SAL_SUM[lname][expert_idx] += s
-                    SAL_CNT[lname][expert_idx] += float(token_idx.numel())
+                    SAL_SUM[lname][expert_idx] += (
+                        g_j.to(torch.float32) * f_j.to(torch.float32).norm(dim=-1)
+                    ).sum().double()
+                    SAL_CNT[lname][expert_idx] += token_idx.numel()
             final.index_add_(0, token_idx, (f_j * g_j[:, None]).to(final.dtype))
         return final
 
@@ -135,7 +139,8 @@ def dump(dirpath: Path, layer_name_fmt: str = "model.language_model.layers.{i}.m
     dirpath = Path(dirpath)
     dirpath.mkdir(parents=True, exist_ok=True)
     for lname in sorted(SAL_SUM):
-        torch.save({"layer": lname, "sum_saliency": SAL_SUM[lname],
-                    "count": SAL_CNT[lname], "num_experts": SAL_SUM[lname].numel()},
+        torch.save({"layer": lname, "sum_saliency": SAL_SUM[lname].detach().cpu(),
+                    "count": SAL_CNT[lname].detach().cpu(),
+                    "num_experts": SAL_SUM[lname].numel()},
                    dirpath / f"{lname.replace('.', '__')}.pt")
     return len(SAL_SUM)
