@@ -1,20 +1,30 @@
-"""Stage 7 - NVFP4 quantisation to the Thor-resident checkpoint.
+"""Stage 7 - NVFP4 quantisation, tensor by tensor.
 
-Per-component precision policy (wiki/60-quantization.md), following the GLM-5.2 precedent of
-NVFP4 on MoE + FP8 on attention:
+No model is ever built. Every model-level route failed on this box for the same underlying
+reason - 157 GiB does not fit anywhere:
 
-  routed + shared experts   -> NVFP4 (W4A4)   ~97% of parameters; the only thing worth compressing
-  attention (MLA + DSA)     -> FP8            1.9% of mass, MLA latents are sensitive
-  KDA linear-attn state     -> untouched      a recurrence compounds error along the sequence
-  vision tower              -> untouched      0.18% of mass, first-class capability
-  mHC / routers / lm_head   -> untouched      tiny, numerically delicate, argmax-sensitive
+  * device_map="cpu"        -> exceeds 122 GiB of RAM
+  * device_map="auto"       -> cudaErrorIllegalAddress (unified memory: accelerate reads
+                               ~122 GiB of "VRAM" and exhausts the pool it is measuring)
+  * accelerate disk offload -> llm-compressor's oneshot asserts offloaded params are on `meta`,
+                               which only holds for CPU offload
 
-The whole non-expert model is ~3% of parameters, so everything worth protecting is affordable
-to protect. That is why the 50% target has headroom at all.
+So this streams safetensors shard by shard, exactly like s04b surgery and s03 saliency.
+`scripts/nvfp4_tensor.py` is verified bit-identical to compressed-tensors' own compressor.
+
+Precision policy (wiki/60-quantization.md):
+  routed + shared experts  -> NVFP4   ~97% of parameters; the only thing worth compressing
+  everything else          -> BF16    3% of mass: attention, KDA state, vision tower, mHC,
+                                      routers, lm_head, embeddings
+
+Non-expert FP8 is dequantised to BF16 rather than left in block format, so the result carries
+ONE quantisation format plus plain BF16 instead of two incompatible schemes in one file.
 """
 from __future__ import annotations
 
 import json
+import re
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -24,164 +34,132 @@ from common import ROOT, ARTIFACTS, log, metric, kv_get, kv_set, publish, free_g
 
 STAGE = "s07_quantize"
 OUT = ROOT / "output" / "glm-5.3-flash-reap50-nvfp4"
-OFFLOAD = ROOT / "offload"
 
-# Untouched: quantising any of these costs almost nothing in size and risks real capability.
+EXPERT_RE = re.compile(r"\.mlp\.(experts\.\d+|shared_experts)\.(gate_proj|up_proj|down_proj)\.weight$")
+
+# Untouched: quantising any of these saves almost nothing and risks real capability.
 IGNORE = [
-    "re:.*lm_head.*",
-    "re:.*embed_tokens.*",
+    "re:.*lm_head.*", "re:.*embed_tokens.*",
     "re:.*visual.*",            # dense ViT, 0.18% of mass, first-class capability
-    "re:.*linear_attn.*",       # KDA recurrence
-    "re:.*\\.self_attn\\.(A_log|dt_bias|.*_conv1d|[fgb]_[ab]_proj).*",
+    "re:.*linear_attn.*",       # KDA recurrence: error compounds along the sequence
+    "re:.*self_attn.*",
     "re:.*hc_.*", "re:.*mapping_proj.*",   # mHC, Sinkhorn-normalised
     "re:.*mlp\\.gate\\..*",     # routers: argmax-sensitive
-    "re:.*shared_experts.*gate\\..*",
+    "re:.*norm.*",
 ]
-
-N_CALIB = 256          # activation scales converge on a few hundred samples
-MAX_LEN = 2048
-
-
-def _calib():
-    import torch
-    from datasets import Dataset
-    rows = []
-    tdir = ROOT / "corpus" / "shards" / "text"
-    for shard in sorted(tdir.glob("*.pt")):
-        try:
-            for it in torch.load(shard, weights_only=False):
-                rows.append({"input_ids": it["input_ids"][:MAX_LEN].tolist()})
-                if len(rows) >= N_CALIB:
-                    return Dataset.from_list(rows)
-        except Exception:
-            continue
-    return Dataset.from_list(rows) if rows else None
 
 
 def run() -> dict:
-    from transformers import AutoTokenizer
-    from transformers.models.glm5_next import Glm5NextForConditionalGeneration
-    from llmcompressor import oneshot
-    from llmcompressor.modifiers.quantization import QuantizationModifier
-    from compressed_tensors.quantization import preset_name_to_scheme
-    from llmcompressor.modeling.moe.linearize import linearize_moe
-    import glm5_next_support
+    import torch
+    from safetensors import safe_open
+    from safetensors.torch import save_file
+    import nvfp4_tensor as NV
 
-    if kv_get("skip_fp8_intermediate", False):
-        nv = Path(kv_get("nvfp4_path", str(OUT)))
-        total = sum(p.stat().st_size for p in nv.rglob("*") if p.is_file())
-        gib = total / 2**30
-        log(f"NVFP4 was written directly by stage 3 (R10 disk-pressure path): "
-            f"{nv} ({gib:.1f} GiB). Nothing to re-quantise.", STAGE)
-        return {"path": str(nv), "bytes": total, "gib": round(gib, 1),
-                "fits_thor": gib < 117, "produced_by": "s03 (R10 path)"}
     src = Path(kv_get("emit_path", str(ROOT / "output" / "glm-5.3-flash-reap50-fp8")))
     if not src.exists():
-        raise RuntimeError(f"emit output not found at {src}")
+        raise RuntimeError(f"FP8 source not found at {src}")
     OUT.mkdir(parents=True, exist_ok=True)
-    OFFLOAD.mkdir(parents=True, exist_ok=True)
-    glm5_next_support.register()
 
-    # The pruned model is ~156 GiB against 116 GiB of RAM, so it still cannot sit in memory -
-    # but surgery deletes the source as it goes, so by now there is ~300 GiB of free disk and
-    # accelerate can offload. Decide from measured space rather than assuming.
-    model_gib = sum(p.stat().st_size for p in src.glob("*.safetensors")) / 2**30
-    have = free_gib()
-    log(f"pruned checkpoint {model_gib:.0f} GiB, {have:.0f} GiB free", STAGE)
-    # Only the part that does not fit in RAM lands on disk, so the requirement is
-    # (model - usable RAM), not the whole model. offload_state_dict=True would write the ENTIRE
-    # state dict out first and does need the full size - that is the difference between needing
-    # ~173 GiB and ~60 GiB here.
-    ram_gib = 0.0
-    with open("/proc/meminfo") as fh:
-        for line in fh:
-            if line.startswith("MemAvailable"):
-                ram_gib = int(line.split()[1]) / 1048576
-                break
-    need = max(model_gib - ram_gib * 0.8, 0) + 15
-    if have < need:
-        raise RuntimeError(
-            f"need ~{need:.0f} GiB free to offload the part of the model that will not fit in "
-            f"RAM ({model_gib:.0f} GiB model, {ram_gib:.0f} GiB available), have {have:.0f}.")
-    # Bound the GPU explicitly. device_map="auto" died with cudaErrorIllegalAddress during
-    # weight materialisation. Verified first that plain FP8 host->device copies work here,
-    # including a real tensor from this checkpoint, so it is placement and not a dtype problem:
-    # Thor's memory is UNIFIED, so accelerate reads ~122 GiB of "VRAM", decides most of a
-    # 157 GiB model belongs there, and exhausts the very pool it just measured.
-    #
-    # This stage runs no forward passes - NVFP4A16 weights are a deterministic transform and
-    # FP8_DYNAMIC computes activation scales at runtime - so the GPU needs almost nothing.
-    max_mem = {0: "2GiB", "cpu": "48GiB"}
-    log(f"loading with bounded placement {max_mem}, disk offload -> {OFFLOAD} "
-        f"(need ~{need:.0f} GiB, have {have:.0f})", STAGE)
-    model = Glm5NextForConditionalGeneration.from_pretrained(
-        src, device_map="auto", dtype="auto", max_memory=max_mem,
-        offload_folder=str(OFFLOAD), offload_state_dict=False)
-    linearize_moe(model)
-    tok = AutoTokenizer.from_pretrained(src)
+    v = NV.verify_against_library()
+    if not (v["packed_equal"] and v["scale_equal"]):
+        raise RuntimeError(f"NVFP4 implementation does not match compressed-tensors: {v}")
+    log(f"NVFP4 implementation verified bit-identical to compressed-tensors {v['packed_shape']}",
+        STAGE)
 
-    # config_groups takes QuantizationScheme objects, NOT a {"scheme": "NVFP4"} dict -
-    # pydantic rejects the latter with extra_forbidden. preset_name_to_scheme resolves the
-    # preset and attaches the targets. Verified to yield: experts 4-bit float, tensor_group,
-    # group_size=16 (NVFP4's 16-element blocks) with dynamic local activations; attention
-    # 8-bit float, channel weights, token-dynamic activations.
-    recipe = [QuantizationModifier(
-        config_groups={
-            "experts_nvfp4": preset_name_to_scheme(
-                # NVFP4A16 (weight-only), not NVFP4 (W4A4). W4A4 needs calibration FORWARD
-                # passes to fit activation scales, and this model's KDA layers cost ~13 GiB of
-                # transient memory per 2048-token sequence - the wall that killed stage 3 six
-                # times. Weight-only needs no forwards at all, so the whole class of failure
-                # disappears. The cost is serving throughput, not accuracy: the weights are
-                # identical NVFP4 either way. Activation scales can be fitted later, cheaply,
-                # against the finished 91 GiB checkpoint rather than the 157 GiB one.
-                "NVFP4A16",
-                targets=["re:.*mlp\\.experts\\..*",
-                         "re:.*shared_experts\\.(gate|up|down)_proj"]),
-            "attention_fp8": preset_name_to_scheme(
-                "FP8_DYNAMIC",
-                targets=["re:.*self_attn\\.(q_a_proj|q_b_proj|kv_a_proj.*|kv_b_proj|o_proj)"]),
-        },
-        ignore=IGNORE,
-    )]
+    shards = sorted(src.glob("*.safetensors"))
+    done = {p.name for p in OUT.glob("*.safetensors")}
+    if done:
+        log(f"resuming: {len(done)} shards already quantised", STAGE)
 
-    # No calibration data: NVFP4A16 weights are a deterministic per-block transform and
-    # FP8_DYNAMIC computes activation scales at runtime. Neither needs a forward pass.
-    ds = None
-    log("NVFP4A16 oneshot: weight-only, no calibration forwards required", STAGE)
+    weight_map: dict[str, str] = {}
+    ip = OUT / "model.safetensors.index.json"
+    if ip.exists():
+        try:
+            weight_map = json.loads(ip.read_text())["weight_map"]
+        except Exception:
+            weight_map = {}
+
+    n_q = n_bf16 = 0
     t0 = time.time()
-    oneshot(
-        model=model,
-        dataset=ds,
-        recipe=recipe,
-        num_calibration_samples=0,
-        max_seq_length=MAX_LEN,
-        pipeline="sequential",
-        sequential_offload_device="cpu",
-        moe_calibrate_all_experts=True,   # quantisation DOES want every expert observed
-        shuffle_calibration_samples=False,
-        output_dir=str(OUT),
-        save_compressed=True,
-    )
-    dt = time.time() - t0
-    metric(STAGE, "quantize_minutes", dt / 60)
+    for si, shard in enumerate(shards, 1):
+        if shard.name in done:
+            continue
+        out_t: dict[str, torch.Tensor] = {}
+        with safe_open(str(shard), framework="pt", device="cpu") as f:
+            keys = set(f.keys())
+            for name in sorted(keys):
+                if name.endswith("weight_scale_inv"):
+                    continue                       # consumed with its weight
+                t = f.get_tensor(name)
+                sname = name[: -len("weight")] + "weight_scale_inv" if name.endswith("weight") else None
+                if EXPERT_RE.search(name):
+                    w = NV.dequant_fp8_block(t, f.get_tensor(sname)) if sname in keys \
+                        else t.to(torch.float32)
+                    q = NV.quantize_nvfp4(w)
+                    base = name[: -len(".weight")]
+                    out_t[f"{base}.weight_packed"] = q["weight_packed"]
+                    out_t[f"{base}.weight_scale"] = q["weight_scale"]
+                    out_t[f"{base}.weight_global_scale"] = q["weight_global_scale"]
+                    n_q += 1
+                    del w, q
+                else:
+                    # Non-expert: dequantise any block-FP8 to BF16 so the file carries one
+                    # quantisation format plus plain BF16, not two incompatible schemes.
+                    if sname in keys:
+                        t = NV.dequant_fp8_block(t, f.get_tensor(sname), dtype=torch.bfloat16)
+                    elif t.dtype == torch.float8_e4m3fn:
+                        t = t.to(torch.bfloat16)
+                    out_t[name] = t
+                    n_bf16 += 1
 
-    if not any(OUT.glob("*.safetensors")):
-        model.save_pretrained(str(OUT), safe_serialization=True)
-    tok.save_pretrained(str(OUT))
+        save_file(out_t, str(OUT / shard.name), metadata={"format": "pt"})
+        for k in out_t:
+            weight_map[k] = shard.name
+        del out_t
+        ip.write_text(json.dumps({"metadata": {"total_size": 0}, "weight_map": weight_map}))
+        if si % 5 == 0 or si == 1:
+            el = time.time() - t0
+            log(f"shard {si}/{len(shards)}  quantised={n_q} bf16={n_bf16}  "
+                f"elapsed {el/60:.1f} min  eta {(el/si)*(len(shards)-si)/60:.0f} min  "
+                f"free {free_gib():.0f} GiB", STAGE)
+
+    # config: compressed-tensors NVFP4 on the experts, everything else ignored
+    cfg = json.loads((src / "config.json").read_text())
+    cfg["quantization_config"] = {
+        "quant_method": "compressed-tensors",
+        "format": "nvfp4-pack-quantized",
+        "quantization_status": "compressed",
+        "ignore": IGNORE,
+        "config_groups": {
+            "group_0": {
+                "targets": ["Linear"],
+                "weights": {"num_bits": 4, "type": "float", "symmetric": True,
+                            "strategy": "tensor_group", "group_size": 16,
+                            "scale_dtype": "float8_e4m3fn", "dynamic": False},
+                "input_activations": None, "output_activations": None,
+            }
+        },
+    }
+    (OUT / "config.json").write_text(json.dumps(cfg, indent=2))
+    for extra in ("tokenizer.json", "tokenizer_config.json", "generation_config.json",
+                  "chat_template.jinja", "preprocessor_config.json", "LICENSE", "README.md"):
+        sp = src / extra
+        if sp.exists():
+            shutil.copy2(sp, OUT / extra)
 
     total = sum(p.stat().st_size for p in OUT.rglob("*") if p.is_file())
     gib = total / 2**30
     metric(STAGE, "nvfp4_bytes", total)
-    log(f"NVFP4 checkpoint: {gib:.1f} GiB in {dt/60:.1f} min", STAGE)
+    metric(STAGE, "quantize_minutes", (time.time() - t0) / 60)
+    res = {"path": str(OUT), "bytes": total, "gib": round(gib, 1),
+           "tensors_nvfp4": n_q, "tensors_bf16": n_bf16,
+           "minutes": round((time.time() - t0) / 60, 1), "fits_thor": gib < 117}
+    log(f"NVFP4 checkpoint: {gib:.1f} GiB, {n_q} expert tensors quantised, "
+        f"{n_bf16} kept", STAGE)
     if gib > 117:
         log(f"checkpoint is {gib:.1f} GiB, over the ~117 GiB Thor envelope", STAGE, "ERROR")
-
-    res = {"path": str(OUT), "bytes": total, "gib": round(gib, 1),
-           "minutes": round(dt / 60, 1), "fits_thor": gib < 117}
-    out = ARTIFACTS / "s07_quantize.json"
-    out.write_text(json.dumps(res, indent=2))
-    publish(out, "artifacts", "stage07/s07_quantize.json", stage=STAGE)
+    p = ARTIFACTS / "s07_quantize.json"
+    p.write_text(json.dumps(res, indent=2))
+    publish(p, "artifacts", "stage07/s07_quantize.json", stage=STAGE)
     kv_set("nvfp4_path", str(OUT))
-    publish(OUT, "nvfp4", ".", stage=STAGE)
     return res
