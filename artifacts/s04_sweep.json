@@ -1,57 +1,57 @@
 {
   "sweep": {
     "0.30": {
-      "routing_mass_retained": 0.7066,
-      "routing_mass_vs_expected": 1.009,
-      "saliency_mass_retained": 0.8387,
-      "min_layer_routing_mass": 0.5197,
+      "routing_mass_retained": 0.6771,
+      "routing_mass_vs_expected": 0.967,
+      "saliency_mass_retained": 0.8421,
+      "min_layer_routing_mass": 0.5274,
       "size_gib_rest_fp8": 123.3,
       "size_gib_rest_bf16": 129.7,
       "fits_envelope": false,
       "layers": 42,
-      "concentration_vs_random": 1.198,
+      "concentration_vs_random": 1.203,
       "gate": "amber"
     },
     "0.40": {
-      "routing_mass_retained": 0.5713,
-      "routing_mass_vs_expected": 0.952,
-      "saliency_mass_retained": 0.7405,
-      "min_layer_routing_mass": 0.4031,
+      "routing_mass_retained": 0.5859,
+      "routing_mass_vs_expected": 0.976,
+      "saliency_mass_retained": 0.78,
+      "min_layer_routing_mass": 0.4538,
       "size_gib_rest_fp8": 107.0,
       "size_gib_rest_bf16": 113.4,
       "fits_envelope": true,
       "layers": 42,
-      "concentration_vs_random": 1.234,
+      "concentration_vs_random": 1.3,
       "gate": "amber"
     },
     "0.50": {
-      "routing_mass_retained": 0.4515,
-      "routing_mass_vs_expected": 0.903,
-      "saliency_mass_retained": 0.6432,
-      "min_layer_routing_mass": 0.2996,
+      "routing_mass_retained": 0.497,
+      "routing_mass_vs_expected": 0.994,
+      "saliency_mass_retained": 0.7109,
+      "min_layer_routing_mass": 0.3829,
       "size_gib_rest_fp8": 90.6,
       "size_gib_rest_bf16": 97.1,
       "fits_envelope": true,
       "layers": 42,
-      "concentration_vs_random": 1.286,
-      "gate": "amber"
+      "concentration_vs_random": 1.422,
+      "gate": "green"
     },
     "0.55": {
-      "routing_mass_retained": 0.3942,
-      "routing_mass_vs_expected": 0.876,
-      "saliency_mass_retained": 0.593,
-      "min_layer_routing_mass": 0.2684,
+      "routing_mass_retained": 0.4525,
+      "routing_mass_vs_expected": 1.006,
+      "saliency_mass_retained": 0.673,
+      "min_layer_routing_mass": 0.3505,
       "size_gib_rest_fp8": 82.5,
       "size_gib_rest_bf16": 88.9,
       "fits_envelope": true,
       "layers": 42,
-      "concentration_vs_random": 1.318,
-      "gate": "amber"
+      "concentration_vs_random": 1.496,
+      "gate": "green"
     }
   },
   "verdict": {
     "chosen_ratio": 0.5,
-    "gate": "amber",
+    "gate": "green",
     "note": "30% is reported for the curve only - it is provably over the 117 GiB envelope, so its quality cannot change the decision.",
     "saliency_arm": "A (stock REAP conditional mean). Arm B (quantile-blended 0.6*mean+0.4*p99) is NOT available: the stock tracker accumulates only sum and count, so per-token quantiles were never retained. Running arm B requires modifying REAP's _expert_hook to keep a sketch, and a second calibration pass. Deferred, not silently dropped."
   }

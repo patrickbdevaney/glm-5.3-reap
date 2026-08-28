@@ -197,3 +197,57 @@ disagreement is noise-driven, scaling 1M -> 2.75M tokens per half should lift ov
 would mean 5.5M tokens still cannot determine the mask, and A7 in `CLOUD_COUNTERFACTUAL.md` moves
 from "candidate non-unlock" to a real one — more calibration would be the cheapest quality
 available, and a cluster would buy it.
+
+## The split-half gate FAILED on identity and PASSED on the objective `[MEAS 2026-08-28 17:50]`
+
+Full budget, 2.75M tokens per half:
+
+| | 1.0M tok/half | 2.75M tok/half |
+|---|---|---|
+| keep-set overlap | 0.9478 | **0.9446** |
+| layers below the 0.95 gate | 22/42 | 19/42 |
+
+**Raising the budget 2.75x moved overlap by -0.003.** If the disagreement were sampling noise it
+should have risen to ~0.968. It did not move at all, so the residual ~5.5% is **structural**, and
+more calibration cannot fix it. That prediction was made in advance and was wrong, which is what
+makes the measurement worth having.
+
+### The disputed experts are near-ties
+
+| | |
+|---|---|
+| disputed experts per layer | ~14 of 144 |
+| their median distance from the decision boundary | **2.42%** |
+| retained saliency mass, mask A vs mask B, scored on the FULL accumulator | 0.70004 vs 0.69973 |
+| **disagreement in what REAP optimises** | **0.133% mean, 0.562% max** |
+
+The two halves pick different experts and retain **the same saliency mass**. The experts they
+argue about sit within 2.4% of the cut line — they are interchangeable, and choosing either is
+not an error.
+
+**The gate was measuring the wrong thing.** Keep-set identity treats a tie-break as a failure.
+`split_half.py` now also computes retained-mass agreement and issues the verdict on *that*,
+reporting `pass_on_mass` when overlap is below the identity gate but mass agrees to within 1%.
+The old wording — "more tokens are the cheapest quality available" — was actively wrong here and
+would have bought calibration this same run proved useless.
+
+### Consequences
+
+1. **Materialising is safe.** The mask is determined to 0.133% of the objective.
+2. **A7 in `CLOUD_COUNTERFACTUAL.md` is settled as a NON-unlock**, now by measurement rather than
+   conjecture: more calibration tokens would not produce a better mask for this model at this
+   ratio. A cluster buys teacher generation, distillation healing and evaluation — not this.
+3. **It sets the resolution limit for P7.** ~10% of the keep-set is an irreducible tie band, so
+   criteria differing by less than that are choosing among equivalents:
+
+| criterion | overlap vs REAP | verdict |
+|---|---|---|
+| `var_aware` 0.9635 | above the tie band | indistinguishable from REAP |
+| `quantile` 0.9385, `mix_sample` 0.9378 | inside the band | not meaningfully different |
+| `gate_only` 0.9238, `mix_codemath` 0.9231 | at the edge | marginal |
+| `norm_only` 0.8940 | outside | genuinely different |
+| `frequency` 0.7553 | far outside | the control, as designed |
+
+So the criterion question closes cheaply: **stock REAP is not measurably improvable here**, and
+the budget belongs to evaluation. The one criterion that clearly differs is the frequency-weighted
+control REAP exists to avoid.

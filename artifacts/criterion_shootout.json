@@ -1,0 +1,81 @@
+{
+  "ratio": 0.5,
+  "layers": 42,
+  "criteria": [
+    "frequency",
+    "gate_only",
+    "mix_codemath",
+    "mix_sample",
+    "norm_only",
+    "quantile",
+    "reap",
+    "var_aware"
+  ],
+  "vs_reap": {
+    "frequency": {
+      "overlap_vs_reap_mean": 0.7552909851074219,
+      "overlap_vs_reap_min": 0.5694444179534912,
+      "differs_by_experts": 35
+    },
+    "gate_only": {
+      "overlap_vs_reap_mean": 0.9237765073776245,
+      "overlap_vs_reap_min": 0.8541666865348816,
+      "differs_by_experts": 11
+    },
+    "mix_codemath": {
+      "overlap_vs_reap_mean": 0.9231151342391968,
+      "overlap_vs_reap_min": 0.8611111044883728,
+      "differs_by_experts": 11
+    },
+    "mix_sample": {
+      "overlap_vs_reap_mean": 0.9378306865692139,
+      "overlap_vs_reap_min": 0.8958333134651184,
+      "differs_by_experts": 9
+    },
+    "norm_only": {
+      "overlap_vs_reap_mean": 0.8940145373344421,
+      "overlap_vs_reap_min": 0.7847222089767456,
+      "differs_by_experts": 15
+    },
+    "quantile": {
+      "overlap_vs_reap_mean": 0.9384921193122864,
+      "overlap_vs_reap_min": 0.7916666865348816,
+      "differs_by_experts": 9
+    },
+    "var_aware": {
+      "overlap_vs_reap_mean": 0.9634590148925781,
+      "overlap_vs_reap_min": 0.9236111044883728,
+      "differs_by_experts": 5
+    }
+  },
+  "pairwise_mean_overlap": {
+    "frequency|gate_only": 0.7381,
+    "frequency|mix_codemath": 0.7523,
+    "frequency|mix_sample": 0.7505,
+    "frequency|norm_only": 0.7278,
+    "frequency|quantile": 0.7436,
+    "frequency|reap": 0.7553,
+    "frequency|var_aware": 0.7531,
+    "gate_only|mix_codemath": 0.8945,
+    "gate_only|mix_sample": 0.9044,
+    "gate_only|norm_only": 0.8232,
+    "gate_only|quantile": 0.8853,
+    "gate_only|reap": 0.9238,
+    "gate_only|var_aware": 0.9077,
+    "mix_codemath|mix_sample": 0.9625,
+    "mix_codemath|norm_only": 0.8679,
+    "mix_codemath|quantile": 0.8884,
+    "mix_codemath|reap": 0.9231,
+    "mix_codemath|var_aware": 0.9086,
+    "mix_sample|norm_only": 0.8737,
+    "mix_sample|quantile": 0.9072,
+    "mix_sample|reap": 0.9378,
+    "mix_sample|var_aware": 0.9282,
+    "norm_only|quantile": 0.8679,
+    "norm_only|reap": 0.894,
+    "norm_only|var_aware": 0.8839,
+    "quantile|reap": 0.9385,
+    "quantile|var_aware": 0.9499,
+    "reap|var_aware": 0.9635
+  }
+}

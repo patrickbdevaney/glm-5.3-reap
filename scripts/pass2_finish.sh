@@ -26,6 +26,28 @@ while pgrep -f "pass2_gate[s]\.sh" > /dev/null; do sleep 120; done
 
 # --- pass-2 keep-set, then gains measured against IT --------------------------------------
 stage s04_sweep      || { say "s04_sweep failed - stopping"; exit 1; }
+
+# Materialise the pass-2 keep-set BEFORE measuring gains against it.
+#
+# reap_retained_experts.json is written by s04b_SURGERY, not s04_sweep - so without this step
+# heal_refit measures against pass 1's mask, stamps it, and s05_heal then refuses the mismatch
+# and halts the run. And heal_refit cannot simply be deferred until after surgery: it reads
+# e_score_correction_bias from the SOURCE, which surgery deletes. The only window where both the
+# pass-2 mask and the teacher exist is right here.
+run "materialise the pass-2 keep-set (pure function of the saliency)" .venv/bin/python - <<'PY'
+import sys, json; sys.path.insert(0,'scripts')
+import stages.s04b_surgery as SG
+from common import ARTIFACTS, kv_get
+ratio = float(kv_get("target_sparsity", 0.5) or 0.5)
+retained = SG.compute_retained(ratio)
+n_keep = len(next(iter(retained.values())))
+mtp = SG._mtp_keep_set(n_keep, SG._original_expert_count())
+if mtp:
+    retained[f"model.language_model.layers.{SG.MTP_LAYER}.mlp"] = mtp
+(ARTIFACTS / "reap_retained_experts.json").write_text(json.dumps(retained))
+print(f"keep-set: {len(retained)} layers, {n_keep} experts, MTP={bool(mtp)}")
+PY
+
 run "heal_refit vs the pass-2 keep-set" .venv/bin/python scripts/heal_refit.py
 run "split_half (full budget)"          .venv/bin/python scripts/split_half.py
 run "criterion shootout (full budget)"  .venv/bin/python scripts/criterion_shootout.py
