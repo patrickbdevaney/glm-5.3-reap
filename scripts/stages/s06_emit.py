@@ -49,13 +49,22 @@ def _enrich(meta: dict) -> dict:
         log(f"could not read sweep numbers for the card: {type(e).__name__}", STAGE, "WARN")
     try:
         import statistics as _st
-        hp = ROOT / "output" / "adapters" / "first_moment_gains.json"
-        if hp.exists():
-            hd = json.loads(hp.read_text())
-            meta["heal_gain_median"] = _st.median(hd["gains"].values())
+        # Report the gain that was APPLIED. s05_heal writes first_moment_gains.json under that
+        # name whatever it applied, so when a measured re-fit exists the measured median is the
+        # honest number - quoting the first-moment value beside the word "measured" would
+        # describe the right method with the wrong figure.
         rf = ARTIFACTS / "heal_refit.json"
-        meta["heal_measured"] = rf.exists() and bool(
-            json.loads(rf.read_text()).get("measured_median"))
+        meas = None
+        if rf.exists():
+            meas = json.loads(rf.read_text()).get("measured_median")
+        meta["heal_measured"] = bool(meas)
+        if meas:
+            meta["heal_gain_median"] = meas
+        else:
+            hp = ROOT / "output" / "adapters" / "first_moment_gains.json"
+            if hp.exists():
+                meta["heal_gain_median"] = _st.median(
+                    json.loads(hp.read_text())["gains"].values())
     except Exception:
         meta.setdefault("heal_measured", False)
     try:
