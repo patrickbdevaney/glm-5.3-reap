@@ -80,6 +80,17 @@ run "P13 evaluate pass 2" .venv/bin/python scripts/run_stage.py s09_eval stages.
 
 # --- quantise and publish -----------------------------------------------------------------
 stage s07_quantize || { say "quantize failed"; exit 1; }
+
+# Evaluate the NVFP4 artifact too. It, not the 157 GiB FP8, is what is size-matched against
+# aggressively-quantised GGUFs of the unpruned model - so this is the number that answers
+# "does 144 experts at 4.5 bpw beat 288 experts at ~2.3 bpw". Reported as top1_agreement,
+# which is the same quantity those releases quote as "retains X% of top-1 accuracy".
+.venv/bin/python - >> $LOG 2>&1 <<'PY'
+import sys; sys.path.insert(0,'scripts')
+from common import kv_set, kv_get
+kv_set("eval_student", "/home/patrickd/glm-5.3-reap/output/" + str(kv_get("nvfp4_name")))
+PY
+run "P13b evaluate the NVFP4 artifact (size-matched comparison)"     .venv/bin/python scripts/run_stage.py s09_eval stages.s09_eval
 run "upload FP8 v2"   .venv/bin/hf upload patrickbdevaney/GLM-5.3-Flash-REAP50-FP8-v2 \
         "output/$(.venv/bin/python -c "import sys;sys.path.insert(0,'scripts');from common import kv_get;print(kv_get('emit_name'))")" . --repo-type model
 run "upload NVFP4 v2" .venv/bin/hf upload patrickbdevaney/GLM-5.3-Flash-REAP50-NVFP4-v2 \

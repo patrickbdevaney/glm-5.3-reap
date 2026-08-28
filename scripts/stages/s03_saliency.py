@@ -195,8 +195,23 @@ def _build_layer(cfg, i, reader, dtype):
 
     names = [k for k in reader.map if k.startswith(prefix)]
     scales = {n for n in names if n.endswith("weight_scale_inv")}
+    packed = {n[: -len("_packed")] for n in names if n.endswith("weight_packed")}
 
     def fetch(name):
+        # NVFP4 path. The size-matched competitor to an aggressively-quantised GGUF is our
+        # NVFP4 checkpoint, not the FP8 master - so the evaluation has to be able to read it,
+        # or it measures a 157 GiB artifact and reports it against 93-109 GB rivals.
+        if name in packed:
+            from compressed_tensors.compressors.nvfp4.helpers import unpack_fp4_from_uint8
+            pk = reader.get(name + "_packed")
+            sc = reader.get(name + "_scale").to(torch.float32)
+            gs = reader.get(name + "_global_scale").to(torch.float32)
+            out_f, in_f = pk.shape[0], pk.shape[1] * 2
+            q = unpack_fp4_from_uint8(pk, out_f, in_f, dtype=torch.float32)
+            # scale is per group of 16, stored as FP8 E4M3 and scaled by the per-tensor global
+            g = q.reshape(out_f, in_f // 16, 16)
+            w = g * (sc.reshape(out_f, in_f // 16, 1) / gs)
+            return w.reshape(out_f, in_f).to(dtype)
         t = reader.get(name)
         s = name[: -len("weight")] + "weight_scale_inv"
         if s in scales:
