@@ -250,3 +250,42 @@ Genomics coverage moves to biomedical literature instead.
 **Terms to read during the corpus build** (tagged `other`, not resolvable from the API):
 `bigcode/the-stack-v2-dedup`, `ncbi/pubmed` (NCBI terms), `thoughtworks/agentic-coding-trajectories`,
 `GPUMODE/KernelBook`. `[OPEN]` — cheap to close before ingest, expensive after.
+
+## The mixture is specified in SAMPLES but acts in TOKENS `[MEAS 2026-08-27 23:25]`
+
+First layer dump of pass 2, per-bucket token counts (now measurable at all, because pass 2 keeps
+per-bucket accumulators; pass 1 could not have seen this):
+
+| bucket | intended share (samples) | realised share (tokens) | tokens/sample |
+|---|---|---|---|
+| agentic | 24% | **31.6%** | 8,634 |
+| math | 15% | **29.9%** | 4,070 |
+| science | 10% | **21.3%** | 9,024 |
+| multimodal | 15% | 6.2% | — |
+| ballast | 7% | 4.9% | 2,023 |
+| **code** | **21%** | **5.7%** | **744** |
+| **finance** | **8%** | **0.5%** | **838** |
+
+`corpus_spec.MIXTURE` is a **sample** quota, but REAP's saliency is a conditional mean over
+**tokens**. Documents differ in length by more than 10×, so the effective mixture is nothing like
+the intended one: code is under-weighted ~4× and finance ~16×, while agentic and science are
+over-weighted. Code and math were named the preeminent domains, so this is not a cosmetic gap.
+
+**It does not require a re-run, and this is exactly what the per-bucket accumulators were for.**
+Saliency is separable by bucket, so any target mixture can be applied offline:
+
+```
+S_j = Σ_b  w_b · (sum_by_bucket[b, j] / cnt_by_bucket[b, j])
+```
+
+Pass 1 could not do this at any price — it kept one summed number per expert, so the mixture was
+baked into the pass. Recovering it would have cost another 14 h.
+
+Sampling adequacy is unaffected: even at 5.7%, code contributes ~1.27M tokens over the full run,
+so each expert sees ~35k code tokens — far above the 2,000-token floor. The issue is *weighting*,
+not starvation, which is precisely the kind that re-weighting fixes.
+
+**P7 action:** treat the mixture as a swept parameter, not a fixed one. Emit masks under at least
+(a) as-realised token weights, (b) sample-proportional weights, (c) a code/math-forward weighting,
+and compare keep-set overlap. If the mask barely moves, the question is closed cheaply; if it
+moves, we pick with the evaluation rather than by assertion.
