@@ -169,9 +169,15 @@ def score_checkpoint(ckpt: Path, rows, mm_rows, tag: str) -> dict:
                 ie = embed(ids)
                 pv = rec["pixel_values"].to(DEV, torch.bfloat16)
                 thw = rec["image_grid_thw"].to(DEV)
-                feats = shell.get_image_features(pv, thw).pooler_output
+                # Both helpers live on shell.model, not on the top-level wrapper:
+                # get_placeholder_mask is absent from Glm5NextForConditionalGeneration, so
+                # calling it there fails on the first image batch. s03 binds mm_model =
+                # shell.model for exactly this reason; mirror it rather than rediscovering it.
+                mm_model = shell.model
+                feats = mm_model.get_image_features(pv, thw).pooler_output
                 feats = torch.cat(feats, dim=0).to(ie.device, ie.dtype)
-                mask, _ = shell.get_placeholder_mask(ids, inputs_embeds=ie, image_features=feats)
+                mask, _ = mm_model.get_placeholder_mask(ids, inputs_embeds=ie,
+                                                        image_features=feats)
                 ie = ie.masked_scatter(mask, feats)
                 states.append({"ids": ids.cpu(), "buckets": ["vision"],
                                "hs": ie.unsqueeze(2).expand(-1, -1, tcfg.hc_mult, -1)
