@@ -1,0 +1,70 @@
+{
+  "checkpoint": "/home/patrickd/glm-5.3-reap/output/glm-5.3-flash-reap50-nvfp4",
+  "format": "compressed-tensors",
+  "shards": 62,
+  "tensors": 56277,
+  "tensor_dtypes": {
+    "BF16": 1177,
+    "F32": 18560,
+    "F8_E4M3": 18270,
+    "U8": 18270
+  },
+  "tensors_by_group": {
+    "other": 477,
+    "mhc": 270,
+    "attention": 664,
+    "router": 87,
+    "routed_expert": 54432,
+    "vision": 347
+  },
+  "quantization_config": {
+    "quant_method": "compressed-tensors",
+    "format": "nvfp4-pack-quantized",
+    "quantization_status": "compressed",
+    "ignore": [
+      "re:.*lm_head.*",
+      "re:.*embed_tokens.*",
+      "re:.*visual.*",
+      "re:.*linear_attn.*",
+      "re:.*self_attn.*",
+      "re:.*hc_.*",
+      "re:.*mapping_proj.*",
+      "re:.*mlp\\.gate\\..*",
+      "re:.*norm.*"
+    ],
+    "config_groups": {
+      "group_0": {
+        "targets": [
+          "Linear"
+        ],
+        "weights": {
+          "num_bits": 4,
+          "type": "float",
+          "symmetric": true,
+          "strategy": "tensor_group",
+          "group_size": 16,
+          "scale_dtype": "float8_e4m3fn",
+          "dynamic": false
+        },
+        "input_activations": null,
+        "output_activations": null
+      }
+    }
+  },
+  "precision_map": {
+    "routed_experts": "NVFP4 (E2M1 4-bit + FP8 E4M3 scale per 16 elems + F32 global)",
+    "shared_experts": "NVFP4",
+    "attention_mla_dsa": "FP8 E4M3 dynamic",
+    "kda_linear_attn_state": "unquantised (recurrence compounds error along sequence)",
+    "vision_tower": "unquantised BF16 (0.18% of mass, first-class capability)",
+    "mhc_routers_lm_head_embed": "unquantised BF16"
+  },
+  "serving_notes_jetson_thor": {
+    "fused_moe_backend": "cutlass - the Marlin FP4 MoE kernel faults in-kernel at >=256 experts",
+    "attention_backend": "TRITON_MLA - FLASHINFER is invalid for MLA",
+    "power": "nvpmodel -m 0 (MAXN) + jetson_clocks; EMC 2750->4266 MHz matters for a bandwidth-bound MoE"
+  },
+  "excluded": {
+    "mtp_layer_45": "not instantiated by transformers Glm5NextForConditionalGeneration; archived unmodified rather than inconsistently pruned"
+  }
+}

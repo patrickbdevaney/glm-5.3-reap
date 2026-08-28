@@ -1,0 +1,9 @@
+{
+  "path": "/home/patrickd/glm-5.3-reap/output/glm-5.3-flash-reap50-nvfp4",
+  "bytes": 103049399926,
+  "gib": 96.0,
+  "tensors_nvfp4": 18270,
+  "tensors_bf16": 1467,
+  "minutes": 36.1,
+  "fits_thor": true
+}
