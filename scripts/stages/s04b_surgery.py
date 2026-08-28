@@ -12,8 +12,11 @@ shard is DELETED once its survivors have been written, which makes free space gr
 through the pass. That is safe because the source is public and re-downloadable in ~23 min, and
 the stage is resumable - a completed-shard ledger means a crash re-runs only what is unfinished.
 
-The MTP block (layer 45) is excluded: transformers does not instantiate it, so it cannot be
-pruned consistently. Its tensors are simply not copied; they remain unmodified upstream.
+The MTP block (layer 45) is PRESERVED and pruned to the same expert count as every other MoE
+layer (forced: `num_local_experts` is a single scalar). It is a draft head - vLLM and SGLang
+implement MTP speculative decoding even though `transformers` does not - so dropping it, as pass
+1 did, forecloses spec-decode from the artifact entirely. Because the streaming sweep never runs
+it, its experts are ranked by weight norm rather than activation saliency; see `_mtp_keep_set`.
 """
 from __future__ import annotations
 
@@ -54,6 +57,89 @@ def _layer_curves():
         total = contrib.sum().clamp(min=1e-12)
         out[d["layer"]] = (order.tolist(), (contrib.cumsum(0) / total).tolist())
     return out
+
+
+def _mtp_keep_set(n_keep: int, n_orig: int) -> list[int] | None:
+    """Rank the MTP block's experts by a WEIGHT-ONLY criterion, and say so.
+
+    Layer 45 is not part of the main forward - `transformers` never instantiates it - so the
+    streaming sweep produces no activation saliency for it. Pruning it therefore has to fall
+    back to weights alone: score_e = log||W_gate||_F + log||W_up||_F + log||W_down||_F, which
+    bounds the expert's operator magnitude.
+
+    That is a genuinely weaker criterion than REAP, and it is acceptable HERE and ONLY here,
+    because the MTP head's intended use is as a draft head that gets fine-tuned against the
+    pruned target afterwards - training repairs a mediocre prune. The same argument must never
+    be used for the main stack, where nothing downstream repairs anything.
+
+    Pruning it at all is forced, not chosen: `num_local_experts` is a single scalar, so layer 45
+    must carry exactly as many experts as every other MoE layer or the config cannot describe
+    the checkpoint.
+    """
+    import torch
+    from safetensors import safe_open
+
+    cache = ARTIFACTS / "mtp_keep.json"
+    if cache.exists():
+        try:
+            return json.loads(cache.read_text())["keep"]
+        except Exception:
+            pass
+
+    ip = SRC / "model.safetensors.index.json"
+    if not ip.exists():
+        return None
+    wm = json.loads(ip.read_text())["weight_map"]
+    pref = f"model.language_model.layers.{MTP_LAYER}.mlp.experts."
+    names = [k for k in wm if k.startswith(pref) and k.endswith(".weight")]
+    if not names:
+        return None
+
+    handles: dict[str, object] = {}
+
+    def _get(n):
+        sh = wm[n]
+        if sh not in handles:
+            fp = SRC / sh
+            if not fp.exists():
+                raise FileNotFoundError(fp)
+            handles[sh] = safe_open(str(fp), framework="pt", device="cpu")
+        return handles[sh].get_tensor(n)
+
+    score = torch.zeros(n_orig, dtype=torch.float64)
+    seen = torch.zeros(n_orig, dtype=torch.bool)
+    try:
+        for n in names:
+            try:
+                e = int(n[len(pref):].split(".")[0])
+            except ValueError:
+                continue
+            if e >= n_orig:
+                continue
+            w = _get(n)
+            sn = n[: -len("weight")] + "weight_scale_inv"
+            if sn in wm:
+                sc = _get(sn).to(torch.float32)
+                out, inn = w.shape
+                sc = sc.repeat_interleave(128, 0).repeat_interleave(128, 1)[:out, :inn]
+                fro = (w.to(torch.float32) * sc).norm()
+            else:
+                fro = w.to(torch.float32).norm()
+            score[e] += float(torch.log(fro.clamp_min(1e-30)))
+            seen[e] = True
+    except FileNotFoundError:
+        # Source shards already consumed by a previous run and no cache: cannot rank.
+        return None
+    finally:
+        handles.clear()
+
+    if not bool(seen.all()):
+        log(f"MTP keep-set: only {int(seen.sum())}/{n_orig} experts scored", STAGE, "WARN")
+    keep = sorted(int(i) for i in torch.argsort(score, descending=True)[:n_keep])
+    cache.write_text(json.dumps({"keep": keep, "criterion": "log-Frobenius weight norm",
+                                 "layer": MTP_LAYER, "note": "no activation saliency exists "
+                                 "for the MTP block; intended to be fine-tuned downstream"}))
+    return keep
 
 
 def compute_retained(ratio: float, uniform: bool = True) -> dict[str, list[int]]:
@@ -153,9 +239,23 @@ def run() -> dict:
     retained = compute_retained(ratio)
     if not retained:
         raise RuntimeError("no saliency available; stage 3 must run first")
-    (ARTIFACTS / "reap_retained_experts.json").write_text(json.dumps(retained))
     n_keep = len(next(iter(retained.values())))
     n_orig = _original_expert_count()
+    # Preserve the MTP block (R14). Dropping it forecloses speculative decoding: an MTP block is
+    # a draft head, and vLLM/SGLang implement MTP even though `transformers` does not, so
+    # "transformers cannot instantiate it" was a fact about our validation harness rather than
+    # about the weight's value. Injecting its keep-set here means the existing expert-renumbering
+    # and router-slicing paths handle it with no special-casing downstream.
+    mtp_lname = f"model.language_model.layers.{MTP_LAYER}.mlp"
+    mtp_keep = _mtp_keep_set(n_keep, n_orig)
+    if mtp_keep:
+        retained[mtp_lname] = mtp_keep
+        log(f"MTP block (layer {MTP_LAYER}) PRESERVED: {len(mtp_keep)}/{n_orig} experts kept by "
+            f"weight norm (no activation saliency exists for it)", STAGE)
+    else:
+        log(f"MTP block (layer {MTP_LAYER}) could not be ranked - it will be dropped, which "
+            f"forecloses speculative decoding from this artifact", STAGE, "WARN")
+    (ARTIFACTS / "reap_retained_experts.json").write_text(json.dumps(retained))
     log(f"ratio {ratio:.0%}: keeping {n_keep} of {n_orig} experts in {len(retained)} MoE layers",
         STAGE)
 
@@ -187,9 +287,9 @@ def run() -> dict:
             for name in f.keys():
                 m = exp_re.match(name)
                 layer_m = re.search(r"\.layers\.(\d+)\.", name)
-                if layer_m and int(layer_m.group(1)) == MTP_LAYER:
+                if layer_m and int(layer_m.group(1)) == MTP_LAYER and not mtp_keep:
                     dropped_t += 1
-                    continue                      # MTP excluded, see module docstring
+                    continue          # only if it could not be ranked; see _mtp_keep_set
                 if m:
                     lname, e = m.group("pre"), int(m.group("e"))
                     keep_map = pos.get(lname)
@@ -260,9 +360,10 @@ def run() -> dict:
         else json.loads((OUT / "config.json").read_text())
     cfg["text_config"]["n_routed_experts"] = n_keep
     cfg["text_config"]["num_local_experts"] = n_keep
-    cfg["text_config"]["num_nextn_predict_layers"] = 0      # MTP excluded
-    cfg["reap"] = {"ratio": ratio, "experts_kept": n_keep, "experts_original": 288,
-                   "mtp_excluded": True}
+    cfg["text_config"]["num_nextn_predict_layers"] = 1 if mtp_keep else 0
+    cfg["reap"] = {"ratio": ratio, "experts_kept": n_keep, "experts_original": n_orig,
+                   "mtp_preserved": bool(mtp_keep),
+                   "mtp_criterion": "weight-norm (no activation saliency)" if mtp_keep else None}
     (OUT / "config.json").write_text(json.dumps(cfg, indent=2))
     for extra in ("tokenizer.json", "tokenizer_config.json", "generation_config.json",
                   "chat_template.jinja", "preprocessor_config.json", "LICENSE"):
