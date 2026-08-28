@@ -86,11 +86,38 @@ def load_heldout():
         want = max(1, int(N_EVAL * share / denom))
         for it in items[used:used + want]:
             rows.append((it["input_ids"][:MAX_LEN], bucket))
-    log(f"held-out: {len(rows)} rows the calibration never saw", STAGE)
-    return rows
+    # Image-text held-out. Vision is a first-class capability and R3 - vision-serving experts
+    # being pruned because calibration under-represents images - is the named escalation risk of
+    # this project. An evaluation with no image tokens cannot see the failure it exists to catch,
+    # so a text-only held-out set would leave precisely the wrong thing unmeasured.
+    mm = []
+    mdir = CORPUS / "multimodal"
+    if mdir.exists():
+        used = 0
+        want_mm = max(8, int(N_EVAL * SPEC.MIXTURE["multimodal"]))
+        # s03 consumes multimodal from the FRONT of the sorted shard order until its quota is
+        # met, so the disjoint tail is the LAST shards, walked in reverse. Taking reversed
+        # records out of the first shard would sit squarely inside calibration's slice.
+        for f in sorted(mdir.glob("mm_*.pt"), reverse=True):
+            try:
+                recs = torch.load(f, weights_only=False)
+            except Exception:
+                continue
+            for rec in reversed(recs):
+                if len(mm) >= want_mm:
+                    break
+                mm.append(rec)
+            if len(mm) >= want_mm:
+                break
+    log(f"held-out: {len(rows)} text + {len(mm)} image-text rows the calibration never saw",
+        STAGE)
+    if not mm:
+        log("NO held-out image-text samples - vision regression will be invisible to this "
+            "evaluation (R3)", STAGE, "WARN")
+    return rows, mm
 
 
-def score_checkpoint(ckpt: Path, rows, tag: str) -> dict:
+def score_checkpoint(ckpt: Path, rows, mm_rows, tag: str) -> dict:
     """Stream one checkpoint over the held-out rows and record per-token statistics."""
     import torch
     from transformers import AutoConfig
@@ -106,7 +133,8 @@ def score_checkpoint(ckpt: Path, rows, tag: str) -> dict:
     with init_empty_weights():
         shell = Glm5NextForConditionalGeneration(cfg)
     lm = shell.model.language_model
-    for mod, prefix in ((lm.embed_tokens, "model.language_model.embed_tokens"),
+    for mod, prefix in ((shell.model.visual, "model.visual"),
+                        (lm.embed_tokens, "model.language_model.embed_tokens"),
                         (lm.norm, "model.language_model.norm"),
                         (lm.hc_head, "model.language_model.hc_head")):
         sd = {k[len(prefix):].lstrip("."): reader.get(k)
@@ -133,6 +161,26 @@ def score_checkpoint(ckpt: Path, rows, tag: str) -> dict:
                            "hs": ie.unsqueeze(2).expand(-1, -1, tcfg.hc_mult, -1)
                            .contiguous().cpu(), "topk": None, "taps": {}})
             del ie
+    # Image-text batches, one sample each: pixel_values/image_grid_thw carry no batch dim.
+    for rec in mm_rows:
+        try:
+            with torch.no_grad():
+                ids = rec["input_ids"].long().unsqueeze(0).to(DEV)
+                ie = embed(ids)
+                pv = rec["pixel_values"].to(DEV, torch.bfloat16)
+                thw = rec["image_grid_thw"].to(DEV)
+                feats = shell.get_image_features(pv, thw).pooler_output
+                feats = torch.cat(feats, dim=0).to(ie.device, ie.dtype)
+                mask, _ = shell.get_placeholder_mask(ids, inputs_embeds=ie, image_features=feats)
+                ie = ie.masked_scatter(mask, feats)
+                states.append({"ids": ids.cpu(), "buckets": ["vision"],
+                               "hs": ie.unsqueeze(2).expand(-1, -1, tcfg.hc_mult, -1)
+                               .contiguous().cpu(), "topk": None, "taps": {}})
+                del ie, pv, thw, feats
+        except Exception as e:
+            log(f"[{tag}] image-text sample skipped ({type(e).__name__}: {str(e)[:100]})",
+                STAGE, "WARN")
+
     del shell
     gc.collect(); torch.cuda.empty_cache()
 
@@ -259,7 +307,7 @@ def run() -> dict:
     if not (student / "model.safetensors.index.json").exists():
         raise RuntimeError(f"student checkpoint not usable: {student}")
     OUT.mkdir(parents=True, exist_ok=True)
-    rows = load_heldout()
+    rows, mm_rows = load_heldout()
 
     # THE TEACHER CAPTURE MUST OUTLIVE THE TEACHER.
     #
@@ -282,11 +330,11 @@ def run() -> dict:
             raise RuntimeError(
                 f"no teacher at {teacher} and no cached capture at {cache}. Surgery consumes the "
                 f"source, so the teacher must be scored BEFORE materialising a student.")
-        T = score_checkpoint(teacher, rows, "teacher")
+        T = score_checkpoint(teacher, rows, mm_rows, "teacher")
         torch.save(T, cache)          # WITH taps: pass-2 tap drift needs the teacher side too
         log(f"teacher capture saved to {cache} - safe to materialise now", STAGE)
 
-    S = score_checkpoint(student, rows, "student")
+    S = score_checkpoint(student, rows, mm_rows, "student")
     torch.save(S, OUT / f"student_{student.name}.pt")
     res = compare(T, S)
     res["teacher_from_cache"] = bool(cache.exists())

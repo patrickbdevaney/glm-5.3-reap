@@ -289,3 +289,36 @@ not starvation, which is precisely the kind that re-weighting fixes.
 (a) as-realised token weights, (b) sample-proportional weights, (c) a code/math-forward weighting,
 and compare keep-set overlap. If the mask barely moves, the question is closed cheaply; if it
 moves, we pick with the evaluation rather than by assertion.
+
+## Held-out split: vision was missing from the evaluation `[MEAS 2026-08-28 10:42]`
+
+`load_heldout` originally iterated only the text buckets, so the evaluation would have contained
+**no image tokens at all**. That would leave R3 — vision-serving experts pruned because
+calibration under-represents images — completely unmeasured, which is precisely the failure the
+evaluation exists to catch. Pass 1 shipped with no evaluation; pass 2 would have shipped with an
+evaluation blind to its own named risk.
+
+Fixed. Held-out is now **189 text + 28 image-text**, ~241k text tokens, verified disjoint from
+calibration by content hash (0 overlaps of either kind).
+
+Two things went wrong while fixing it, both worth recording:
+
+1. **The first fix leaked.** `s03` consumes multimodal from the FRONT of the sorted shard order,
+   and the fix took `reversed(recs)` from the first shard — squarely inside calibration's slice.
+   Corrected to walk the shards in reverse. Position-based splitting across two stages is fragile;
+   the disjointness assertion is what caught it.
+2. **A false alarm from a bad hash.** Hashing `input_ids[:96]` reported "826 records, 4 unique" —
+   catastrophic-looking. It was wrong: a VQA sample's first 96 tokens are mostly the 208
+   image-placeholder tokens, identical across samples. With a content hash over the image bytes
+   plus the full sequence: **826 records, 826 unique, zero duplicates.** The lesson is narrow but
+   sharp — a prefix hash on templated data measures the template.
+
+### Real duplication, measured properly
+
+| corpus | records | unique | duplicates |
+|---|---|---|---|
+| multimodal | 826 | **826** | 0 |
+| text | 10,141 | 9,137 | **1,004 (9.9%)** |
+
+Text duplication is real but modest, and it slightly over-weights the repeated documents in
+calibration. Not worth a re-run; worth a dedupe pass if the corpus is ever rebuilt.
