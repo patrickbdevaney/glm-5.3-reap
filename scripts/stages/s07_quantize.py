@@ -34,6 +34,11 @@ from common import ROOT, ARTIFACTS, log, metric, kv_get, kv_set, publish, free_g
 
 STAGE = "s07_quantize"
 OUT = ROOT / "output" / "glm-5.3-flash-reap50-nvfp4"
+# Keep non-expert FP8 tensors in FP8 instead of upcasting them to BF16. Saves
+# 1.45 GiB at bit-identical quality, but produces a MIXED-scheme checkpoint.
+# Default off until such a checkpoint has been loaded successfully; see the branch
+# in run() for the reasoning.
+KEEP_FP8 = bool(kv_get("nvfp4_keep_fp8_passthrough", False))
 
 EXPERT_RE = re.compile(r"\.mlp\.(experts\.\d+|shared_experts)\.(gate_proj|up_proj|down_proj)\.weight$")
 
@@ -79,7 +84,7 @@ def run() -> dict:
         except Exception:
             weight_map = {}
 
-    n_q = n_bf16 = 0
+    n_q = n_bf16 = n_fp8 = 0
     t0 = time.time()
     for si, shard in enumerate(shards, 1):
         if shard.name in done:
@@ -102,9 +107,25 @@ def run() -> dict:
                     out_t[f"{base}.weight_global_scale"] = q["weight_global_scale"]
                     n_q += 1
                     del w, q
+                elif KEEP_FP8 and sname in keys:
+                    # Pass the FP8 payload and its block scale through untouched.
+                    #
+                    # Upcasting FP8 to BF16 adds no information - it stores already-FP8 values in
+                    # twice the bytes. Measured: 53 tensors, 1.45 GiB -> 2.91 GiB, so the file is
+                    # 1.5% larger for exactly zero quality difference. Keeping them FP8 is
+                    # bit-identical and smaller.
+                    out_t[name] = t
+                    out_t[sname] = f.get_tensor(sname)
+                    n_fp8 += 1
                 else:
-                    # Non-expert: dequantise any block-FP8 to BF16 so the file carries one
-                    # quantisation format plus plain BF16, not two incompatible schemes.
+                    # Default. Dequantise block-FP8 to BF16 so the file carries ONE quantisation
+                    # format plus plain BF16 rather than two schemes in one checkpoint.
+                    #
+                    # This costs 1.45 GiB and buys loader simplicity. It stays the default until
+                    # a mixed nvfp4-pack-quantized + fp8-block checkpoint has actually been LOADED
+                    # - and nothing has yet run this architecture on this box, so that claim
+                    # cannot be tested here. Shipping an untestable format change into the one
+                    # artifact we cannot validate would trade 1.5% of disk for the whole model.
                     if sname in keys:
                         t = NV.dequant_fp8_block(t, f.get_tensor(sname), dtype=torch.bfloat16)
                     elif t.dtype == torch.float8_e4m3fn:
@@ -119,18 +140,29 @@ def run() -> dict:
         ip.write_text(json.dumps({"metadata": {"total_size": 0}, "weight_map": weight_map}))
         if si % 5 == 0 or si == 1:
             el = time.time() - t0
-            log(f"shard {si}/{len(shards)}  quantised={n_q} bf16={n_bf16}  "
+            log(f"shard {si}/{len(shards)}  quantised={n_q} bf16={n_bf16} fp8={n_fp8}  "
                 f"elapsed {el/60:.1f} min  eta {(el/si)*(len(shards)-si)/60:.0f} min  "
                 f"free {free_gib():.0f} GiB", STAGE)
 
     # config: compressed-tensors NVFP4 on the experts, everything else ignored
     cfg = json.loads((src / "config.json").read_text())
+    # A mixed-scheme checkpoint must DECLARE both schemes, or a loader silently reads the
+    # passed-through FP8 tensors as unquantised and produces garbage rather than an error.
+    extra_group = {}
+    if KEEP_FP8:
+        extra_group["group_1"] = {
+            "targets": ["Linear"],
+            "weights": {"num_bits": 8, "type": "float", "symmetric": True,
+                        "strategy": "block", "block_structure": [128, 128], "dynamic": False},
+            "input_activations": None, "output_activations": None,
+        }
     cfg["quantization_config"] = {
         "quant_method": "compressed-tensors",
         "format": "nvfp4-pack-quantized",
         "quantization_status": "compressed",
         "ignore": IGNORE,
         "config_groups": {
+            **extra_group,
             "group_0": {
                 "targets": ["Linear"],
                 "weights": {"num_bits": 4, "type": "float", "symmetric": True,
@@ -152,7 +184,8 @@ def run() -> dict:
     metric(STAGE, "nvfp4_bytes", total)
     metric(STAGE, "quantize_minutes", (time.time() - t0) / 60)
     res = {"path": str(OUT), "bytes": total, "gib": round(gib, 1),
-           "tensors_nvfp4": n_q, "tensors_bf16": n_bf16,
+           "tensors_nvfp4": n_q, "tensors_bf16": n_bf16, "tensors_fp8_passthrough": n_fp8,
+           "keep_fp8_passthrough": KEEP_FP8,
            "minutes": round((time.time() - t0) / 60, 1), "fits_thor": gib < 117}
     log(f"NVFP4 checkpoint: {gib:.1f} GiB, {n_q} expert tensors quantised, "
         f"{n_bf16} kept", STAGE)
