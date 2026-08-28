@@ -159,3 +159,41 @@ materialising and evaluating. If P6 reports 0.91, then everything in the table a
 the correct conclusion is that the criterion does not matter at this ratio — spend the budget on
 evaluation instead. Running P7 without P6 would invite reading noise as signal, which is how a
 project talks itself into materialising three arms of the same mask.
+
+## Interim noise floor, and what it does to the criterion table `[MEAS 2026-08-28 06:55]`
+
+Split-half at **2 chunks per half (~1M tokens each)**, i.e. 40% of the final budget:
+
+| | |
+|---|---|
+| keep-set overlap | mean **0.9478**, p10 0.9167, min 0.9028 |
+| layers below the 0.95 gate | **22 / 42** |
+| worst layers | 35 (0.9028), 18 (0.9097), 14/31/39 (0.9167) |
+
+Worst layers carry 380–900 tokens for their least-served expert, which is the expected driver.
+
+**This is the ruler for P7.** Read the criterion table against it:
+
+| criterion | overlap vs REAP | verdict at this noise floor |
+|---|---|---|
+| `var_aware` | 0.958 | **above the floor — indistinguishable from REAP** |
+| `quantile` | 0.937 | at/below — marginal |
+| `gate_only` | 0.922 | slightly below |
+| `mix_sample` / `mix_codemath` | 0.915 / 0.911 | slightly below |
+| `norm_only` | 0.866 | **clearly below — genuinely different** |
+| `frequency` | 0.804 | **clearly below — the control, as expected** |
+
+So the emerging answer to "does the criterion matter?" is **mostly no**: `var_aware` is inside the
+noise, `quantile` marginal, and only removing the gate or switching to frequency-weighting yields
+a materially different mask. That is the cheap-close outcome — it would send the budget to
+evaluation rather than criterion search.
+
+Two caveats before this is final: the shootout ran on 1 chunk and the split-half on 2+2, so the
+two are **not yet measured on matched data** — both get re-run at full budget. And if the
+disagreement is noise-driven, scaling 1M -> 2.75M tokens per half should lift overlap to roughly
+**0.97** and pass the gate.
+
+**If it does not pass at full budget, that is a substantive result**, not a disappointment: it
+would mean 5.5M tokens still cannot determine the mask, and A7 in `CLOUD_COUNTERFACTUAL.md` moves
+from "candidate non-unlock" to a real one — more calibration would be the cheapest quality
+available, and a cluster would buy it.
