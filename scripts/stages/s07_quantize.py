@@ -103,9 +103,19 @@ def run() -> dict:
         raise RuntimeError(
             f"need ~{need:.0f} GiB free to offload the part of the model that will not fit in "
             f"RAM ({model_gib:.0f} GiB model, {ram_gib:.0f} GiB available), have {have:.0f}.")
-    log(f"loading with disk offload -> {OFFLOAD} (need ~{need:.0f} GiB, have {have:.0f})", STAGE)
+    # Bound the GPU explicitly. device_map="auto" died with cudaErrorIllegalAddress during
+    # weight materialisation. Verified first that plain FP8 host->device copies work here,
+    # including a real tensor from this checkpoint, so it is placement and not a dtype problem:
+    # Thor's memory is UNIFIED, so accelerate reads ~122 GiB of "VRAM", decides most of a
+    # 157 GiB model belongs there, and exhausts the very pool it just measured.
+    #
+    # This stage runs no forward passes - NVFP4A16 weights are a deterministic transform and
+    # FP8_DYNAMIC computes activation scales at runtime - so the GPU needs almost nothing.
+    max_mem = {0: "2GiB", "cpu": "48GiB"}
+    log(f"loading with bounded placement {max_mem}, disk offload -> {OFFLOAD} "
+        f"(need ~{need:.0f} GiB, have {have:.0f})", STAGE)
     model = Glm5NextForConditionalGeneration.from_pretrained(
-        src, device_map="auto", dtype="auto",
+        src, device_map="auto", dtype="auto", max_memory=max_mem,
         offload_folder=str(OFFLOAD), offload_state_dict=False)
     linearize_moe(model)
     tok = AutoTokenizer.from_pretrained(src)
