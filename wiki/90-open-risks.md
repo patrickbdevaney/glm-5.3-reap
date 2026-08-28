@@ -173,3 +173,41 @@ saliency numbers, and the directive's priority is a usable model. The non-unifor
 **Cost of finding this late:** the non-uniform output was discarded and the source re-staged.
 It would have been caught before surgery by one question — *can the target config express a
 per-layer expert count?* — which is now the first thing to ask of any allocation scheme.
+
+## R14 — the MTP draft head was dropped, and that forecloses speculative decoding `[MEAS 2026-08-27 22:32]`
+
+**The shipped REAP FP8 has no layer 45.** Source layers are 0–45 (n=46); the REAP output has
+0–44 (n=45) and zero MTP tensors. `s04b_surgery` excludes it deliberately (`MTP_LAYER = 45`,
+"transformers does not instantiate it") and writes `num_nextn_predict_layers: 0`.
+
+**The research's claim that `num_nextn_predict_layers: 0` in the source, so the block is "closed",
+is FALSE.** The source config says **1**, and layer 45 is a real, fully-populated block:
+
+| | layer 45 (MTP) | layer 44 (normal) |
+|---|---|---|
+| tensors | 1,760 | 1,759 |
+| experts | 288 routed + shared + router | same |
+| attention | **MLA + DSA indexer** | KDA linear attention |
+| mHC (`hc_*`) | **absent** | present |
+| MTP-specific | `eh_proj`, `enorm`, `hnorm`, `shared_head.norm` | — |
+
+Two consequences:
+
+1. **Cost to preserve is trivial**: layer 45's experts are ~6.75 GiB FP8 at 288, ~3.4 GiB pruned
+   to 144 — about +2% on the artifact.
+2. **Cost of dropping it is not**: an MTP block is exactly the draft head a speculative-decoding
+   inference server needs. vLLM implements MTP spec-decode even though `transformers` does not,
+   so "transformers cannot instantiate it" is a statement about the *validation* harness, not
+   about the weight's value. Dropping it makes a draft-head fine-tune impossible from the
+   published artifact — the weights simply are not there.
+
+**Pass-2 decision: preserve layer 45**, prune its experts to 144 (forced — `num_local_experts` is
+one scalar), and ship `num_nextn_predict_layers: 1`.
+
+Note that layer 45 has **no hyper-connections**, so it runs on plain `[B, S, H]` and is *easier*
+to stream standalone than a normal layer. Getting real saliency for it means reconstructing the
+MTP input, `eh_proj(cat(hnorm(h_final), enorm(embed(next_token))))`, after the layer-44 sweep.
+
+If that forward proves fiddly, a weight-only criterion is an acceptable fallback **here
+specifically**, because the intended downstream use is to *fine-tune* the draft head — which
+repairs a mediocre prune. That argument does NOT extend to the main stack.
