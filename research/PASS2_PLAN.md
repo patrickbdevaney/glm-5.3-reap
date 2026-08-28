@@ -19,7 +19,7 @@ The synthesis said "delete both output trees." That was written against a stale 
 
 | tree | size | status | disposition |
 |---|---|---|---|
-| `output/…-fp8` | 157 GiB | **verified on HF**: 62 shards, 157.0 GiB, config+index | delete local **before P12**, not now |
+| `output/…-fp8` | 157 GiB | **verified on HF**: 62 shards, 157.0 GiB, config+index | delete local **after P9.5 has evaluated it** — it is the A/B baseline |
 | `output/…-nvfp4` | 96 GiB | uploading | delete local **after upload verifies**; reproducible from FP8 in 0.6 h |
 | `offload/` | 17 GiB | dead accelerate scratch | **deleted** ✔ |
 | docker | 30.7 GB | pre-approved prune | **reclaimed** ✔ |
@@ -46,11 +46,39 @@ Numbered P0–P14. **CP** = critical path.
 | P7 | Criterion shootout | 8 offline masks from the accumulators + pairwise overlap; pick 2. Includes **arm B (quantile-blended 0.6*mean + 0.4*p99)**, which pass 1 had to defer because the tracker kept only sum and count - the log-histogram accumulator now makes it available without a new pass. | 1 | high-value |
 | P8 | AIMER cross-check | calibration-free second opinion, streamed | 0.5–1 | opt |
 | P9 | Staged greedy re-scoring | R=8–16, router-aware, needs P2's logit cache | 1–2 | opt |
+| **P9.5** | **Score the teacher, and evaluate pass 1** | **MUST precede any materialisation** — see below | 6–12 | **CP** |
 | P10 | Materialise mask A | surgery 0.29 + heal 0.33 + quantize 0.60 | 1.3 | **CP** |
 | P11 | Materialise mask B | serially, deleting between arms | 1.3–2.6 | opt |
 | P12 | Paired eval harness | lockstep teacher/student streamed forward, B=4, teacher-forced only | 4–8 dev | **CP** |
 | P13 | **Eval pass** | held-out per-domain ΔNLL + flip/KL + PopQA + multimodal slice + BFCL non-live AST | 6–15 | **CP** |
 | P14 | Decide + ship | ratio, criterion, healing gain → final FP8 + NVFP4 → HF | 2 | **CP** |
+
+## P9.5 — the sequencing hazard, and the A/B it buys
+
+**`s04b_surgery` deletes each source shard as it writes, and the source IS the teacher.** That is
+the R10 mechanism keeping the prune inside the disk envelope, and it is correct — but it means
+that after any materialisation there is no teacher left to score against, and a teacher-vs-student
+number becomes impossible without a 3-hour re-download.
+
+The teacher capture is per-token over a **fixed** held-out set, so it is reusable across every
+student. Score the teacher **once**, persist it with taps, compare every later student to the
+saved copy. `s09_eval` now does this automatically and refuses to run with neither a teacher nor
+a cache.
+
+The same window buys something better than a safeguard. Right now **both** the source (306 GiB)
+and the pass-1 FP8 student (157 GiB) are on disk simultaneously. So P9.5 should evaluate **pass 1
+as well** — against the same teacher, on the same held-out tokens. Then:
+
+| artifact | evaluated against | gives |
+|---|---|---|
+| pass-1 REAP (published) | cached teacher | the first measurement of the model already on HF |
+| pass-2 REAP | **same** cached teacher | a true A/B, not an argument |
+
+Without this, "pass 2 is better than pass 1" stays an inference from better inputs. With it, it is
+a number. And it retires the awkward fact that the currently-published artifact has never been
+evaluated at all.
+
+**Consequence for disk:** do **not** delete the local pass-1 FP8 until P9.5 has scored it.
 
 ## The three things that actually change the outcome
 

@@ -250,16 +250,41 @@ def run() -> dict:
     import torch
     teacher = Path(kv_get("eval_teacher", str(ROOT / "source" / "GLM-5.3-Flash")))
     student = Path(kv_get("eval_student", str(ROOT / "output" / "glm-5.3-flash-reap50-fp8")))
-    for p in (teacher, student):
-        if not (p / "model.safetensors.index.json").exists():
-            raise RuntimeError(f"checkpoint not usable: {p}")
+    if not (student / "model.safetensors.index.json").exists():
+        raise RuntimeError(f"student checkpoint not usable: {student}")
     OUT.mkdir(parents=True, exist_ok=True)
     rows = load_heldout()
 
-    T = score_checkpoint(teacher, rows, "teacher")
-    torch.save({k: v for k, v in T.items() if k != "taps"}, OUT / "teacher.pt")
+    # THE TEACHER CAPTURE MUST OUTLIVE THE TEACHER.
+    #
+    # s04b_surgery deletes each source shard right after writing its survivors - that is the R10
+    # mechanism that keeps the prune inside the disk envelope - and the source IS the teacher. So
+    # after any materialisation there is no teacher left to score against, and a teacher-vs-student
+    # number becomes impossible without a 3-hour re-download.
+    #
+    # The capture is per-token on a FIXED held-out set, so it is reusable across every student:
+    # score the teacher once, persist it WITH taps, and compare each subsequent student to the
+    # saved copy. Missing this would have cost pass 2 its evaluation entirely - the sequencing is
+    # the whole point, not an optimisation.
+    cache = OUT / "teacher.pt"
+    if cache.exists() and bool(kv_get("eval_reuse_teacher", True)):
+        T = torch.load(cache, weights_only=False)
+        log(f"reusing cached teacher capture ({T['nll'].numel()} tokens) - the source may be "
+            f"gone, and it does not need to be here", STAGE)
+    else:
+        if not (teacher / "model.safetensors.index.json").exists():
+            raise RuntimeError(
+                f"no teacher at {teacher} and no cached capture at {cache}. Surgery consumes the "
+                f"source, so the teacher must be scored BEFORE materialising a student.")
+        T = score_checkpoint(teacher, rows, "teacher")
+        torch.save(T, cache)          # WITH taps: pass-2 tap drift needs the teacher side too
+        log(f"teacher capture saved to {cache} - safe to materialise now", STAGE)
+
     S = score_checkpoint(student, rows, "student")
+    torch.save(S, OUT / f"student_{student.name}.pt")
     res = compare(T, S)
+    res["teacher_from_cache"] = bool(cache.exists())
+    res["student"] = student.name
 
     (ARTIFACTS / "s09_eval.json").write_text(json.dumps(res, indent=2))
     for k, v in res.items():
