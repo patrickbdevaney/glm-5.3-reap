@@ -115,3 +115,47 @@ Qwen3-Coder-REAP-20/50, Qwen3.8-REAP-25, Kimi-Linear-REAP-30). The exceptions ar
 Kimi-K3 MLX ports at **REAP-73 and REAP-80** — and those are explicitly described as having
 **"noticeable degradation versus full K3"**. The absence of validated high-ratio checkpoints
 is real, and the one high-ratio data point that exists is a negative result. `[EST]`
+
+## Early criterion divergence, and the noise floor that interprets it `[MEAS 2026-08-27 23:58]`
+
+Run on **partial** pass-2 data — 11 layers of chunk 1, ~1/10 of the final token budget — so
+indicative, not final. Keep-set overlap against stock REAP at 50%, 144 experts/layer:
+
+| criterion | overlap vs REAP | experts differing (of 144) |
+|---|---|---|
+| `var_aware` (mean + 0.5·std) | 0.958 | 6 |
+| `quantile` (0.6·mean + 0.4·p99) | 0.937 | 9 |
+| `gate_only` (mean g) | 0.922 | 11 |
+| `mix_sample` (sample-proportional re-weight) | 0.915 | 12 |
+| `mix_codemath` (code/math-forward) | 0.911 | 13 |
+| `norm_only` (mean ‖f‖, gate removed) | 0.866 | 19 |
+| `frequency` (sum, not mean) | 0.804 | **28** |
+
+Three things this already tells us:
+
+1. **REAP's conditional mean is doing real work.** `frequency` is the control — the
+   frequency-weighted ranking REAP exists to avoid — and it picks **28 different experts per
+   layer**. Had it come out at 0.99, the whole conditional-mean argument would have been
+   decorative. It did not.
+2. **Both factors in `g·‖f‖` carry independent signal.** Removing the gate (`norm_only`) moves 19
+   experts; keeping only the gate (`gate_only`) moves 11. Neither half reproduces the product, so
+   the criterion is not secretly one of its factors.
+3. **The mixture is not neutral.** Re-weighting the calibration mixture moves ~12 experts per
+   layer — the same order as changing the criterion outright. Given the realised token mixture
+   gave `code` 5.7% against a 21% sample quota, that is a live decision, not a formality.
+
+### The methodological point: P6 sets the ruler for P7
+
+These overlaps cannot be read on their own, because **part of every gap is sampling noise, not
+criterion disagreement**. At 1/10 of the token budget, even stock REAP disagrees with *itself*
+across independent halves.
+
+That is exactly what P6's split-half overlap measures. So the two gates must be read together:
+
+> **split-half overlap is the noise floor; criterion divergence is only meaningful above it.**
+
+If P6 reports 0.97 at full budget, then `mix_codemath` at 0.911 is a real difference worth
+materialising and evaluating. If P6 reports 0.91, then everything in the table above is noise and
+the correct conclusion is that the criterion does not matter at this ratio — spend the budget on
+evaluation instead. Running P7 without P6 would invite reading noise as signal, which is how a
+project talks itself into materialising three arms of the same mask.
