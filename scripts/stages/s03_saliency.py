@@ -53,6 +53,8 @@ SALIENCY = ROOT / "artifacts" / "saliency"
 # Router-score cache, written per chunk. Grows with TOKENS rather than with experts, so it is
 # flushed and cleared each chunk instead of accumulating across the run.
 ROUTER_CACHE_DIR = ROOT / "artifacts" / "router_cache"
+# Per-chunk cumulative snapshots of the ranking statistics; see SS.dump_light.
+SNAPSHOT_DIR = ROOT / "artifacts" / "saliency_snapshots"
 
 TARGET_SPARSITY = float(kv_get("chosen_ratio", 0.50) or 0.50)
 # Sized so that ALL activations fit in RAM at once, which lets each layer be loaded exactly
@@ -456,6 +458,9 @@ def run() -> dict:
         _sweep(states, f"chunk {ci+1}/{len(text_chunks)}")
         nrc = SS.dump_router_cache(ROUTER_CACHE_DIR / f"chunk_{ci:03d}.pt")
         SS.dump(SALIENCY)
+        # Cumulative snapshot per chunk: the split-half gate (P6) cannot be computed from a
+        # single running total, and the sweep is far too expensive to re-run to get one.
+        SS.dump_light(SNAPSHOT_DIR / f"chunk_{ci:03d}")
         done.add(ci)
         ledger.parent.mkdir(parents=True, exist_ok=True)
         ledger.write_text(json.dumps({"done": sorted(done), "chunks": len(text_chunks)}))

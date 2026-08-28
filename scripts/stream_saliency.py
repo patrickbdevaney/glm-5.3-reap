@@ -341,6 +341,32 @@ def dump_router_cache(path: Path) -> int:
     return n
 
 
+def dump_light(dirpath: Path) -> int:
+    """Write a small CUMULATIVE snapshot of the ranking statistics only.
+
+    Exists so the split-half stopping rule (P6) is computable at all. The keep-set depends only
+    on `sum` and `cnt`, and a single running total cannot be split after the fact - so each chunk
+    leaves a cumulative snapshot, and any chunk's own contribution is recovered by differencing
+    two of them. Half A = chunks 0..5, half B = 6..11, and the overlap between the two keep-sets
+    says whether the token budget was sufficient instead of guessing at a floor.
+
+    Deliberately omits `osum` (288x4096 f32, ~4.7 MB/layer) and `hist`: at ~130 KB/layer this is
+    ~5.5 MB per chunk, so keeping all 12 costs ~66 MB. The full accumulators are still written by
+    dump() for resume.
+    """
+    dirpath = Path(dirpath)
+    dirpath.mkdir(parents=True, exist_ok=True)
+    for lname in sorted(ACC):
+        a = ACC[lname]
+        torch.save({"layer": lname,
+                    "sum_saliency": a["sum"].sum(0).detach().cpu(),
+                    "count": a["cnt"].sum(0).detach().cpu(),
+                    "sum_by_bucket": a["sum"].detach().cpu(),
+                    "cnt_by_bucket": a["cnt"].detach().cpu()},
+                   dirpath / f"{lname.replace('.', '__')}.pt")
+    return len(ACC)
+
+
 def load_accumulators(dirpath: Path, device) -> int:
     """Restore accumulators from a previous run's per-layer dumps.
 
