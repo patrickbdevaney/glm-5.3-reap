@@ -117,7 +117,26 @@ def _load_calib():
                     mm_rows.append(rec)
             except Exception:
                 continue
-    log(f"calibration: {len(text_rows)} text + {len(mm_rows)} image-text", STAGE)
+    # Stratify the text rows so EVERY chunk carries the full mixture.
+    #
+    # The rows are built bucket-by-bucket, so slicing them into chunks in that order gives chunk 0
+    # entirely to `agentic`, chunk 1 to agentic+code, and so on. Two things break: an interrupted
+    # run leaves a domain-skewed accumulator, and - worse - the split-half gate would compare
+    # early chunks against late ones, i.e. one set of domains against a different set, and report
+    # spuriously low keep-set overlap. We would then read a mixture artefact as "the token budget
+    # was insufficient" and buy hours of calibration we did not need.
+    #
+    # Interleave by within-bucket rank so each bucket spreads evenly over the whole list and the
+    # proportions hold in every slice. Deterministic - no RNG - so a resumed run rebuilds the
+    # identical order.
+    by_b: dict[str, list] = {}
+    for row in text_rows:
+        by_b.setdefault(row[1], []).append(row)
+    text_rows = [r for _, r in sorted(
+        ((i + 0.5) / max(1, len(rows)), r)
+        for rows in by_b.values() for i, r in enumerate(rows))]
+    log(f"calibration: {len(text_rows)} text + {len(mm_rows)} image-text; stratified across "
+        f"{len(by_b)} buckets so every chunk carries the mixture", STAGE)
     metric(STAGE, "calib_text_samples", len(text_rows))
     metric(STAGE, "calib_mm_samples", len(mm_rows))
     if not mm_rows:
