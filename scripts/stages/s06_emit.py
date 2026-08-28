@@ -29,8 +29,56 @@ ADAPTERS = ROOT / "output" / "adapters"
 EMIT = ROOT / "output" / str(kv_get("emit_name", "glm-5.3-flash-reap50-fp8"))
 
 
+def _enrich(meta: dict) -> dict:
+    """Fill the card's quality numbers from the artifacts, never from literals.
+
+    The card previously hardcoded "1.29x better than random / saliency mass 0.643". Those are
+    PASS-1 measurements. Printed on a pass-2 model they would be a confident, specific, wrong
+    claim about a different checkpoint - the worst kind, because nothing about the card would
+    look stale.
+    """
+    try:
+        sw = json.loads((ARTIFACTS / "s04_sweep.json").read_text())["sweep"]
+        key = f"{float(meta.get('sparsity', 0.5)):.2f}"
+        row = sw.get(key) or sw.get(str(meta.get("sparsity"))) or {}
+        meta["saliency_mass_retained"] = row.get("saliency_mass_retained")
+        meta["concentration_vs_random"] = row.get("concentration_vs_random")
+        meta["routing_mass_retained"] = row.get("routing_mass_retained")
+        meta["min_layer_routing_mass"] = row.get("min_layer_routing_mass")
+    except Exception as e:
+        log(f"could not read sweep numbers for the card: {type(e).__name__}", STAGE, "WARN")
+    try:
+        sg = json.loads((ARTIFACTS / "s04b_surgery.json").read_text())
+        meta["mtp_preserved"] = bool(sg.get("mtp_preserved", False))
+        meta["mtp_criterion"] = sg.get("mtp_criterion")
+    except Exception:
+        meta.setdefault("mtp_preserved", False)
+    return meta
+
+
 def _card(meta: dict) -> str:
     healed = meta.get("healed")
+    conc = meta.get("concentration_vs_random")
+    smass = meta.get("saliency_mass_retained")
+    conc = f"{conc:.2f}" if isinstance(conc, (int, float)) else "?"
+    smass = f"{smass:.3f}" if isinstance(smass, (int, float)) else "?"
+    if meta.get("mtp_preserved"):
+        mtp_inline = " The MTP block at layer 45 is **preserved**."
+        mtp_note = (
+            "- **The MTP (multi-token-prediction) block at layer 45 is preserved** and pruned to "
+            "the same expert count as every other MoE layer (forced: `num_local_experts` is a "
+            "single scalar). `transformers` does not instantiate it, but vLLM and SGLang implement "
+            "MTP speculative decoding, so it is retained as a draft head. Because the calibration "
+            "sweep never runs it, its experts were ranked by "
+            f"{meta.get('mtp_criterion') or 'weight norm'} rather than activation saliency - a "
+            "weaker criterion, appropriate here because a draft head is expected to be fine-tuned "
+            "downstream.")
+    else:
+        mtp_inline = " The MTP block at layer 45 is cleanly absent."
+        mtp_note = (
+            "- **The MTP (multi-token-prediction) block at layer 45 is excluded.** `transformers`' "
+            "`Glm5NextForConditionalGeneration` does not instantiate it, so the pruning path "
+            "cannot see it. Dropping it forecloses speculative decoding from this artifact.")
     return f"""---
 license: mit
 base_model: zai-org/GLM-5.3-Flash
@@ -73,19 +121,17 @@ vision-serving experts with certainty. Real image-text pairs were asserted prese
 **This checkpoint has not been evaluated.** No benchmark has been run against it - not coding,
 not agentic, not vision, not knowledge. What has been verified is *structural*: expert counts
 match the config, routers are sliced to the retained set, every tensor loads, the vision tower
-is untouched, and the MTP block is cleanly absent.
+is untouched.{mtp_inline}
 
-The pruning itself measured **1.29x better than random** at retaining expert output
-contribution (saliency mass 0.643 against 0.50 for random pruning at the same ratio). That says
+The pruning itself measured **{conc}x better than random** at retaining expert output
+contribution (saliency mass {smass} against 0.50 for random pruning at the same ratio). That says
 the criterion selected well. It does **not** say the model is good.
 
 Treat this as a research artifact pending evaluation, not a drop-in replacement.
 
 ## Known limitations
 
-- **The MTP (multi-token-prediction) block at layer 45 is excluded.** `transformers`'
-  `Glm5NextForConditionalGeneration` does not instantiate it, so the pruning path cannot see
-  it. Its original tensors are archived unmodified rather than inconsistently pruned.
+{mtp_note}
 - REAP has no published data above 50% compression; this checkpoint sits at the validated
   ceiling, not beyond it.
 - Expect **factual-recall** regression before reasoning or coding regression. That is the
@@ -117,6 +163,7 @@ def run() -> dict:
         meta = {"sparsity": sg["ratio"], "experts_kept": sg["experts_kept"],
                 "pruned_gib": sg["gib"], "healed": True,
                 "calib_samples": s3.get("calib_samples")}
+        meta = _enrich(meta)
         (nvp / "README.md").write_text(_card(meta))
         (nvp / "reap_metadata.json").write_text(json.dumps(meta, indent=2))
         kv_set("emit_path", str(nvp))
@@ -164,6 +211,7 @@ def run() -> dict:
     meta = {"sparsity": sg["ratio"], "experts_kept": sg["experts_kept"],
             "pruned_gib": sg["gib"], "healed": healed,
             "calib_samples": s3.get("calib_samples")}
+    meta = _enrich(meta)
     (EMIT / "README.md").write_text(_card(meta))
     (EMIT / "reap_metadata.json").write_text(json.dumps(meta, indent=2))
 
