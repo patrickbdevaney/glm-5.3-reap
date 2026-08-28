@@ -71,7 +71,7 @@ as well** — against the same teacher, on the same held-out tokens. Then:
 
 | artifact | evaluated against | gives |
 |---|---|---|
-| pass-1 REAP (published) | cached teacher | the first measurement of the model already on HF |
+| pass-1 REAP (**re-healed** 2026-08-28) | cached teacher | first measurement of the model on HF |
 | pass-2 REAP | **same** cached teacher | a true A/B, not an argument |
 
 Without this, "pass 2 is better than pass 1" stays an inference from better inputs. With it, it is
@@ -79,6 +79,17 @@ a number. And it retires the awkward fact that the currently-published artifact 
 evaluated at all.
 
 **Consequence for disk:** do **not** delete the local pass-1 FP8 until P9.5 has scored it.
+
+**What the baseline now isolates.** The local pass-1 tree was re-healed on 2026-08-28 with the
+measured gain, and re-uploaded, so it is again identical to what is published. The A/B therefore
+compares *pass 1 with correct healing* against *pass 2*, which isolates the calibration and
+sampling improvements — 10.6x the tokens, restored vision, masked padding, corrected mixture —
+rather than confounding them with the healing fix.
+
+The healing fix's own value is separately measurable, because the correction is exactly
+invertible (`artifacts/reheal_factors.json`): dividing the block scales reconstructs the
+as-published state bit-for-bit. That would be a third eval arm at ~6-12 h. Worth running only if
+the pass-1-vs-pass-2 gap turns out small enough that attributing it matters.
 
 ## The three things that actually change the outcome
 

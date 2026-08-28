@@ -1,6 +1,6 @@
 # STATE — terse recovery point
 
-Updated 2026-08-27 23:55 EDT. Read this first after any context loss.
+Updated 2026-08-28 01:45 EDT. Read this first after any context loss.
 
 ## Where we are
 
@@ -8,7 +8,7 @@ Updated 2026-08-27 23:55 EDT. Read this first after any context loss.
 
 | artifact | where | status |
 |---|---|---|
-| FP8 master, 157 GiB, 62 shards | `output/glm-5.3-flash-reap50-fp8` + HF `patrickbdevaney/GLM-5.3-Flash-REAP50-FP8` | verified on HF (62 shards, config+index). **Local copy deletes at P12, not before.** |
+| FP8 master, 157 GiB, 62 shards | `output/glm-5.3-flash-reap50-fp8` + HF `…-REAP50-FP8` | **RE-HEALED 2026-08-28** with the measured gain (6,048 scales x median 1.3121) and re-uploaded. Local copy deletes only after **P9.5** has scored it — it is the A/B baseline. |
 | NVFP4, 96 GiB, 62 shards | HF `patrickbdevaney/GLM-5.3-Flash-REAP50-NVFP4` | verified byte-for-byte, **local copy deleted** to make room for the source |
 | pipeline infra | `github.com/patrickbdevaney/glm-5.3-reap` | ~95 commits pushed |
 
