@@ -199,6 +199,15 @@ def patch_experts_for_saliency():
             acc = _ensure(lname, self.num_experts, hidden_states.shape[-1], dev)
             bkt = _CTX["bucket"]
             valid = _CTX["valid"]
+            if valid is not None and valid.shape[0] != hidden_states.shape[0]:
+                # Glm5NextTextMoE flattens with view(-1, H), so the mask is 1:1 with rows IFF the
+                # MLP sees [B, S, H]. mHC's hc_mult axis is consumed inside the decoder layer
+                # before the MLP, so it should. If that ever stops being true, a silently
+                # misaligned mask would corrupt every statistic in the run while still looking
+                # plausible - so refuse to guess how to broadcast it.
+                raise RuntimeError(
+                    f"valid mask length {valid.shape[0]} != {hidden_states.shape[0]} expert rows "
+                    f"in {lname}; token flattening is not 1:1, fix the mask construction")
         for expert_idx in hit:
             if expert_idx == self.num_experts:
                 continue
@@ -329,6 +338,42 @@ def dump_router_cache(path: Path) -> int:
     torch.save({"topk": ROUTER_TOPK, "subsample": ROUTER_SUBSAMPLE, "layers": out}, path)
     n = sum(v["scores"].shape[0] for v in out.values())
     ROUTER_CACHE.clear()
+    return n
+
+
+def load_accumulators(dirpath: Path, device) -> int:
+    """Restore accumulators from a previous run's per-layer dumps.
+
+    Chunked calibration is only worth doing if a kill costs one chunk rather than the whole
+    token budget, and that requires the accumulators to survive the process. They are already
+    written per layer by dump(); this reads them back onto the device so the next chunk adds
+    to them instead of starting from zero.
+    """
+    dirpath = Path(dirpath)
+    n = 0
+    for f in sorted(dirpath.glob("*.pt")):
+        try:
+            d = torch.load(f, weights_only=False)
+        except Exception:
+            continue
+        lname = d.get("layer")
+        if lname is None or "sum_by_bucket" not in d:
+            continue          # a pass-1 dump: no per-bucket tensors, cannot be resumed into
+        a = {
+            "sum": d["sum_by_bucket"].to(device),
+            "cnt": d["cnt_by_bucket"].to(device),
+            "sq": d["sq_by_bucket"].to(device),
+            "nrm": d["norm_sum_by_bucket"].to(device),
+            "nsq": d["norm_sq_by_bucket"].to(device),
+            "gat": d["gate_sum_by_bucket"].to(device),
+            "gsq": d["gate_sq_by_bucket"].to(device),
+            "hist": d["hist"].to(device),
+            "osum": d["out_sum"].to(device),
+        }
+        ACC[lname] = a
+        SAL_SUM[lname] = a["sum"]
+        SAL_CNT[lname] = a["cnt"]
+        n += 1
     return n
 
 

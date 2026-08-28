@@ -119,5 +119,30 @@ check("valid mask drops padded tokens",
       int(SS.ACC["L2"]["cnt"].sum()) == int(valid.sum()) * K,
       f"got {int(SS.ACC['L2']['cnt'].sum())} want {int(valid.sum())*K}")
 
+
+# ---- 7. accumulators survive a chunk boundary ------------------------------------------------
+# The whole point of chunking is that a kill costs one chunk, not the token budget.
+import tempfile, shutil
+SS.reset_accumulators()
+SS.set_current_layer("L3"); SS.set_bucket("bio"); SS.set_valid_mask(None)
+_ = fwd(stub, x, i_sim, w_sim)
+before = {k: v.clone() for k, v in SS.ACC["L3"].items()}
+td = Path(tempfile.mkdtemp())
+try:
+    SS.dump(td)
+    SS.reset_accumulators()
+    check("reset really clears", "L3" not in SS.ACC)
+    n = SS.load_accumulators(td, "cpu")
+    after = SS.ACC.get("L3", {})
+    check("resume reloads every accumulator", n == 1 and set(after) == set(before))
+    check("resume is bit-exact",
+          all(torch.equal(before[k], after[k]) for k in before))
+    # and a second chunk must ADD to the restored state, not overwrite it
+    _ = fwd(stub, x, i_sim, w_sim)
+    check("second chunk accumulates on top of the resumed state",
+          torch.allclose(SS.ACC["L3"]["sum"], before["sum"] * 2, rtol=1e-6))
+finally:
+    shutil.rmtree(td, ignore_errors=True)
+
 print("\n" + ("ALL PASS" if not fails else f"FAILURES: {fails}"))
 sys.exit(1 if fails else 0)

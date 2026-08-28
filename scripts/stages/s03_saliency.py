@@ -50,6 +50,9 @@ def _reclaim_page_cache() -> None:
 SRC = ROOT / "source" / "GLM-5.3-Flash"
 CORPUS = ROOT / "corpus" / "shards"
 SALIENCY = ROOT / "artifacts" / "saliency"
+# Router-score cache, written per chunk. Grows with TOKENS rather than with experts, so it is
+# flushed and cleared each chunk instead of accumulating across the run.
+ROUTER_CACHE_DIR = ROOT / "artifacts" / "router_cache"
 
 TARGET_SPARSITY = float(kv_get("chosen_ratio", 0.50) or 0.50)
 # Sized so that ALL activations fit in RAM at once, which lets each layer be loaded exactly
@@ -57,8 +60,14 @@ TARGET_SPARSITY = float(kv_get("chosen_ratio", 0.50) or 0.50)
 # re-reads. 512 x 2048 x hc_mult(4) x 4096 x 2B ~= 34 GB.
 # REAP's saliency is a conditional mean, so tokens-per-expert governs, not corpus size:
 # 512 x 2048 x 8/288 ~= 29k tokens per expert, far above the 2k sufficiency floor.
-N_CALIB = int(kv_get("n_calib_samples", 256) or 256)
 MAX_LEN = int(kv_get("calib_max_len", 2048) or 2048)
+# PASS 2. Pass 1 ran 256 samples = 0.52M tokens: 1.1% of the 48.3M-token corpus we built, which
+# left 501/12096 expert slots decided on under 2000 tokens and ~25.5 experts per layer sitting
+# within +-5% of the 50% cut. The budget is now expressed in TOKENS and swept in chunks, so it
+# is bounded by wall-clock rather than by RAM.
+CALIB_TOKENS = int(kv_get("calib_tokens", 5_500_000) or 5_500_000)
+CHUNK_TOKENS = int(kv_get("calib_chunk_tokens", 500_000) or 500_000)
+N_CALIB = int(kv_get("n_calib_samples", 0) or 0) or -(-CALIB_TOKENS // MAX_LEN)
 # MEASURED 2026-08-27: the KDA (linear_attention) forward costs ~13 GiB of transient memory
 # per 2048-token sequence and scales linearly with batch, so B=8 needed ~104 GiB and took the
 # box to 0.2 GiB available. That is why every run died at layer 5 - the first layer that is
@@ -89,7 +98,9 @@ def _load_calib():
         items = per_bucket.get(bucket, [])
         want = int(n_text * share / denom)
         for it in items[:want]:
-            text_rows.append(it["input_ids"][:MAX_LEN])
+            # Carry the bucket. Pass 1 discarded it, which made the calibration mixture
+            # impossible to re-weight after the fact - any change meant another full pass.
+            text_rows.append((it["input_ids"][:MAX_LEN], bucket))
     mm_rows = []
     mdir = CORPUS / "multimodal"
     if mdir.exists():
@@ -244,6 +255,11 @@ def run() -> dict:
     tcfg = cfg.text_config
     reader = SS.ShardReader(SRC)
     SS.patch_experts_for_saliency()
+    # Cache the router's per-token scores. This is what turns one saliency pass into an offline
+    # laboratory: post-prune routing (selection AND the renormalised gate) becomes exactly
+    # replayable for any candidate keep-set, which is what P5's healing re-fit and P9's
+    # router-aware re-scoring need and what pass 1 could not do at any price.
+    SS.patch_router_for_cache()
     SS.reset_accumulators()
 
     text_rows, mm_rows = _load_calib()
@@ -306,90 +322,149 @@ def run() -> dict:
         mask, _ = mm_model.get_placeholder_mask(ids, inputs_embeds=ie, image_features=feats)
         return ids, ie.masked_scatter(mask, feats)
 
-    # ---- build every batch's layer-0 input once, and keep it in RAM -------------------
-    log("preparing activations for all batches (kept in RAM so each layer loads once)", STAGE)
-    states = []
-    with torch.no_grad():
-        for i in range(0, len(text_rows), BATCH):
-            ids, ie = embeds_for(text_rows[i:i + BATCH], None)
-            states.append({"ids": ids.cpu(), "hs": ie.unsqueeze(2)
-                           .expand(-1, -1, tcfg.hc_mult, -1).contiguous().cpu(), "topk": None})
-            del ie
-        for rec in mm_rows:
+    # ---- chunked, resumable sweep ----------------------------------------------------
+    # Pass 1 kept every batch's activations in RAM for the whole layer sweep, which is what
+    # capped it at 0.52M tokens. Chunking trades one extra read of the weights per chunk
+    # (306 GiB at 3.4 GB/s, ~90 s) for an effectively unbounded token budget. On this box read
+    # is 7x faster than write, so re-reading weights beats spilling activations every time.
+    def _prepare(chunk_text, chunk_mm):
+        states = []
+        with torch.no_grad():
+            # Batches must be homogeneous in bucket - the accumulators attribute a whole batch
+            # to one domain. Grouping first is free; it only changes the packing order.
+            by_bucket: dict[str, list] = {}
+            for ids_row, bkt in chunk_text:
+                by_bucket.setdefault(bkt, []).append(ids_row)
+            for bkt, rows in by_bucket.items():
+                for i0 in range(0, len(rows), BATCH):
+                    ids, ie = embeds_for(rows[i0:i0 + BATCH], None)
+                    # Padding routes like any other token. Pass 1 accumulated it as though it
+                    # were text, most heavily for the shortest documents.
+                    valid = (ids != tcfg.pad_token_id).reshape(-1)
+                    states.append({"ids": ids.cpu(), "bucket": bkt, "valid": valid.cpu(),
+                                   "hs": ie.unsqueeze(2).expand(-1, -1, tcfg.hc_mult, -1)
+                                   .contiguous().cpu(), "topk": None})
+                    del ie
+            for rec in chunk_mm:
+                try:
+                    ids, ie = embeds_for(None, rec)
+                    states.append({"ids": ids.cpu(), "bucket": "vision",
+                                   "valid": torch.ones(ids.numel(), dtype=torch.bool),
+                                   "hs": ie.unsqueeze(2).expand(-1, -1, tcfg.hc_mult, -1)
+                                   .contiguous().cpu(), "topk": None})
+                    del ie
+                except Exception as e:
+                    log(f"image-text sample skipped ({type(e).__name__}: {str(e)[:120]})",
+                        STAGE, "WARN")
+        return states
+
+    def _sweep(states, tag):
+        t0 = time.time()
+        for li in range(tcfg.num_hidden_layers):
+            layer = _build_layer(tcfg, li, reader, DT)
+            SS.set_current_layer(f"model.language_model.layers.{li}.mlp")
+            ltype = tcfg.layer_types[li]
+            bi_seen = 0
+            for st in states:
+                try:
+                    with torch.no_grad():
+                        hs = st["hs"].to(DEV, non_blocking=False)
+                        ids = st["ids"].to(DEV)
+                        SS.set_bucket(st["bucket"])
+                        SS.set_valid_mask(st["valid"].to(DEV))
+                        am = torch.ones(ids.shape[0], ids.shape[1], dtype=torch.bool, device=DEV)
+                        pos = torch.arange(ids.shape[1], device=DEV).unsqueeze(0)
+                        topk = st["topk"].to(DEV) if st["topk"] is not None else None
+                        out, topk = layer(hs, attention_mask=am, position_ids=pos,
+                                          position_embeddings=None, input_ids=ids,
+                                          past_key_values=None, use_cache=False,
+                                          prev_topk_indices=topk)
+                        # Back to host immediately. Device memory here is driver-pinned: the
+                        # kernel cannot see, swap or reclaim it, so anything left resident is
+                        # permanently unavailable until the process exits.
+                        st["hs"] = out.cpu()
+                        st["topk"] = topk.cpu() if topk is not None else None
+                        del hs, out, ids, am, pos, topk
+                except Exception as e:
+                    log(f"layer {li} batch failed ({type(e).__name__}: {str(e)[:160]})",
+                        STAGE, "WARN")
+                    gc.collect()
+                    torch.cuda.empty_cache()
+                finally:
+                    SS.set_valid_mask(None)
+                bi_seen += 1
+                if bi_seen % 25 == 0:
+                    torch.cuda.empty_cache()
+            SS.set_current_layer(None)
+            del layer
+            reader.release()      # tear down shard mmaps so their pages become reclaimable
+            gc.collect()
+            torch.cuda.empty_cache()
+            _reclaim_page_cache()
+            el = time.time() - t0
+            avail = 0.0
             try:
-                ids, ie = embeds_for(None, rec)
-                states.append({"ids": ids.cpu(), "hs": ie.unsqueeze(2)
-                               .expand(-1, -1, tcfg.hc_mult, -1).contiguous().cpu(),
-                               "topk": None})
-                del ie
-            except Exception as e:
-                log(f"image-text sample skipped ({type(e).__name__}: {str(e)[:120]})",
-                    STAGE, "WARN")
-    del visual, mm_model, shell
-    gc.collect()
-    torch.cuda.empty_cache()
+                with open("/proc/meminfo") as fh:
+                    for line in fh:
+                        if line.startswith("MemAvailable"):
+                            avail = int(line.split()[1]) / 1048576
+                            break
+            except OSError:
+                pass
+            log(f"{tag} layer {li+1}/{tcfg.num_hidden_layers} ({ltype})  elapsed {el/60:.1f} min  "
+                f"eta {(el/(li+1))*(tcfg.num_hidden_layers-li-1)/60:.0f} min  "
+                f"avail {avail:.0f} GiB", STAGE)
+            SS.dump(SALIENCY)  # checkpoint per layer: a kill costs at most one layer
 
-    _reclaim_page_cache()
-    act_gib = sum(st["hs"].numel() * st["hs"].element_size() for st in states) / 2**30
-    log(f"{len(states)} batches prepared, {act_gib:.1f} GiB of activations on HOST "
-        f"(reclaimable; device memory here is driver-pinned and is not)", STAGE)
-    metric(STAGE, "activation_gib", act_gib)
-    if not states:
-        raise RuntimeError("no calibration batches could be prepared")
+    # Chunk by token count, not sample count, so a chunk's activation footprint is predictable
+    # regardless of how the mixture happens to be packed.
+    per_chunk = max(1, CHUNK_TOKENS // MAX_LEN)
+    text_chunks = [text_rows[k:k + per_chunk] for k in range(0, len(text_rows), per_chunk)]
+    if not text_chunks:
+        raise RuntimeError("no calibration text rows")
+    mm_per = max(1, -(-len(mm_rows) // len(text_chunks)))
+    mm_chunks = [mm_rows[k:k + mm_per] for k in range(0, len(mm_rows), mm_per)]
+    mm_chunks += [[]] * (len(text_chunks) - len(mm_chunks))
 
-    # ---- sweep layers: each layer is built ONCE and every batch passes through it --------
+    ledger = ROOT / "state" / "s03_chunks.json"
+    done = set()
+    if ledger.exists():
+        try:
+            done = set(json.loads(ledger.read_text()).get("done", []))
+        except Exception:
+            done = set()
+    if done:
+        # Resume: the accumulators live in the per-layer dumps, so a killed run reloads them
+        # rather than starting the token budget over.
+        loaded = SS.load_accumulators(SALIENCY, DEV)
+        log(f"resuming after chunk(s) {sorted(done)}; reloaded {loaded} layer accumulators",
+            STAGE, )
+    log(f"{len(text_chunks)} chunks x ~{per_chunk} samples ({CHUNK_TOKENS/1e6:.1f}M tokens each), "
+        f"{CALIB_TOKENS/1e6:.1f}M tokens total", STAGE)
+
     t0 = time.time()
-    for li in range(tcfg.num_hidden_layers):
-        layer = _build_layer(tcfg, li, reader, DT)
-        SS.set_current_layer(f"model.language_model.layers.{li}.mlp")
-        ltype = tcfg.layer_types[li]
-        bi_seen = 0
-        for st in states:
-            try:
-                with torch.no_grad():
-                    hs = st["hs"].to(DEV, non_blocking=False)
-                    ids = st["ids"].to(DEV)
-                    am = torch.ones(ids.shape[0], ids.shape[1], dtype=torch.bool, device=DEV)
-                    pos = torch.arange(ids.shape[1], device=DEV).unsqueeze(0)
-                    topk = st["topk"].to(DEV) if st["topk"] is not None else None
-                    out, topk = layer(hs, attention_mask=am, position_ids=pos,
-                                      position_embeddings=None, input_ids=ids,
-                                      past_key_values=None, use_cache=False,
-                                      prev_topk_indices=topk)
-                    # Back to host immediately. Device memory here is driver-pinned: the
-                    # kernel cannot see, swap or reclaim it, so anything left resident is
-                    # permanently unavailable until the process exits.
-                    st["hs"] = out.cpu()
-                    st["topk"] = topk.cpu() if topk is not None else None
-                    del hs, out, ids, am, pos, topk
-            except Exception as e:
-                log(f"layer {li} batch failed ({type(e).__name__}: {str(e)[:160]})",
-                    STAGE, "WARN")
-                gc.collect()
-                torch.cuda.empty_cache()
-            bi_seen += 1
-            if bi_seen % 25 == 0:
-                torch.cuda.empty_cache()
-        SS.set_current_layer(None)
-        del layer
-        reader.release()          # tear down shard mmaps so their pages become reclaimable
+    for ci, (ct, cm) in enumerate(zip(text_chunks, mm_chunks)):
+        if ci in done:
+            continue
+        states = _prepare(ct, cm)
+        if not states:
+            log(f"chunk {ci}: no batches prepared, skipping", STAGE, "WARN")
+            continue
+        act_gib = sum(st["hs"].numel() * st["hs"].element_size() for st in states) / 2**30
+        log(f"chunk {ci+1}/{len(text_chunks)}: {len(states)} batches, {act_gib:.1f} GiB "
+            f"activations on HOST (reclaimable; device memory here is driver-pinned)", STAGE)
+        _sweep(states, f"chunk {ci+1}/{len(text_chunks)}")
+        nrc = SS.dump_router_cache(ROUTER_CACHE_DIR / f"chunk_{ci:03d}.pt")
+        SS.dump(SALIENCY)
+        done.add(ci)
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_text(json.dumps({"done": sorted(done), "chunks": len(text_chunks)}))
+        del states
         gc.collect()
         torch.cuda.empty_cache()
         _reclaim_page_cache()
-        el = time.time() - t0
-        avail = 0.0
-        try:
-            with open("/proc/meminfo") as fh:
-                for line in fh:
-                    if line.startswith("MemAvailable"):
-                        avail = int(line.split()[1]) / 1048576
-                        break
-        except OSError:
-            pass
-        log(f"layer {li+1}/{tcfg.num_hidden_layers} ({ltype})  elapsed {el/60:.1f} min  "
-            f"eta {(el/(li+1))*(tcfg.num_hidden_layers-li-1)/60:.0f} min  "
-            f"avail {avail:.0f} GiB", STAGE)
-        SS.dump(SALIENCY)      # checkpoint per layer: a kill costs at most one layer
+        log(f"chunk {ci+1}/{len(text_chunks)} done ({nrc} cached router rows); "
+            f"elapsed {(time.time()-t0)/60:.1f} min", STAGE)
 
     n = SS.dump(SALIENCY)
     dt = time.time() - t0
@@ -398,7 +473,7 @@ def run() -> dict:
 
     audit = _audit()
     kv_set("saliency_ready", True)
-    res = {"layers": n, "minutes": round(dt / 60, 1), "batches": len(states),
+    res = {"layers": n, "minutes": round(dt / 60, 1), "chunks": len(text_chunks),
            "expert_audit": audit, "sparsity": TARGET_SPARSITY,
            "calib_samples": len(text_rows) + len(mm_rows), "max_len": MAX_LEN,
            "path": "stream"}
