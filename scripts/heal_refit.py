@@ -32,6 +32,7 @@ hours early.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -186,7 +187,14 @@ def main():
 
     meas = [r["measured_gain"] for r in rows if r.get("measured_gain")]
     fm = [r["first_moment_gain"] for r in rows if r.get("first_moment_gain") == r.get("first_moment_gain")]
+    # Stamp the keep-set these gains were measured against. A healing gain is only valid for the
+    # mask it was derived from - applying pass-1 gains to a pass-2 mask would be the same class of
+    # error the gains themselves were fixing: a stale intermediate used with confidence.
+    keyhash = None
+    if RETAINED.exists():
+        keyhash = hashlib.sha256(RETAINED.read_bytes()).hexdigest()[:16]
     res = {"ratio": a.ratio, "layers": len(rows), "shipped_gain": a.shipped_gain,
+           "keep_set_sha": keyhash,
            "first_moment_median": float(torch.tensor(fm).median()) if fm else None,
            "measured_median": float(torch.tensor(meas).median()) if meas else None,
            "per_layer": rows}

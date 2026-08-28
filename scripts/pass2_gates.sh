@@ -25,7 +25,12 @@ nice -n 15 .venv/bin/python scripts/heal_refit.py >> $LOG 2>&1
 say "waiting for the sweep to finish"
 while pgrep -f "run_stage.py s03_saliency" > /dev/null; do sleep 300; done
 
-say "P5 heal_refit (full budget)"
+# NOTE: this full-budget re-fit still measures against the CURRENT keep-set on disk, which is
+# pass 1's until s04_sweep re-runs. It is informative, not the value pass 2 will apply - s05_heal
+# now refuses gains whose keep-set stamp does not match, and heal_refit must be re-run after
+# s04_sweep. Kept here because the chunk-1 number is what gates the run, and this confirms it at
+# full token budget.
+say "P5 heal_refit (full budget, vs the CURRENT keep-set - re-run after s04_sweep for pass 2)"
 .venv/bin/python scripts/heal_refit.py >> $LOG 2>&1
 say "P6 split_half gate"
 .venv/bin/python scripts/split_half.py >> $LOG 2>&1

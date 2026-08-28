@@ -75,6 +75,22 @@ def run() -> dict:
     if rf.exists():
         try:
             d = json.loads(rf.read_text())
+            # Refuse gains measured against a DIFFERENT keep-set. Pass 2 re-ranks the experts,
+            # so a heal_refit.json left over from pass 1 describes a mask that no longer exists.
+            # Silently applying it would repeat, in a new costume, exactly the failure P5 found:
+            # a confidently-wrong correction derived from stale bookkeeping.
+            import hashlib
+            want = hashlib.sha256(retained_p.read_bytes()).hexdigest()[:16]
+            got = d.get("keep_set_sha")
+            if got and got != want:
+                raise RuntimeError(
+                    f"heal_refit.json was measured against keep-set {got} but this run applies "
+                    f"{want}. Re-run scripts/heal_refit.py AFTER s04_sweep has written the "
+                    f"current keep-set; healing gains are only valid for the mask they were "
+                    f"derived from.")
+            if not got:
+                log("heal_refit.json predates keep-set stamping; cannot prove it matches this "
+                    "mask - re-run heal_refit.py to be safe", STAGE, "WARN")
             measured = {r["layer"]: r["measured_gain"] for r in d.get("per_layer", [])
                         if r.get("measured_gain")}
             log(f"using MEASURED healing gains for {len(measured)} layers "
