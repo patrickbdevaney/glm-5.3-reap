@@ -48,6 +48,17 @@ def _enrich(meta: dict) -> dict:
     except Exception as e:
         log(f"could not read sweep numbers for the card: {type(e).__name__}", STAGE, "WARN")
     try:
+        import statistics as _st
+        hp = ROOT / "output" / "adapters" / "first_moment_gains.json"
+        if hp.exists():
+            hd = json.loads(hp.read_text())
+            meta["heal_gain_median"] = _st.median(hd["gains"].values())
+        rf = ARTIFACTS / "heal_refit.json"
+        meta["heal_measured"] = rf.exists() and bool(
+            json.loads(rf.read_text()).get("measured_median"))
+    except Exception:
+        meta.setdefault("heal_measured", False)
+    try:
         sg = json.loads((ARTIFACTS / "s04b_surgery.json").read_text())
         meta["mtp_preserved"] = bool(sg.get("mtp_preserved", False))
         meta["mtp_criterion"] = sg.get("mtp_criterion")
@@ -62,6 +73,22 @@ def _card(meta: dict) -> str:
     smass = meta.get("saliency_mass_retained")
     conc = f"{conc:.2f}" if isinstance(conc, (int, float)) else "?"
     smass = f"{smass:.3f}" if isinstance(smass, (int, float)) else "?"
+    rm = meta.get("routing_mass_retained")
+    rmass = f"{rm/0.5:.2f}" if isinstance(rm, (int, float)) else "?"
+    hg = meta.get("heal_gain_median")
+    if meta.get("heal_measured"):
+        heal_note = (
+            "- Healing is an output-scale correction applied exactly to the F32 block scales, "
+            f"median gain **{hg:.4f}**. It was **measured**, not derived: post-prune routing is "
+            "replayed from a cached router-score trace, because the first-moment estimator that "
+            "pass 1 used ignores that `norm_topk_prob` renormalises the surviving top-8 and "
+            "over-corrects by ~30%. It is *not* distillation and does not recover lost knowledge.")
+    else:
+        heal_note = (
+            f"- Healing is a **first-moment output-scale correction** derived from the "
+            f"calibration saliency (median gain {hg if hg else 'n/a'}, applied exactly to the F32 "
+            "block scales). Known to over-correct by ~30% on this architecture; prefer a measured "
+            "re-fit. It is *not* distillation and does not recover lost knowledge.")
     if meta.get("mtp_preserved"):
         mtp_inline = " The MTP block at layer 45 is **preserved**."
         mtp_note = (
@@ -138,10 +165,8 @@ Treat this as a research artifact pending evaluation, not a drop-in replacement.
   measured failure mode of expert pruning on this architecture family: the closest published
   analogue (`cerebras/Kimi-Linear-REAP-35B-A3B`, same KDA + full-attention stack) loses 3.4
   points on FRAMES at only 30% pruning while code and maths hold flat.
-- Healing is a **first-moment output-scale correction** derived from the calibration saliency
-  (median gain 0.696, applied exactly to the F32 block scales). It is *not* distillation and
-  does not attempt to recover lost knowledge.
-- Routing is disrupted more than expert count suggests: the retained experts carry ~0.90x the
+{heal_note}
+- Routing is disrupted more than expert count suggests: the retained experts carry ~{rmass}x the
   routing mass an average expert would, because REAP preserves rare-but-strong experts over
   common-but-weak ones.
 
