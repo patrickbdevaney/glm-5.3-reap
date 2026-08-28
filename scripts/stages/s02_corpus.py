@@ -165,12 +165,40 @@ def collect_multimodal(quota: int) -> int:
     proc = AutoProcessor.from_pretrained(MODEL_ID, token=hf_token())
     outdir = SHARDS / "multimodal"
     outdir.mkdir(parents=True, exist_ok=True)
-    done = kv_get("mm_done", 0)
+
+    # Count what is ACTUALLY on disk, never what the kv counter claims.
+    #
+    # MEASURED 2026-08-27: kv said mm_done=1802 while the directory held 2 shards / 128
+    # samples - the rest were deleted by a later disk reclaim. Trusting the counter would make
+    # this function return immediately and hand the R3-critical vision bucket to calibration at
+    # 7% of its intended weight, silently. Same lesson as surgery's resume rule: the artifact's
+    # presence is the record, a counter is only a claim.
+    shards = sorted(outdir.glob("mm_*.pt"))
+    on_disk = 0
+    for f in shards:
+        try:
+            on_disk += len(torch.load(f, weights_only=False))
+        except Exception as e:
+            log(f"multimodal shard {f.name} unreadable, ignoring ({type(e).__name__})",
+                STAGE, "WARN")
+    claimed = kv_get("mm_done", 0)
+    if claimed and on_disk < claimed:
+        log(f"multimodal: kv claims {claimed} samples but only {on_disk} are on disk across "
+            f"{len(shards)} shards - re-collecting the difference", STAGE, "WARN")
+    kv_set("mm_done", on_disk)
+    done = on_disk
     if done >= quota:
         log(f"multimodal: already have {done}/{quota}", STAGE)
         return done
 
-    buf, idx, have = [], len(list(outdir.glob("mm_*.pt"))), done
+    # Index past the highest existing shard number so a top-up cannot overwrite a survivor.
+    next_idx = 0
+    for f in shards:
+        try:
+            next_idx = max(next_idx, int(f.stem.split("_")[1]) + 1)
+        except (IndexError, ValueError):
+            continue
+    buf, idx, have = [], next_idx, done
     for hf_id, config, split, weight in SPEC.MM_SOURCES:
         if have >= quota:
             break
