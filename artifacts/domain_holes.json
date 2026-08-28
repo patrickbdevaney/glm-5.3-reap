@@ -1,0 +1,468 @@
+{
+  "per_domain": {
+    "general": {
+      "mean": 0.4865282312414813,
+      "min": 0.32909056367374095,
+      "worst_layer": "model.language_model.layers.19.mlp",
+      "layers": 42
+    },
+    "code": {
+      "mean": 0.7282800025023396,
+      "min": 0.6108022956068763,
+      "worst_layer": "model.language_model.layers.39.mlp",
+      "layers": 42
+    },
+    "math": {
+      "mean": 0.713289477210843,
+      "min": 0.5633935831297159,
+      "worst_layer": "model.language_model.layers.27.mlp",
+      "layers": 42
+    },
+    "agentic": {
+      "mean": 0.7465829810853527,
+      "min": 0.6284265817041054,
+      "worst_layer": "model.language_model.layers.5.mlp",
+      "layers": 42
+    },
+    "finance": {
+      "mean": 0.6506876045483869,
+      "min": 0.47284427410919605,
+      "worst_layer": "model.language_model.layers.20.mlp",
+      "layers": 42
+    },
+    "science": {
+      "mean": 0.7204162037617388,
+      "min": 0.5982794341325542,
+      "worst_layer": "model.language_model.layers.22.mlp",
+      "layers": 42
+    },
+    "vision": {
+      "mean": 0.681562488137314,
+      "min": 0.4736503106201187,
+      "worst_layer": "model.language_model.layers.12.mlp",
+      "layers": 42
+    }
+  },
+  "per_layer": [
+    {
+      "layer": "model.language_model.layers.10.mlp",
+      "general": 0.597787809086932,
+      "code": 0.7257664140973816,
+      "math": 0.7472179436608164,
+      "agentic": 0.7077702897660384,
+      "finance": 0.7117158494102485,
+      "science": 0.6973525406974561,
+      "vision": 0.5765159980152651
+    },
+    {
+      "layer": "model.language_model.layers.11.mlp",
+      "general": 0.593151938504885,
+      "code": 0.7712345408658903,
+      "math": 0.7608356392658115,
+      "agentic": 0.6923885607812225,
+      "finance": 0.6874027150391515,
+      "science": 0.7737452485764751,
+      "vision": 0.588228633729021
+    },
+    {
+      "layer": "model.language_model.layers.12.mlp",
+      "general": 0.4828436412948498,
+      "code": 0.7471868640671089,
+      "math": 0.7552478232895646,
+      "agentic": 0.7204865397141201,
+      "finance": 0.6529840859082156,
+      "science": 0.7223202835942785,
+      "vision": 0.4736503106201187
+    },
+    {
+      "layer": "model.language_model.layers.13.mlp",
+      "general": 0.42279227931421853,
+      "code": 0.7997520659122553,
+      "math": 0.7547685904886134,
+      "agentic": 0.7265532622696798,
+      "finance": 0.6335917905028328,
+      "science": 0.7172101765379898,
+      "vision": 0.5718800713483059
+    },
+    {
+      "layer": "model.language_model.layers.14.mlp",
+      "general": 0.45519378073479333,
+      "code": 0.7646896422447553,
+      "math": 0.7183852184740791,
+      "agentic": 0.7246233626897988,
+      "finance": 0.6796602096189757,
+      "science": 0.7275508621624334,
+      "vision": 0.6451225217959909
+    },
+    {
+      "layer": "model.language_model.layers.15.mlp",
+      "general": 0.4667106328181571,
+      "code": 0.6823975443268017,
+      "math": 0.750095176763943,
+      "agentic": 0.7133957874486855,
+      "finance": 0.6779833044728895,
+      "science": 0.7288044668291552,
+      "vision": 0.573996229556972
+    },
+    {
+      "layer": "model.language_model.layers.16.mlp",
+      "general": 0.4301742535850402,
+      "code": 0.7275414354229027,
+      "math": 0.7633270307665043,
+      "agentic": 0.7289152039330627,
+      "finance": 0.5188600473199633,
+      "science": 0.7209910175687211,
+      "vision": 0.6390055760154827
+    },
+    {
+      "layer": "model.language_model.layers.17.mlp",
+      "general": 0.3719287070850827,
+      "code": 0.8044453067094947,
+      "math": 0.7430580843157036,
+      "agentic": 0.7425754389149186,
+      "finance": 0.5275118376783967,
+      "science": 0.6825450612717429,
+      "vision": 0.7733040805881258
+    },
+    {
+      "layer": "model.language_model.layers.18.mlp",
+      "general": 0.36706892302517585,
+      "code": 0.8167079799241472,
+      "math": 0.7463783910141836,
+      "agentic": 0.7721970239779309,
+      "finance": 0.6007495831654132,
+      "science": 0.7593206172663094,
+      "vision": 0.7718942558215112
+    },
+    {
+      "layer": "model.language_model.layers.19.mlp",
+      "general": 0.32909056367374095,
+      "code": 0.7944911600686186,
+      "math": 0.7707860439897155,
+      "agentic": 0.7709722517847589,
+      "finance": 0.5613596421781519,
+      "science": 0.757388970112147,
+      "vision": 0.7972849403169143
+    },
+    {
+      "layer": "model.language_model.layers.20.mlp",
+      "general": 0.3388383354764849,
+      "code": 0.7515135668282127,
+      "math": 0.7059179113476789,
+      "agentic": 0.7190227933680579,
+      "finance": 0.47284427410919605,
+      "science": 0.6936832305437005,
+      "vision": 0.6592179159758633
+    },
+    {
+      "layer": "model.language_model.layers.21.mlp",
+      "general": 0.33176480131068325,
+      "code": 0.7989323656016507,
+      "math": 0.7411325827387767,
+      "agentic": 0.7187071300247645,
+      "finance": 0.5031072449733048,
+      "science": 0.6729820313939103,
+      "vision": 0.7706813088376443
+    },
+    {
+      "layer": "model.language_model.layers.22.mlp",
+      "general": 0.3631536220873288,
+      "code": 0.7192595274106174,
+      "math": 0.6295710097530647,
+      "agentic": 0.7183172011457537,
+      "finance": 0.5098398329986534,
+      "science": 0.5982794341325542,
+      "vision": 0.7057896659192598
+    },
+    {
+      "layer": "model.language_model.layers.23.mlp",
+      "general": 0.4175189984451164,
+      "code": 0.6501036064363667,
+      "math": 0.7484868429157137,
+      "agentic": 0.7188922801724441,
+      "finance": 0.5335432158155113,
+      "science": 0.6855397455823793,
+      "vision": 0.7674154307742482
+    },
+    {
+      "layer": "model.language_model.layers.24.mlp",
+      "general": 0.3720597054890375,
+      "code": 0.7748653159115033,
+      "math": 0.7289952722267905,
+      "agentic": 0.7693612407950559,
+      "finance": 0.617514265304678,
+      "science": 0.7028023703150952,
+      "vision": 0.7193319363289357
+    },
+    {
+      "layer": "model.language_model.layers.25.mlp",
+      "general": 0.37036239799217946,
+      "code": 0.7695091206238219,
+      "math": 0.6762228776927707,
+      "agentic": 0.755262989064349,
+      "finance": 0.6098747385723171,
+      "science": 0.7109697814361298,
+      "vision": 0.8422842702521305
+    },
+    {
+      "layer": "model.language_model.layers.26.mlp",
+      "general": 0.40765196889365746,
+      "code": 0.7903993696904162,
+      "math": 0.6788935696102195,
+      "agentic": 0.7915547268846371,
+      "finance": 0.6596203406035095,
+      "science": 0.7545688047044238,
+      "vision": 0.7927217655572122
+    },
+    {
+      "layer": "model.language_model.layers.27.mlp",
+      "general": 0.42377688984660705,
+      "code": 0.6872542963665687,
+      "math": 0.5633935831297159,
+      "agentic": 0.6963179112178473,
+      "finance": 0.6064721421727918,
+      "science": 0.6606861181370234,
+      "vision": 0.7335595364740627
+    },
+    {
+      "layer": "model.language_model.layers.28.mlp",
+      "general": 0.4897073969869646,
+      "code": 0.7179373268939176,
+      "math": 0.7230386309061547,
+      "agentic": 0.7587680811520368,
+      "finance": 0.6913764937113278,
+      "science": 0.7422929099833768,
+      "vision": 0.7343184074789995
+    },
+    {
+      "layer": "model.language_model.layers.29.mlp",
+      "general": 0.5203436029004878,
+      "code": 0.716146107017929,
+      "math": 0.6493840284528254,
+      "agentic": 0.7760545081733949,
+      "finance": 0.5923320120619724,
+      "science": 0.702753402091344,
+      "vision": 0.7322013237544812
+    },
+    {
+      "layer": "model.language_model.layers.30.mlp",
+      "general": 0.4567102762718564,
+      "code": 0.7498686893458163,
+      "math": 0.6901356654313362,
+      "agentic": 0.7694306224297063,
+      "finance": 0.7082110529937525,
+      "science": 0.7052455238035075,
+      "vision": 0.7264119626390113
+    },
+    {
+      "layer": "model.language_model.layers.31.mlp",
+      "general": 0.47915474555549364,
+      "code": 0.7036275398532489,
+      "math": 0.7402613960911925,
+      "agentic": 0.7943429921397065,
+      "finance": 0.7405243107579378,
+      "science": 0.8006893996502839,
+      "vision": 0.7766178314618168
+    },
+    {
+      "layer": "model.language_model.layers.32.mlp",
+      "general": 0.5173219541970946,
+      "code": 0.7209762222089398,
+      "math": 0.7252229144681104,
+      "agentic": 0.7651840925950707,
+      "finance": 0.6965950610166055,
+      "science": 0.7790499890877263,
+      "vision": 0.6920111740171847
+    },
+    {
+      "layer": "model.language_model.layers.33.mlp",
+      "general": 0.49293845369277894,
+      "code": 0.7412615110595062,
+      "math": 0.7010922895917996,
+      "agentic": 0.7824864718541237,
+      "finance": 0.7622965410974744,
+      "science": 0.7350044170887137,
+      "vision": 0.7338185634887106
+    },
+    {
+      "layer": "model.language_model.layers.34.mlp",
+      "general": 0.4783656815805477,
+      "code": 0.6857978116093996,
+      "math": 0.650247142567262,
+      "agentic": 0.7026748918692943,
+      "finance": 0.5985610455907104,
+      "science": 0.7168366601164889,
+      "vision": 0.7443520193352717
+    },
+    {
+      "layer": "model.language_model.layers.35.mlp",
+      "general": 0.4876361607998768,
+      "code": 0.6807325508698301,
+      "math": 0.6791123727984404,
+      "agentic": 0.7412295590823176,
+      "finance": 0.664674985756584,
+      "science": 0.6497349395448725,
+      "vision": 0.6703394893295525
+    },
+    {
+      "layer": "model.language_model.layers.36.mlp",
+      "general": 0.5006374593565678,
+      "code": 0.6427223595270651,
+      "math": 0.635730497898329,
+      "agentic": 0.7534984036550688,
+      "finance": 0.6848113007957422,
+      "science": 0.6549661876217311,
+      "vision": 0.7324675129233497
+    },
+    {
+      "layer": "model.language_model.layers.37.mlp",
+      "general": 0.5231624338635299,
+      "code": 0.6691801173769415,
+      "math": 0.723831562204375,
+      "agentic": 0.762910316418616,
+      "finance": 0.6888729825077159,
+      "science": 0.7601953880166419,
+      "vision": 0.7217293908011558
+    },
+    {
+      "layer": "model.language_model.layers.38.mlp",
+      "general": 0.49516415824540905,
+      "code": 0.7520253535200419,
+      "math": 0.7327059413305929,
+      "agentic": 0.7827853773304531,
+      "finance": 0.7219478694386546,
+      "science": 0.7397007097800471,
+      "vision": 0.7232488922421365
+    },
+    {
+      "layer": "model.language_model.layers.39.mlp",
+      "general": 0.5099377266687274,
+      "code": 0.6108022956068763,
+      "math": 0.7469603567126695,
+      "agentic": 0.7663279912830238,
+      "finance": 0.7248638857717125,
+      "science": 0.7564626108074772,
+      "vision": 0.6688919932469153
+    },
+    {
+      "layer": "model.language_model.layers.3.mlp",
+      "general": 0.6708094552488987,
+      "code": 0.7863861187726793,
+      "math": 0.7880378948421858,
+      "agentic": 0.7644671678710099,
+      "finance": 0.7522808836593062,
+      "science": 0.7801336497090321,
+      "vision": 0.4931766819391634
+    },
+    {
+      "layer": "model.language_model.layers.40.mlp",
+      "general": 0.5818468740182764,
+      "code": 0.7418097110389675,
+      "math": 0.7051011616478473,
+      "agentic": 0.753300656350629,
+      "finance": 0.7256652775207325,
+      "science": 0.7195003774590417,
+      "vision": 0.6822009201513355
+    },
+    {
+      "layer": "model.language_model.layers.41.mlp",
+      "general": 0.5377427342647558,
+      "code": 0.6982615702690028,
+      "math": 0.7219280853792259,
+      "agentic": 0.7666867428518158,
+      "finance": 0.7585009029974087,
+      "science": 0.7397610737471249,
+      "vision": 0.6225480332690856
+    },
+    {
+      "layer": "model.language_model.layers.42.mlp",
+      "general": 0.536605599709525,
+      "code": 0.6981127887231346,
+      "math": 0.7255771288788617,
+      "agentic": 0.7835450650914089,
+      "finance": 0.7239834489043775,
+      "science": 0.7323740451923352,
+      "vision": 0.6834623509479203
+    },
+    {
+      "layer": "model.language_model.layers.43.mlp",
+      "general": 0.5548900182973845,
+      "code": 0.7635161705050229,
+      "math": 0.7232347241064323,
+      "agentic": 0.8762563364724252,
+      "finance": 0.7409609181419132,
+      "science": 0.7720316225386485,
+      "vision": 0.7011009767704279
+    },
+    {
+      "layer": "model.language_model.layers.44.mlp",
+      "general": 0.6316930059287975,
+      "code": 0.821999070481056,
+      "math": 0.8173599720531574,
+      "agentic": 0.9359078103149305,
+      "finance": 0.678371071427448,
+      "science": 0.8433681649583218,
+      "vision": 0.6426099446608765
+    },
+    {
+      "layer": "model.language_model.layers.4.mlp",
+      "general": 0.596024689617202,
+      "code": 0.6811814251428278,
+      "math": 0.6843376898744318,
+      "agentic": 0.6584542110720774,
+      "finance": 0.6394670783758941,
+      "science": 0.6886866813393612,
+      "vision": 0.6888070676993293
+    },
+    {
+      "layer": "model.language_model.layers.5.mlp",
+      "general": 0.5625747152115252,
+      "code": 0.6188017803801669,
+      "math": 0.635769172053723,
+      "agentic": 0.6284265817041054,
+      "finance": 0.6117128988515884,
+      "science": 0.6515280353512344,
+      "vision": 0.5481247282370302
+    },
+    {
+      "layer": "model.language_model.layers.6.mlp",
+      "general": 0.5805469265587646,
+      "code": 0.6998045852178016,
+      "math": 0.6918867923265698,
+      "agentic": 0.6811960570762521,
+      "finance": 0.6619762598336005,
+      "science": 0.6784733786617817,
+      "vision": 0.621434305253719
+    },
+    {
+      "layer": "model.language_model.layers.7.mlp",
+      "general": 0.5445417541672812,
+      "code": 0.7246169052128151,
+      "math": 0.7000131665956987,
+      "agentic": 0.7109965214946038,
+      "finance": 0.7137139462015453,
+      "science": 0.7519474558500934,
+      "vision": 0.6795296672829614
+    },
+    {
+      "layer": "model.language_model.layers.8.mlp",
+      "general": 0.5582832627366044,
+      "code": 0.6906641804088349,
+      "math": 0.6926155165274693,
+      "agentic": 0.7162949169618064,
+      "finance": 0.6034629133339127,
+      "science": 0.6923641776230716,
+      "vision": 0.6246343325018004
+    },
+    {
+      "layer": "model.language_model.layers.9.mlp",
+      "general": 0.5856773775998942,
+      "code": 0.6954777915479252,
+      "math": 0.6918603486730488,
+      "agentic": 0.7379458363878132,
+      "finance": 0.6790811304401327,
+      "science": 0.6976389971088467,
+      "vision": 0.579702484407889
+    }
+  ]
+}

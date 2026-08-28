@@ -211,3 +211,27 @@ MTP input, `eh_proj(cat(hnorm(h_final), enorm(embed(next_token))))`, after the l
 If that forward proves fiddly, a weight-only criterion is an acceptable fallback **here
 specifically**, because the intended downstream use is to *fine-tune* the draft head — which
 repairs a mediocre prune. That argument does NOT extend to the main stack.
+
+## R15 — the eval held 19 GiB of tap features and was killed at layer 14/45 `[MEAS 2026-08-28 18:20]`
+
+memguard killed `s09_eval` with MemAvailable at 162 MB. Cause: the tap capture stored the **full**
+`[B, S, H]` hidden state for each of 5 tap layers across all 122 batches and subsampled only at
+the end — **~19 GiB held persistently**, on top of ~16 GiB of activations and a ~30 GiB KDA
+transient for the longest image-text sample.
+
+Only 2% of the taps is ever used. Subsampling at capture instead of at the end: **19 GiB -> 0.38
+GiB**.
+
+Two things worth keeping:
+
+- **The guard chain worked.** memguard killed only this project's stage; the finisher saw `rc=137`
+  and refused to continue to `s04b_surgery`, which would have deleted the teacher the eval still
+  needs. A failure at the worst possible moment cost 30 minutes instead of the run.
+- **`s03` never hit this** because it captures no taps and chunks its batches. Reusing s03's
+  streaming shape for the eval carried over its layer loop but not its memory discipline — the
+  new per-batch state was the part that needed the same treatment.
+
+Measured while diagnosing: held-out image-text sequences are much longer than calibration's
+(median 4,076 vs 308 tokens) because they come from the tail shards. Calibration survived a
+5,052-token sample, so length alone was not the trigger — but it narrows the margin, and the KDA
+transient scales linearly with sequence length.

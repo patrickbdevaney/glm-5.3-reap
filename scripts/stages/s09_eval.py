@@ -206,8 +206,21 @@ def score_checkpoint(ckpt: Path, rows, mm_rows, tag: str) -> dict:
                                   prev_topk_indices=topk)
                 if li in TAP_LAYERS:
                     # Collapse hc_mult the same way the model's head does, so the stored tap is
-                    # the [B,S,H] feature a drafter would actually consume.
-                    st["taps"][li] = hc_head(out).to(torch.float16).cpu()
+                    # the [B,S,H] feature a drafter would actually consume - then SUBSAMPLE
+                    # IMMEDIATELY.
+                    #
+                    # MEASURED 2026-08-28: storing the full tap and subsampling at the end held
+                    # ~24 GiB across 5 tap layers x 122 batches, which is what drove
+                    # MemAvailable to 162 MB and got this stage killed at layer 14/45. Only ~2%
+                    # is ever used, so keeping the rest is pure cost. s03 never hit this because
+                    # it captures no taps and chunks its batches.
+                    tp = hc_head(out)[:, :-1].to(torch.float16).cpu()
+                    v = (st["ids"][:, 1:] != tcfg.pad_token_id)
+                    tp = tp[v]
+                    nk = max(1, int(tp.shape[0] * TAP_SUBSAMPLE))
+                    sel = torch.arange(0, tp.shape[0], max(1, tp.shape[0] // nk))[:nk]
+                    st["taps"][li] = tp[sel].clone()
+                    del tp
                 st["hs"] = out.cpu()
                 st["topk"] = topk.cpu() if topk is not None else None
                 del hs, out, ids, am, pos, topk
@@ -236,9 +249,9 @@ def score_checkpoint(ckpt: Path, rows, mm_rows, tag: str) -> dict:
             for r, b in enumerate(st["buckets"]):
                 bkt += [b] * int(valid[r].sum())
             for li in TAP_LAYERS:
-                t = st["taps"][li][:, :-1][valid.cpu()]
-                n = max(1, int(t.shape[0] * TAP_SUBSAMPLE))
-                taps[li].append(t[torch.arange(0, t.shape[0], max(1, t.shape[0] // n))[:n]])
+                # Already valid-masked and subsampled at capture; just collect.
+                if li in st["taps"]:
+                    taps[li].append(st["taps"][li])
             del h, ids, logits, lp, lp_s
     res = {"nll": torch.cat(nll), "argmax": torch.cat(amax),
            "topk_idx": torch.cat(tk_i), "topk_logp": torch.cat(tk_p),
