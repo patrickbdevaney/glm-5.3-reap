@@ -187,3 +187,25 @@ amount of care in the derivation would have caught. The first-moment correction 
 consistent, dimensionally sound, defensible in review, and wrong by 30% — because it modelled a
 router that renormalises as though it did not. The router cache cost ~0.5 GB per chunk and turned
 an unanswerable question into a five-minute one.
+
+### Convergence check: the measurement was already stable at one chunk `[MEAS 2026-08-28 05:05]`
+
+The published FP8 was re-healed using the **chunk-1** measurement, before the sweep finished. That
+is a decision acted on with 1/10 of the data, so it needs checking rather than assuming.
+
+| | median measured gain |
+|---|---|
+| 1 chunk (0.5M tokens) — what shipped | 0.9111 |
+| 3 chunks (1.5M tokens) | 0.9099 |
+| per-layer drift | **median 0.10%, max 0.93%** |
+
+The re-healed artifact is **0.14%** from the better estimate. No further correction is warranted,
+and the decision to act early was sound.
+
+Worth noting *why* it converges so fast, because it is not a general licence to trust one chunk:
+the healing gain is a **ratio of population means over ~2.3M routed-token events per layer**, so
+its standard error is tiny even at one chunk. The keep-set decision is a different animal — it
+depends on the *ordering* of 288 experts, many separated by less than the noise floor, which is
+exactly why P6's split-half gate exists and why the token budget matters there but not here.
+
+Relevant to A7 in `CLOUD_COUNTERFACTUAL.md`: for this quantity, more calibration buys nothing.
