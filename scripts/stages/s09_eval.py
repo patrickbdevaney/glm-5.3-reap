@@ -204,14 +204,30 @@ def compare(T: dict, S: dict) -> dict:
            "teacher_nll": float(T["nll"][:n].double().mean()),
            "student_nll": float(S["nll"][:n].double().mean()),
            "flip_rate": float(flip.mean())}
-    # k-truncated KL(teacher || student), evaluated on the teacher's top-k support.
+    # k-truncated KL(teacher || student) on the teacher's top-k support.
+    #
+    # Chunked deliberately. Materialising a dense [n, 154880] scatter to look up the student's
+    # logprob at the teacher's indices is 124 GB at n=200k - it would OOM the box after the
+    # multi-hour scoring passes had already been paid for, which is the most expensive possible
+    # place to discover an allocation bug. Both top-k lists are sorted-by-index-searchable per
+    # chunk instead, so peak memory is O(chunk * k).
     ti, tp = T["topk_idx"][:n].long(), T["topk_logp"][:n].float()
     si, sp = S["topk_idx"][:n].long(), S["topk_logp"][:n].float()
-    full = torch.full((n, 154880), -30.0)
-    full.scatter_(1, si, sp)
-    s_on_t = full.gather(1, ti)
-    p = tp.exp()
-    out["topk_KL"] = float((p * (tp - s_on_t)).sum(-1).mean())
+    FLOOR = -30.0
+    tot, seen = 0.0, 0
+    CH = 4096
+    for a0 in range(0, n, CH):
+        a1 = min(n, a0 + CH)
+        ti_c, tp_c, si_c, sp_c = ti[a0:a1], tp[a0:a1], si[a0:a1], sp[a0:a1]
+        # match[i,j,k] : teacher index j equals student index k
+        eq = ti_c.unsqueeze(2) == si_c.unsqueeze(1)          # [c, K, K]
+        hit = eq.any(-1)
+        pos = eq.float().argmax(-1)
+        s_on_t = torch.where(hit, sp_c.gather(1, pos), torch.full_like(tp_c, FLOOR))
+        pk = tp_c.exp()
+        tot += float((pk * (tp_c - s_on_t)).sum(-1).sum())
+        seen += a1 - a0
+    out["topk_KL"] = tot / max(1, seen)
     by = {}
     for b in sorted(set(T["buckets"][:n])):
         m = torch.tensor([x == b for x in T["buckets"][:n]])
