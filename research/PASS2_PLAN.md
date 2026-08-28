@@ -41,9 +41,9 @@ Numbered P0–P14. **CP** = critical path.
 | P2 | Instrument `stream_saliency.py` | 6 accumulators + log-histogram + top-40 fp16 logit cache, replicated per domain-bucket and per modality | 0.5 dev | **CP** |
 | P3 | Chunk `s03` | 0.5M tokens/chunk (~21 GiB activations), 45 layers/chunk, resumable accumulation | 0.5 dev | **CP** |
 | P4 | **Saliency pass, 5.5M tokens** | 11 chunks × ~82 min, detached, watch the 61 GiB headroom | 14–17 | **CP** |
-| P5 | **G0-2: re-fit the healing gain** | measured per-layer output-norm ratio vs the 0.696 first-moment value | 0.5 | **CP** |
+| P5 | **G0-2: re-fit the healing gain** | `scripts/heal_refit.py` - measured per-layer output-norm ratio vs the 0.696 first-moment value. **Runs after CHUNK 1, not after all 12**: if the correction is wrong that is worth knowing 13 h early. Harness validated - it reproduces the shipped 0.6964 to within 0.9%. | 0.5 | **CP** |
 | P6 | Split-half overlap gate | keep-set overlap at 50%; **gate >0.95** or the token budget was too small | 0.2 | **CP** |
-| P7 | Criterion shootout | 8 offline masks from the accumulators + pairwise overlap; pick 2 | 1 | high-value |
+| P7 | Criterion shootout | 8 offline masks from the accumulators + pairwise overlap; pick 2. Includes **arm B (quantile-blended 0.6*mean + 0.4*p99)**, which pass 1 had to defer because the tracker kept only sum and count - the log-histogram accumulator now makes it available without a new pass. | 1 | high-value |
 | P8 | AIMER cross-check | calibration-free second opinion, streamed | 0.5–1 | opt |
 | P9 | Staged greedy re-scoring | R=8–16, router-aware, needs P2's logit cache | 1–2 | opt |
 | P10 | Materialise mask A | surgery 0.29 + heal 0.33 + quantize 0.60 | 1.3 | **CP** |

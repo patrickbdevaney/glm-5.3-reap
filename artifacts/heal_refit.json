@@ -1,0 +1,345 @@
+{
+  "ratio": 0.5,
+  "layers": 42,
+  "shipped_gain": 0.6964,
+  "first_moment_median": 0.6901416778564453,
+  "measured_median": null,
+  "per_layer": [
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7248485529204297,
+      "first_moment_unweighted": 0.7042094534737686,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.10.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7688839920978157,
+      "first_moment_unweighted": 0.7125507772352988,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.11.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.720266710081958,
+      "first_moment_unweighted": 0.7393981004751128,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.12.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.696414400741539,
+      "first_moment_unweighted": 0.7248252275622211,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.13.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7211824227542548,
+      "first_moment_unweighted": 0.7385771553901777,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.14.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6125752507194004,
+      "first_moment_unweighted": 0.7104947390814971,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.15.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6266638877989685,
+      "first_moment_unweighted": 0.7197686803391787,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.16.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6343424894071013,
+      "first_moment_unweighted": 0.7067336588411385,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.17.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6322330673730951,
+      "first_moment_unweighted": 0.7108121084052627,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.18.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6993459008759719,
+      "first_moment_unweighted": 0.7301221835929134,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.19.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6615843635101955,
+      "first_moment_unweighted": 0.7521751788363549,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.20.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.732024506110538,
+      "first_moment_unweighted": 0.7459176862074125,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.21.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7189183799764408,
+      "first_moment_unweighted": 0.7546401465869275,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.22.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6901417022089127,
+      "first_moment_unweighted": 0.7239894958145219,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.23.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6898154806947164,
+      "first_moment_unweighted": 0.7138782759406931,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.24.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6578422600868652,
+      "first_moment_unweighted": 0.7042730036917295,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.25.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6879420555565667,
+      "first_moment_unweighted": 0.7372892382013873,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.26.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6737260687929116,
+      "first_moment_unweighted": 0.7128124594531671,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.27.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6875200063116345,
+      "first_moment_unweighted": 0.7163445917356294,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.28.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6157321477126972,
+      "first_moment_unweighted": 0.686836240271554,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.29.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7151061947713371,
+      "first_moment_unweighted": 0.7156251323364232,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.30.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7580117612960523,
+      "first_moment_unweighted": 0.7271703318762903,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.31.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7367504496510207,
+      "first_moment_unweighted": 0.7331408861143726,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.32.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7177796212930482,
+      "first_moment_unweighted": 0.7072375325513338,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.33.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6550129459013841,
+      "first_moment_unweighted": 0.7027568251029086,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.34.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6104379621205798,
+      "first_moment_unweighted": 0.7269747289044513,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.35.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7485389193425518,
+      "first_moment_unweighted": 0.7199956496427917,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.36.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7445576730429859,
+      "first_moment_unweighted": 0.7387108057468772,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.37.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7484986303732742,
+      "first_moment_unweighted": 0.7296259317286554,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.38.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7270820959634358,
+      "first_moment_unweighted": 0.7335751589102504,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.39.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.5635186002509643,
+      "first_moment_unweighted": 0.6471141614018234,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.3.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6251607867418474,
+      "first_moment_unweighted": 0.7108285618800477,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.40.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6626084032625078,
+      "first_moment_unweighted": 0.7039266294974103,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.41.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6404987609192929,
+      "first_moment_unweighted": 0.7053317152305237,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.42.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6514927957884765,
+      "first_moment_unweighted": 0.6579531386777602,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.43.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6198709771060313,
+      "first_moment_unweighted": 0.5913582725030359,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.44.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.8459079542295754,
+      "first_moment_unweighted": 0.7355762600332201,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.4.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.8389507085980841,
+      "first_moment_unweighted": 0.7433347424911824,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.5.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7816916664281629,
+      "first_moment_unweighted": 0.7516139689502713,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.6.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.8557034564095768,
+      "first_moment_unweighted": 0.7516541967811371,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.7.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.6330346614389457,
+      "first_moment_unweighted": 0.692766742628662,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.8.mlp"
+    },
+    {
+      "experts": 288,
+      "kept": 144,
+      "first_moment_gain": 0.7417681296946149,
+      "first_moment_unweighted": 0.7102124089685895,
+      "has_true_norms": false,
+      "layer": "model.language_model.layers.9.mlp"
+    }
+  ]
+}
