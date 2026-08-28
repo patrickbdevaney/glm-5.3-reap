@@ -22,7 +22,11 @@ from common import ROOT, ARTIFACTS, log, metric, kv_get, kv_set, publish  # noqa
 STAGE = "s06_emit"
 PRUNED = ROOT / "output" / "pruned-fp8"
 ADAPTERS = ROOT / "output" / "adapters"
-EMIT = ROOT / "output" / "glm-5.3-flash-reap50-fp8"
+# Versioned. Pass 2 must NOT write into pass 1's tree: that tree is the published artifact and,
+# from P9.5 onward, the A/B baseline the whole "pass 2 is better" claim rests on. Emitting into a
+# populated directory is also exactly how pass 1 produced four mixed shard families
+# (of-00029/35/52/62) from partial runs, none of them a complete model.
+EMIT = ROOT / "output" / str(kv_get("emit_name", "glm-5.3-flash-reap50-fp8"))
 
 
 def _card(meta: dict) -> str:
@@ -122,6 +126,15 @@ def run() -> dict:
     src = Path(kv_get("pruned_model_path", str(PRUNED)))
     if not src.exists():
         raise RuntimeError(f"pruned model not found at {src}")
+    # Refuse to emit into a tree that already holds a model. Overwriting shard-by-shard leaves
+    # a directory that looks complete and is not.
+    if EMIT.exists() and any(EMIT.glob("*.safetensors")):
+        if not bool(kv_get("emit_overwrite", False)):
+            raise RuntimeError(
+                f"{EMIT} already contains a model. Set kv emit_name to a new directory (pass 2 "
+                f"must not clobber pass 1 - it is the published artifact and the A/B baseline), "
+                f"or set emit_overwrite=1 deliberately.")
+        log(f"emit_overwrite set: writing over the existing model in {EMIT}", STAGE, "WARN")
     EMIT.mkdir(parents=True, exist_ok=True)
 
     log(f"emitting deliverable from {src}", STAGE)

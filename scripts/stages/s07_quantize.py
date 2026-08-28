@@ -33,7 +33,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from common import ROOT, ARTIFACTS, log, metric, kv_get, kv_set, publish, free_gib  # noqa: E402
 
 STAGE = "s07_quantize"
-OUT = ROOT / "output" / "glm-5.3-flash-reap50-nvfp4"
+# Versioned for the same reason as the FP8 emit: pass 2 must not overwrite pass 1's artifact.
+OUT = ROOT / "output" / str(kv_get("nvfp4_name", "glm-5.3-flash-reap50-nvfp4"))
 # Keep non-expert FP8 tensors in FP8 instead of upcasting them to BF16. Saves
 # 1.45 GiB at bit-identical quality, but produces a MIXED-scheme checkpoint.
 # Default off until such a checkpoint has been loaded successfully; see the branch
