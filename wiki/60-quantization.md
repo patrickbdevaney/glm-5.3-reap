@@ -134,3 +134,37 @@ to know, per tensor, what layout to expect. `[EST]`
 over `compressed-tensors`' canonical one. That is a decision for the kernel project, and it
 can transform from `compressed-tensors` at that time. Do not pre-optimise the export for a
 consumer that does not exist yet.
+
+## NVFP4 repo composition — what overlaps the FP8 repo, and why `[MEAS 2026-08-27 22:15]`
+
+Prompted by the question "did the NVFP4 repo re-upload the FP8 weights?" Measured directly from
+the FP8 master's safetensors headers, split by `EXPERT_RE` (what `s07` actually quantises):
+
+| class | tensors | size in master | in the NVFP4 repo |
+|---|---|---|---|
+| experts (routed + shared) | 18,270 | 142.73 GiB FP8 | **NVFP4 packed**, ~80 GiB — genuinely 4-bit |
+| natively-BF16 passthrough | 1,124 | 12.74 GiB BF16 | **byte-identical BF16** |
+| F32 (scales, biases) | 18,613 | 0.04 GiB | passthrough |
+| FP8 passthrough | 53 | **1.45 GiB FP8** | **dequantised → 2.91 GiB BF16** |
+
+**No, the FP8 weights were not re-uploaded.** 97% of the mass is genuinely 4-bit; the repo is
+96 GiB against the master's 157 GiB.
+
+**~12.74 GiB is byte-identical between the two repos and must be.** Those are the tensors that
+are BF16 even in the FP8 release — embeddings, KDA attention, the vision tower, mHC, routers,
+norms. Every self-contained quantised checkpoint repeats its unquantised layers; strip them and
+the NVFP4 repo cannot load standalone.
+
+**The one real inefficiency is 1.45 GiB (1.5%).** `s07` deliberately dequantises the 53
+non-expert FP8 tensors to BF16 — 44 MLA projections (`q_a`, `q_b`, `kv_a_proj_with_mqa`,
+`o_proj` × 11 layers) and the 9 dense-FFN tensors of layers 0–2 — "so the result carries ONE
+quantisation format plus plain BF16, not two incompatible schemes."
+
+That trade is **quality-neutral and size-negative**: upcasting FP8→BF16 adds no information, it
+just stores already-FP8 values in twice the bytes. Keeping them FP8 with their `weight_scale_inv`
+would be *bit-identical* in quality at half the size. The only thing bought is loader simplicity.
+
+**Pass-2 action:** emit those 53 tensors as FP8 + `weight_scale_inv` under a second
+compressed-tensors `config_group` (`fp8-block` alongside `nvfp4-pack-quantized`) and verify the
+result loads. Falls back to the current behaviour if the mixed-scheme checkpoint is rejected.
+Not worth a 94 GiB re-upload of the provisional artifact for 1.5% — folded into pass 2.
