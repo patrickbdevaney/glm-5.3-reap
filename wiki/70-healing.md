@@ -116,3 +116,74 @@ primary deliverable.
    components whose semantics actually changed.
 3. **LoRA SFT** on attention-adjacent + surviving experts over the domain mixture.
 4. ~~RLVR~~ — deferred with reasons above.
+
+## RESOLVED: the first-moment healing gain over-corrects by 30.8% `[MEAS 2026-08-28 01:10]`
+
+The `[OPEN]` question from the pass-2 research is now answered, and **the research was right**.
+
+Measured on chunk 1 of the pass-2 sweep (2,345,112 cached router rows, 42 layers), by replaying
+post-prune routing from the router-score cache rather than deriving the correction from pre-prune
+means:
+
+| quantity | value |
+|---|---|
+| shipped in pass 1 | **0.6964** |
+| first-moment estimator, recomputed on pass-2 data | 0.7149 |
+| **measured by router replay** | **0.9111** (per-layer 0.8460 – 0.9499) |
+| **disagreement with shipped** | **30.8%** |
+| gate mass, pre-prune / post-prune | **2.5000 / 2.5000** |
+| real output inflation | **1.1015x** (first-moment implied 1.3925x) |
+
+### The mechanism, confirmed exactly
+
+`norm_topk_prob` renormalises the surviving top-8, so **the router hands back essentially all the
+gate mass by itself** — measured identically at 2.5000 on both sides. A surviving expert's gate
+*grows* after pruning because it divides by a smaller sum. The first-moment ratio compares
+pre-prune conditional means and cannot see that, so it attributes the entire saliency gap to output
+inflation and prescribes a 39% shrink where the true inflation is 10%.
+
+### It is not an artefact of the estimator
+
+The replay only resolves tokens with >=8 survivors inside the cached top-40, and that fraction
+varies by layer (0.366 – 0.999), so the obvious worry is a biased subsample. Tested:
+
+| subset | n | median measured gain |
+|---|---|---|
+| resolvable < 0.75 | 8 | 0.9177 |
+| resolvable >= 0.95 | 12 | 0.9041 |
+| all | 42 | 0.9111 |
+
+Pearson r(resolvable_frac, gain) = **-0.257**. The spread between the well- and poorly-resolved
+layers is ~1.5%, against a 30.8% discrepancy. The finding is not a sampling artefact.
+
+The estimator also benefits from being a **ratio** of two same-form quantities: the
+`||y||^2 ~ sum g^2||f||^2` orthogonality approximation appears in numerator and denominator alike,
+so cross-term error largely cancels. The first-moment derivation has no such protection — it omits
+renormalisation, which is a first-order effect.
+
+### Consequence for the published artifact
+
+`patrickbdevaney/GLM-5.3-Flash-REAP50-FP8` (and the NVFP4 derived from it) has **every retained
+expert's output scaled by 0.6964 where 0.9111 was correct — a systematic under-scaling of
+0.7643 on the entire MoE pathway in all 42 layers**, relative to attention, the shared experts and
+the residual stream. It is a real defect, not a rounding issue.
+
+It is also cheap to repair: the gain lives entirely in the F32 `weight_scale_inv` tensors, so
+correcting it is a multiply by 1.3083, not a requantisation.
+
+### Actions taken
+
+1. `s05_heal` now **prefers the measured per-layer gains** from `artifacts/heal_refit.json` and
+   falls back to the first-moment derivation only with a loud warning naming the ~30% bias.
+2. Pass 2 will be healed with the measured gains.
+3. Pass 1 stays as published for now, because it is the honest A/B baseline for P9.5 — what is on
+   HF today. Re-healing it is a separate, cheap job and would make a clean three-way comparison
+   (published / re-healed / pass 2) that isolates the value of this fix alone.
+
+### The general lesson
+
+This is the second time on this project that a **derivation** lost to a **measurement** in a way no
+amount of care in the derivation would have caught. The first-moment correction was internally
+consistent, dimensionally sound, defensible in review, and wrong by 30% — because it modelled a
+router that renormalises as though it did not. The router cache cost ~0.5 GB per chunk and turned
+an unanswerable question into a five-minute one.

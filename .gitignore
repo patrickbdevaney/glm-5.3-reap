@@ -12,3 +12,11 @@ state/*.json
 __pycache__/
 *.pyc
 state/
+
+# Local analysis notes, not published
+notes/
+artifacts/router_cache/
+artifacts/saliency_snapshots/
+artifacts/saliency_pass1/
+artifacts/eval/
+*.pt

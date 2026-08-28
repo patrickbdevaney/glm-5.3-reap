@@ -68,6 +68,26 @@ def run() -> dict:
         raise RuntimeError("reap_retained_experts.json missing; stage 3 must run first")
     retained = json.loads(retained_p.read_text())
 
+    # Per-layer gains measured by scripts/heal_refit.py, which replays post-prune routing from
+    # the cached router scores rather than deriving the correction from pre-prune means.
+    measured: dict[str, float] = {}
+    rf = ARTIFACTS / "heal_refit.json"
+    if rf.exists():
+        try:
+            d = json.loads(rf.read_text())
+            measured = {r["layer"]: r["measured_gain"] for r in d.get("per_layer", [])
+                        if r.get("measured_gain")}
+            log(f"using MEASURED healing gains for {len(measured)} layers "
+                f"(median {d.get('measured_median')}); first-moment retained only as fallback",
+                STAGE)
+        except Exception as e:
+            log(f"heal_refit.json unreadable ({type(e).__name__}); falling back to first-moment",
+                STAGE, "WARN")
+    if not measured:
+        log("NO measured gains available - applying the first-moment derivation, which is known "
+            "to over-correct by ~30% on this architecture because it ignores norm_topk_prob "
+            "renormalisation. Run scripts/heal_refit.py first.", STAGE, "WARN")
+
     gains, skipped = {}, []
     for f in sorted(SALIENCY.glob("*.pt")):
         d = torch.load(f, weights_only=False)
@@ -91,6 +111,17 @@ def run() -> dict:
             skipped.append(layer)
             continue
         g = e_all / e_keep
+        # MEASURED overrides DERIVED. See wiki/70-healing.md.
+        #
+        # The first-moment ratio above ignores that `norm_topk_prob` renormalises the surviving
+        # top-8, so a surviving expert's gate GROWS after pruning and the router hands most of the
+        # lost mass back by itself. Measured 2026-08-28: gate mass is 2.5000 before and 2.5000
+        # after, and the real output inflation is 1.10x, not the 1.39x this ratio implies. Pass 1
+        # therefore shrank every retained expert by 0.696 where 0.911 was correct - a 30.8% error,
+        # baked into the published checkpoint.
+        m = measured.get(layer)
+        if m:
+            g = m
         gains[layer] = g
         metric(STAGE, "first_moment_gain", g, tag=layer)
 
