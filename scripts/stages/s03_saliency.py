@@ -132,9 +132,14 @@ def _load_calib():
     by_b: dict[str, list] = {}
     for row in text_rows:
         by_b.setdefault(row[1], []).append(row)
-    text_rows = [r for _, r in sorted(
-        ((i + 0.5) / max(1, len(rows)), r)
-        for rows in by_b.values() for i, r in enumerate(rows))]
+    # Sort on an explicit key. Sorting (fraction, row) tuples lets equal fractions fall through
+    # to comparing the rows themselves, and a row holds an input_ids TENSOR - so ties raise
+    # "size of tensor a (130) must match tensor b (2048)". Ties are common here because the first
+    # item of every bucket has fraction 0.5/n.
+    keyed = [((i + 0.5) / max(1, len(rows)), b, i, r)
+             for b, rows in by_b.items() for i, r in enumerate(rows)]
+    keyed.sort(key=lambda t: (t[0], t[1], t[2]))
+    text_rows = [t[3] for t in keyed]
     log(f"calibration: {len(text_rows)} text + {len(mm_rows)} image-text; stratified across "
         f"{len(by_b)} buckets so every chunk carries the mixture", STAGE)
     metric(STAGE, "calib_text_samples", len(text_rows))
