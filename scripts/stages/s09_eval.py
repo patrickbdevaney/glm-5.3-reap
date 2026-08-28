@@ -203,7 +203,13 @@ def compare(T: dict, S: dict) -> dict:
            "dNLL_p95": float(dn.quantile(0.95)),
            "teacher_nll": float(T["nll"][:n].double().mean()),
            "student_nll": float(S["nll"][:n].double().mean()),
-           "flip_rate": float(flip.mean())}
+           "flip_rate": float(flip.mean()),
+           # Reported explicitly because it is the metric published quantization work uses.
+           # "Retains X% of top-1 accuracy" against the unpruned model is exactly 1 - flip_rate
+           # measured against the teacher, so this number is directly comparable to e.g. an
+           # aggressively-quantized GGUF of the SAME base model - provided both are measured
+           # against that same unpruned reference, which ours is.
+           "top1_agreement": float(1.0 - flip.mean())}
     # k-truncated KL(teacher || student) on the teacher's top-k support.
     #
     # Chunked deliberately. Materialising a dense [n, 154880] scatter to look up the student's
@@ -290,7 +296,8 @@ def run() -> dict:
     for k, v in res.items():
         if isinstance(v, (int, float)):
             metric(STAGE, f"eval_{k}", v)
-    log(f"dNLL {res['dNLL_mean']:+.4f} nats/token | flip {100*res['flip_rate']:.2f}% | "
+    log(f"dNLL {res['dNLL_mean']:+.4f} nats/token | top-1 agreement "
+        f"{100*res['top1_agreement']:.2f}% (flip {100*res['flip_rate']:.2f}%) | "
         f"topk-KL {res['topk_KL']:.4f}", STAGE)
     for b, d in res["by_domain"].items():
         log(f"  {b:10s} dNLL {d['dNLL_mean']:+.4f}  flip {100*d['flip_rate']:.2f}%  "
