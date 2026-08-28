@@ -13,7 +13,7 @@ LOG=logs/backup_fp8.log
 say(){ echo "[backup $(date -Is)] $*" >> "$LOG"; }
 say "starting upload of $SRC -> $REPO ($(du -sh $SRC | cut -f1))"
 for attempt in $(seq 1 40); do
-  if .venv/bin/hf upload "$REPO" "$SRC" . --repo-type model --private >> "$LOG" 2>&1; then
+  if .venv/bin/hf upload "$REPO" "$SRC" . --repo-type model >> "$LOG" 2>&1; then
     say "UPLOAD COMPLETE after $attempt attempt(s)"
     exit 0
   fi

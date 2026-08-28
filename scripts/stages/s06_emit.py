@@ -64,6 +64,19 @@ Vision is first-class: the vision tower contains no MoE and is untouched, but im
 route through the same expert pool as text, so text-only calibration would have deleted
 vision-serving experts with certainty. Real image-text pairs were asserted present.
 
+## Evaluation status: NONE
+
+**This checkpoint has not been evaluated.** No benchmark has been run against it - not coding,
+not agentic, not vision, not knowledge. What has been verified is *structural*: expert counts
+match the config, routers are sliced to the retained set, every tensor loads, the vision tower
+is untouched, and the MTP block is cleanly absent.
+
+The pruning itself measured **1.29x better than random** at retaining expert output
+contribution (saliency mass 0.643 against 0.50 for random pruning at the same ratio). That says
+the criterion selected well. It does **not** say the model is good.
+
+Treat this as a research artifact pending evaluation, not a drop-in replacement.
+
 ## Known limitations
 
 - **The MTP (multi-token-prediction) block at layer 45 is excluded.** `transformers`'
@@ -72,7 +85,15 @@ vision-serving experts with certainty. Real image-text pairs were asserted prese
 - REAP has no published data above 50% compression; this checkpoint sits at the validated
   ceiling, not beyond it.
 - Expect **factual-recall** regression before reasoning or coding regression. That is the
-  measured failure mode of expert pruning on this architecture family.
+  measured failure mode of expert pruning on this architecture family: the closest published
+  analogue (`cerebras/Kimi-Linear-REAP-35B-A3B`, same KDA + full-attention stack) loses 3.4
+  points on FRAMES at only 30% pruning while code and maths hold flat.
+- Healing is a **first-moment output-scale correction** derived from the calibration saliency
+  (median gain 0.696, applied exactly to the F32 block scales). It is *not* distillation and
+  does not attempt to recover lost knowledge.
+- Routing is disrupted more than expert count suggests: the retained experts carry ~0.90x the
+  routing mass an average expert would, because REAP preserves rare-but-strong experts over
+  common-but-weak ones.
 
 ## Serving on Jetson Thor
 
