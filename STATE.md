@@ -1,6 +1,6 @@
 # STATE — terse recovery point
 
-Updated 2026-08-27 22:25 EDT. Read this first after any context loss.
+Updated 2026-08-27 23:55 EDT. Read this first after any context loss.
 
 ## Where we are
 
@@ -14,16 +14,35 @@ Updated 2026-08-27 22:25 EDT. Read this first after any context loss.
 
 ## Running right now
 
-- `run_stage.py s01_source` (detached, pid in `logs/p1_source.log`) — re-staging 62 shards / 306 GiB. ~40 min left.
-- `scripts/mm_topup.sh` (detached) — **waits** for the above, then restores the multimodal bucket.
-- `glm53-memguard` user service: active. `glm53-reap` user service: **stopped but still enabled** (it has `Restart=always,RestartSec=60`; it was relaunching the finished pass-1 graph every minute). Re-`start` it when the pass-2 graph is ready.
+**`s03_saliency`, pass 2** — detached, `logs/p2_saliency.log`. 10 chunks x 0.5M tokens = 5.5M.
+Measured ~109 min/chunk, so **~18 h**, finishing late 2026-08-28. Resumable per chunk
+(`state/s03_chunks.json` + `SS.load_accumulators`); a kill costs one chunk.
+
+Calibration inputs, vs pass 1: **2,280 text + 406 image-text** (pass 1: 217 + 39).
+
+- `glm53-memguard` user service: **active**.
+- `glm53-reap` user service: **stopped, still enabled**. It has `Restart=always,RestartSec=60` and
+  was relaunching the finished pass-1 graph every minute. Start it only when the pass-2 graph is
+  ready; `s04b_surgery` DELETES source shards, so it must never run behind an unreviewed sweep.
+
+Source: 62/62 shards, byte-exact (328,337,455,672). Disk 79 GiB free.
 
 ## Pass-2 plan
 
 `research/PASS2_PLAN.md` — P0–P14, ~38–55 Thor-h. `research/PASS2_FINDINGS.md` has the corrections
 (two of the research's four gates were stale; it inspected the box mid-`s07`).
 
-Done: **P0** (disk), **P2** (instrumented saliency), **P3** (chunked sweep). In flight: **P1**.
+Done: **P0** disk, **P1** re-stage, **P2** instrumented saliency, **P3** chunked sweep.
+In flight: **P4** the sweep.
+
+Written and tested, waiting on data:
+- `scripts/heal_refit.py` (**P5**) — run after **chunk 1**, not chunk 10. Reproduces the shipped
+  0.6964 to within 0.9%, so the measured number will be trustworthy.
+- `scripts/split_half.py` (**P6**) — gate on >0.95 keep-set overlap.
+- `scripts/criterion_shootout.py` (**P7**) — 8 criteria offline; 2 on pass-1 dumps, 8 on pass-2.
+- `scripts/stages/s09_eval.py` (**P12**) — paired teacher/student, per-domain dNLL, flips,
+  top-k KL, and drift at the DFlash tap layers. 13 tests pass.
+- `research/DRAFTER_PLAN.md`, `research/CLOUD_COUNTERFACTUAL.md` — deliverables in progress.
 
 ## Hard-won facts (do not rediscover)
 
