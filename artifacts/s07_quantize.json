@@ -1,9 +1,11 @@
 {
-  "path": "/home/patrickd/glm-5.3-reap/output/glm-5.3-flash-reap50-nvfp4",
-  "bytes": 103049399926,
-  "gib": 96.0,
-  "tensors_nvfp4": 18270,
-  "tensors_bf16": 1467,
-  "minutes": 36.1,
+  "path": "/home/patrickd/glm-5.3-reap/output/glm-5.3-flash-reap50-nvfp4-pass2",
+  "bytes": 105420487527,
+  "gib": 98.2,
+  "tensors_nvfp4": 18705,
+  "tensors_bf16": 1489,
+  "tensors_fp8_passthrough": 0,
+  "keep_fp8_passthrough": false,
+  "minutes": 37.3,
   "fits_thor": true
 }

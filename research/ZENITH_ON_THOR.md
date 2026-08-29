@@ -131,22 +131,29 @@ a completely different quantity. The second sweep bought a real, if modest, impr
   survivors recovers it. Fitting it more exactly moves the third decimal. Recovering it at all
   means changing the surviving experts' weights, i.e. distillation, which is out of scope below.
 
-- **A 40% ratio arm.** **Out of scope — memory, not compute.** Measured from the actual
-  checkpoint: routed experts are **90.3%** of the parameters, and the 50%-prune NVFP4 build is
-  96.0 GiB. Keeping 173 of 288 instead of 144 scales that share by 1.201:
+- **A 40% ratio arm.** **Out of scope — memory, not compute.** Measured directly from the shipped
+  pass-2 NVFP4 build (98.2 GiB, 144 of 288 experts, MTP preserved): routed experts are **83.2%**
+  of its bytes. Scaling that share by the expert count:
 
   | ratio | kept/288 | NVFP4 weights | headroom vs 117 GiB |
   |---|---|---|---|
-  | 50% (shipped) | 144 | 96.0 GiB | 21.0 GiB |
-  | 45% | 158 | 104.4 GiB | 12.6 GiB |
-  | 40% | 173 | 113.5 GiB | **3.5 GiB** |
+  | 50% (shipped) | 144 | 98.2 GiB | 18.9 GiB |
+  | 45% | 158 | 106.1 GiB | 10.9 GiB |
+  | 40% | 173 | **114.6 GiB** | **2.4 GiB** |
 
-  3.5 GiB has to hold the KV cache, activations, the CUDA context *and* the 1.171B DFlash2
+  2.4 GiB has to hold the KV cache, activations, the CUDA context *and* the 1.171B DFlash2
   drafter. It does not fit in any serving sense. The earlier framing — "worth it only if the
-  evaluation says 50% is too aggressive, costs a ~3 h re-download" — was wrong: the re-download
-  was never the binding constraint. **45% is the only arm that is even arguable**, and it spends
-  8.4 GiB of headroom to move retention from 0.50 to 0.55 of the expert budget. That trade should
-  be made against Tier 3 evidence, not before it.
+  evaluation says 50% is too aggressive, costs a ~3 h re-download" — was wrong: the re-download was
+  never the binding constraint. **45% is the only arm that is even arguable**, and it spends 8 GiB
+  of headroom to move the expert budget from 0.50 to 0.55.
+
+  *(An earlier revision of this table used the FP8 expert share, 90.3%, applied to the NVFP4 total.
+  That was a modelling shortcut: experts compress 2× harder than the bf16 remainder, so their share
+  of an NVFP4 build is lower. The numbers above are read from the build itself. Same verdict.)*
+
+  And the evaluation has now spoken on whether 50% is too aggressive — see Tier 3. Top-1 agreement
+  is 0.837 with damage concentrated in the one domain retrieval repairs, which is not a picture of
+  a ratio that needs relaxing.
 
 ## Tier 3 — needs the student to actually run, and is the highest-information item
 
@@ -165,7 +172,7 @@ a completely different quantity. The second sweep bought a real, if modest, impr
 | 16k-token calibration | needs sparse-DSA + chunkwise-KDA kernels first |
 | non-uniform per-layer expert allocation | **not compute** — `num_local_experts` is one scalar |
 | expert merging (REAM/EEP) | tractable but REAP's own thesis is that merging loses to pruning for MoE; a step sideways at best |
-| a 40% ratio arm | **memory, not compute**: 113.5 GiB of NVFP4 weights leaves 3.5 GiB for KV cache, activations, CUDA context and the drafter (see Tier 2) |
+| a 40% ratio arm | **memory, not compute**: 114.6 GiB of NVFP4 weights leaves 2.4 GiB for KV cache, activations, CUDA context and the drafter (see Tier 2) |
 | per-token teacher output matching | bounded to the third decimal by the two measurements in §1.1b/§1.1c — the residual that remains is deleted information, not approximation error |
 
 ## Does any of it need another full REAP run on the teacher?

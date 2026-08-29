@@ -177,6 +177,11 @@ def _rename(rel: str) -> str:
     return rel
 
 
+# layer index -> per-expert multiplier on down_proj, applied when the layer is materialised.
+# Empty in every normal run; populated only by scripts/heal_ablation.py.
+HEAL_OVERRIDE: dict[int, list] = {}
+
+
 def _build_layer(cfg, i, reader, dtype):
     """Materialise decoder layer i from the source shards.
 
@@ -263,6 +268,17 @@ def _build_layer(cfg, i, reader, dtype):
             d = fetch(names_e["down_proj"])
             dn[j].copy_(d)
             del d
+        # Optional per-expert rescale applied AT LOAD, for healing ablations. Healing is a
+        # multiply on down_proj, so an alternative healing can be evaluated by multiplying here
+        # instead of rewriting 161 GiB of checkpoint - which matters because there is not enough
+        # disk for a second copy, and mutating the shipped artifact in place to measure it would
+        # risk publishing whichever variant an interruption left behind.
+        mult = HEAL_OVERRIDE.get(i)
+        if mult is not None:
+            if len(mult) != dn.shape[0]:
+                raise RuntimeError(f"heal override for layer {i} has {len(mult)} coefficients "
+                                   f"but the layer has {dn.shape[0]} experts")
+            dn.mul_(torch.tensor(mult, dtype=dn.dtype).view(-1, 1, 1))
         sd["mlp.experts.gate_up_proj"] = gu
         sd["mlp.experts.down_proj"] = dn
         expert_names.clear()
