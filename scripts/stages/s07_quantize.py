@@ -47,8 +47,27 @@ EXPERT_RE = re.compile(r"\.mlp\.(experts\.\d+|shared_experts)\.(gate_proj|up_pro
 IGNORE = [
     "re:.*lm_head.*", "re:.*embed_tokens.*",
     "re:.*visual.*",            # dense ViT, 0.18% of mass, first-class capability
-    "re:.*linear_attn.*",       # KDA recurrence: error compounds along the sequence
-    "re:.*self_attn.*",
+    # Attention is SPLIT, not blanket-excluded.
+    #
+    # The old rule was `re:.*self_attn.*` with the reason "KDA recurrence: error compounds along
+    # the sequence". That reason is right for the GATES and wrong for q/k/v/o/b - the gates are
+    # what sits inside the recurrence, and they are 0.20 GiB. Excluding all of attention cost
+    # 8.01 GiB of BF16 that DECODE READS ON EVERY TOKEN, and measurement says it dominates:
+    # 76% of AR per-token traffic for 15% of the weights, because only 8 of 144 experts are read
+    # per token while the whole attention stack is. Quantising it takes the AR roofline on Thor
+    # from 13.5 to 23.5 tok/s and the checkpoint from 98.2 to 90.1 GiB.
+    #
+    # Protected, for 0.37 GiB total:
+    #   f_a/f_b/g_a/g_b   KDA forget/output gates - feed exp()/sigmoid inside the delta rule,
+    #                     so error compounds along the sequence rather than averaging out
+    #   *_conv1d          short causal convolutions, also inside the recurrence
+    #   indexer.*         DSA's token selector. It decides WHICH tokens are attended, so it is
+    #                     argmax-sensitive in exactly the way the MoE router is, and gets the
+    #                     same treatment.
+    #   *norm*            per-channel scales; already covered by the norm rule below
+    r"re:.*self_attn\.(f_a_proj|f_b_proj|g_a_proj|g_b_proj)\..*",
+    r"re:.*self_attn\..*_conv1d.*",
+    "re:.*indexer.*",
     "re:.*hc_.*", "re:.*mapping_proj.*",   # mHC, Sinkhorn-normalised
     "re:.*mlp\\.gate\\..*",     # routers: argmax-sensitive
     "re:.*norm.*",
