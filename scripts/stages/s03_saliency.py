@@ -202,6 +202,31 @@ def _build_layer(cfg, i, reader, dtype):
     scales = {n for n in names if n.endswith("weight_scale_inv")}
     packed = {n[: -len("_packed")] for n in names if n.endswith("weight_packed")}
 
+    # Iterate LOGICAL weight names, not raw tensor names.
+    #
+    # FP8 stores `w.weight` alongside `w.weight_scale_inv`, so the bare name is present and the
+    # old code could simply skip the companion. NVFP4 stores THREE companions - `weight_packed`,
+    # `weight_scale`, `weight_global_scale` - and NO bare `weight`. Iterating raw names therefore
+    # handed the module `...gate_proj.weight_packed`, which is not a parameter it has: the tensor
+    # was reported "missing from checkpoint" and the module silently kept the uninitialised f32
+    # buffer from `to_empty`. The failure surfaced two layers later as
+    # `mat1 and mat2 to have the same dtype: BFloat16 != float`, which names neither the tensor
+    # nor the format. Collapse every companion onto its logical `...weight` first; `fetch` already
+    # knows how to reconstitute either format from that name.
+    def _logical(n: str) -> str:
+        for suf in ("weight_packed", "weight_scale_inv", "weight_global_scale", "weight_scale"):
+            if n.endswith(suf):
+                return n[: -len(suf)] + "weight"
+        return n
+
+    seen: set[str] = set()
+    logical: list[str] = []
+    for n in names:
+        b = _logical(n)
+        if b not in seen:
+            seen.add(b)
+            logical.append(b)
+
     def fetch(name):
         # NVFP4 path. The size-matched competitor to an aggressively-quantised GGUF is our
         # NVFP4 checkpoint, not the FP8 master - so the evaluation has to be able to read it,
@@ -229,7 +254,7 @@ def _build_layer(cfg, i, reader, dtype):
     sd = {}
     convs: dict[str, "torch.Tensor"] = {}
     expert_names: dict[int, dict[str, str]] = {}
-    for n in names:
+    for n in logical:
         if n in scales:
             continue
         rel = n[len(prefix):]
