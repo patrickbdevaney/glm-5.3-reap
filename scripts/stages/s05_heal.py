@@ -54,6 +54,10 @@ ADAPTERS = ROOT / "output" / "adapters"
 # average - layer 44 keeps 86 of 288 experts and lands at 0.441. That is a large correction,
 # not a wrong one. A 0.5 floor rejected it and would have failed the stage after surgery.
 GAIN_FLOOR, GAIN_CEIL = 0.25, 1.0
+# A per-expert coefficient is NOT bounded above by 1 the way the layer scalar is: the layer
+# mean can be right while an individual expert that lost most of its top-8 competitors needs
+# scaling UP. The fitter clamps to [0.25, 1.60]; this is the same band, re-checked on load.
+PEREXPERT_FLOOR, PEREXPERT_CEIL = 0.25, 1.60
 LEDGER = ROOT / "state" / "heal_done.json"
 
 
@@ -99,6 +103,58 @@ def run() -> dict:
         except Exception as e:
             log(f"heal_refit.json unreadable ({type(e).__name__}); falling back to first-moment",
                 STAGE, "WARN")
+    # Tier 1.1 - PER-EXPERT gains. `measured` above is one scalar per layer, which is the
+    # degenerate case of the least-squares problem heal_perexpert.py actually solves: choose a
+    # coefficient per RETAINED expert minimising ||y_unpruned - y_pruned||^2 under the replayed
+    # post-prune routing. It ships a layer's vector only if it beat the best possible scalar on
+    # HELD-OUT tokens, so an empty dict here means the scalar genuinely could not be improved on,
+    # not that the fit failed.
+    perexp: dict[str, list[float]] = {}
+    pe = ARTIFACTS / "heal_perexpert.json"
+    if pe.exists():
+        try:
+            d = json.loads(pe.read_text())
+            import hashlib
+            want = hashlib.sha256(retained_p.read_bytes()).hexdigest()[:16]
+            got = d.get("keep_set_sha")
+            if got != want:
+                raise RuntimeError(
+                    f"heal_perexpert.json was fitted against keep-set {got} but this run applies "
+                    f"{want}; per-expert coefficients are only valid for the mask that produced "
+                    f"the routing they were fitted from.")
+            for r in d.get("per_layer", []):
+                if r.get("chosen", "").startswith("per_expert") and r.get("c"):
+                    ln, c = r["layer"], r["c"]
+                    kept = retained.get(ln) or []
+                    # The checkpoint indexes experts by POSITION in the sorted keep-list (see
+                    # s04b_surgery's `pos` map), which is exactly the order `kept_ids` was
+                    # written in. Refuse the layer if that correspondence does not hold rather
+                    # than scale the wrong experts.
+                    if r.get("kept_ids") != sorted(kept) or len(c) != len(kept):
+                        log(f"{ln}: per-expert vector does not line up with the keep-set "
+                            f"({len(c)} coeffs vs {len(kept)} experts) - using the scalar",
+                            STAGE, "WARN")
+                        continue
+                    if not all(PEREXPERT_FLOOR <= x <= PEREXPERT_CEIL for x in c):
+                        log(f"{ln}: per-expert coefficient out of "
+                            f"[{PEREXPERT_FLOOR},{PEREXPERT_CEIL}] - using the scalar",
+                            STAGE, "WARN")
+                        continue
+                    perexp[ln] = c
+            if perexp:
+                mg = (d.get("median_gain_vs_scalar") or {}).get("per_expert_diag")
+                log(f"using PER-EXPERT healing for {len(perexp)}/{d.get('layers')} layers "
+                    f"(median held-out residual reduction vs the optimal scalar: "
+                    f"{mg:.1%})" if mg is not None else
+                    f"using PER-EXPERT healing for {len(perexp)} layers", STAGE)
+            else:
+                log("heal_perexpert.json present but no layer beat its scalar out of sample; "
+                    "applying per-layer scalars", STAGE)
+        except Exception as e:
+            log(f"heal_perexpert.json rejected ({type(e).__name__}: {e}); falling back to "
+                f"per-layer scalars", STAGE, "WARN")
+            perexp = {}
+
     if not measured:
         log("NO measured gains available - applying the first-moment derivation, which is known "
             "to over-correct by ~30% on this architecture because it ignores norm_topk_prob "
@@ -179,7 +235,7 @@ def run() -> dict:
     if done:
         log(f"resuming: {len(done)} shards already healed, skipping them", STAGE)
 
-    applied, touched_files = 0, 0
+    applied, touched_files, perexpert_applied = 0, 0, 0
     for shard in sorted(src.glob("*.safetensors")):
         if shard.name in done:
             continue
@@ -188,10 +244,21 @@ def run() -> dict:
         for name in list(tensors):
             if ".mlp.experts." not in name or not name.endswith("down_proj.weight"):
                 continue
-            layer_key = name.split(".mlp.experts.")[0] + ".mlp"
+            head, tail = name.split(".mlp.experts.", 1)
+            layer_key = head + ".mlp"
             g = gains.get(layer_key)
             if g is None:
                 continue
+            pv = perexp.get(layer_key)
+            if pv is not None:
+                # Local expert index in the PRUNED checkpoint == position in the sorted
+                # keep-list, which is the order `pv` is stored in.
+                try:
+                    g = pv[int(tail.split(".", 1)[0])]
+                except (ValueError, IndexError):
+                    pass
+                else:
+                    perexpert_applied += 1
             # Scale the BLOCK SCALE, not the FP8 values. The dequantised weight is
             # w_fp8 * weight_scale_inv, so scaling the F32 scale is mathematically identical
             # and exact, whereas round-tripping E4M3 values through float32 and back would
@@ -217,16 +284,22 @@ def run() -> dict:
 
     ADAPTERS.mkdir(parents=True, exist_ok=True)
     (ADAPTERS / "first_moment_gains.json").write_text(json.dumps(
-        {"method": "first-moment MoE output-scale correction (no teacher, no forward pass)",
+        {"method": ("per-expert least-squares output matching (closed form, no teacher)"
+                    if perexp else
+                    "first-moment MoE output-scale correction (no teacher, no forward pass)"),
          "gains": gains, "stats": stats,
+         "per_expert_layers": sorted(perexp), "per_expert_tensors": perexpert_applied,
+         "per_expert_coefficients": perexp,
          "experts_scaled": applied, "shards_rewritten": touched_files,
          "not_done": "layer-local distillation and LoRA SFT - not tractable for 165B on a "
                      "117 GiB box; see wiki/70-healing.md"}, indent=2))
     kv_set("healed", True)
-    res = {**stats, "experts_scaled": applied, "shards_rewritten": touched_files}
+    res = {**stats, "experts_scaled": applied, "shards_rewritten": touched_files,
+           "per_expert_layers": len(perexp), "per_expert_tensors": perexpert_applied}
     p = ARTIFACTS / "s05_heal.json"
     p.write_text(json.dumps(res, indent=2))
     publish(p, "artifacts", "stage05/s05_heal.json", stage=STAGE)
-    log(f"first-moment correction applied to {applied} expert tensors "
-        f"across {touched_files} shards", STAGE)
+    log(f"correction applied to {applied} expert tensors across {touched_files} shards "
+        f"({perexpert_applied} with a per-expert coefficient, "
+        f"{applied - perexpert_applied} with the layer scalar)", STAGE)
     return res

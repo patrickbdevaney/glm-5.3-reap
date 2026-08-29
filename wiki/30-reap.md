@@ -251,3 +251,37 @@ would have bought calibration this same run proved useless.
 So the criterion question closes cheaply: **stock REAP is not measurably improvable here**, and
 the budget belongs to evaluation. The one criterion that clearly differs is the frequency-weighted
 control REAP exists to avoid.
+
+## Was the second sweep worth it? Measured on reconstruction error `[MEAS 2026-08-28 20:40]`
+
+The pass-2 mask was previously justified by a **proxy**: it retains +1.524% more saliency mass than
+pass 1, winning in all 42 layers. That is the criterion's own scoring function, so it cannot be
+entirely trusted to say the criterion produced a better mask — it is close to circular.
+
+The per-expert healing work (see `70-healing.md`) incidentally supplies a non-circular one. The
+reconstruction residual `Σ‖y−ŷ‖² / Σ‖y‖²` can be evaluated for *any* keep-set on held-out tokens,
+and crucially `Σ‖y‖²` depends only on **pre**-prune routing — so it is a denominator both masks
+share, and the two numbers are directly comparable. `heal_perexpert.py --keep-set <path>` scores an
+arbitrary mask in ~8 minutes.
+
+Both masks keep 144 of 288 experts, both fitted and scored identically:
+
+| mask | mean rel. residual (per-expert healed) | mean rel. residual (unhealed) |
+|---|---|---|
+| **pass 2 (shipped)** | **0.2663** | **0.3332** |
+| pass 1 (published) | 0.2730 | 0.3405 |
+
+**Pass 2 reduces reconstruction error by 2.5%, and wins in 30 of 42 layers.** Per-layer spread is
+−5.8% to +10.1%; the masks agree on **91.0%** of experts, so the 2.5% is bought by moving about one
+expert in eleven.
+
+Two things follow. First, the answer to "was the second run worth doing" is **yes, modestly** —
+consistent in sign and order of magnitude with the +1.52% proxy, but now derived from a quantity
+the ranking criterion never optimised. Second, mask selection is no longer an argument about
+proxies: any candidate mask — balanced-retention, staged-greedy, a different criterion from the
+shootout — can be *scored* for the cost of one 8-minute run. That is the tool `ZENITH_ON_THOR.md`
+§1.3 was missing.
+
+A caveat worth keeping: this residual measures how well the pruned layer reproduces the unpruned
+layer's *output vector* on calibration-like text. It is a better proxy than retained saliency mass.
+It is still not a measure of whether the model is smart — only Tier-3 generative benchmarks are.

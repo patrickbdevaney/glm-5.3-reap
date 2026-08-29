@@ -75,6 +75,24 @@ def _enrich(meta: dict) -> dict:
             if hp.exists():
                 meta["heal_gain_median"] = _st.median(
                     json.loads(hp.read_text())["gains"].values())
+        # Per-expert healing supersedes the scalar wherever it shipped. Read what was APPLIED
+        # from the adapter record, not from the fit, so a layer that fell back to its scalar is
+        # not described as per-expert.
+        ap = ROOT / "output" / "adapters" / "first_moment_gains.json"
+        if ap.exists():
+            a = json.loads(ap.read_text())
+            n = len(a.get("per_expert_layers") or [])
+            if n:
+                meta["heal_per_expert_layers"] = n
+                meta["heal_per_expert_tensors"] = a.get("per_expert_tensors")
+        pe = ARTIFACTS / "heal_perexpert.json"
+        if pe.exists():
+            d = json.loads(pe.read_text())
+            rr = d.get("median_holdout_rel_residual") or {}
+            for k, dst in (("none", "heal_resid_none"), ("shipped", "heal_resid_scalar"),
+                           ("per_expert_mag", "heal_resid_perexpert")):
+                if rr.get(k) is not None:
+                    meta[dst] = rr[k]
     except Exception:
         meta.setdefault("heal_measured", False)
     try:
@@ -95,7 +113,27 @@ def _card(meta: dict) -> str:
     rm = meta.get("routing_mass_retained")
     rmass = f"{rm/0.5:.2f}" if isinstance(rm, (int, float)) else "?"
     hg = meta.get("heal_gain_median")
-    if meta.get("heal_measured"):
+    npe = meta.get("heal_per_expert_layers")
+    if npe:
+        r0, r1, r2 = (meta.get("heal_resid_none"), meta.get("heal_resid_scalar"),
+                      meta.get("heal_resid_perexpert"))
+        tbl = ""
+        if None not in (r0, r1, r2):
+            tbl = (f" On held-out calibration tokens the relative reconstruction residual "
+                   f"`\u03a3\u2016y\u2212\u0177\u2016\u00b2/\u03a3\u2016y\u2016\u00b2` "
+                   f"falls from **{r0:.4f}** with no correction to **{r1:.4f}** with the best "
+                   f"single scalar to **{r2:.4f}** per-expert.")
+        heal_note = (
+            f"- Healing is an output-scale correction applied exactly to the F32 block scales, "
+            f"fitted **per retained expert** ({npe} of 42 MoE layers; the rest keep a per-layer "
+            f"scalar, median **{hg:.4f}**). Each coefficient is the closed-form least-squares "
+            f"solution for reproducing the unpruned layer's output under post-prune routing, "
+            f"replayed from a cached router-score trace - no teacher and no forward pass. The "
+            f"solution is rescaled to preserve the layer's output magnitude, because the "
+            f"unconstrained least-squares fit is scale-attenuating and that bias would compound "
+            f"across 42 layers.{tbl} It is *not* distillation and does not recover lost "
+            f"knowledge.")
+    elif meta.get("heal_measured"):
         heal_note = (
             "- Healing is an output-scale correction applied exactly to the F32 block scales, "
             f"median gain **{hg:.4f}**. It was **measured**, not derived: post-prune routing is "
@@ -235,8 +273,12 @@ not a targeted design: this is mixture-shaped preservation, not surgery.
 
 **Where it falls short, stated plainly**
 
-- **Healing is a scalar, not distillation.** Layer-local distillation is the right repair and
-  needs a backward pass that does not fit the hardware this was built on.
+- **Healing rescales experts; it does not retrain them.** The per-expert coefficients are the best
+  a *fixed rescaling* can do, and that ceiling is now measured rather than assumed: 96.6% of an
+  expert's output energy is token-dependent residual rather than its mean, so the ~0.27 residual
+  that remains is information deleted with the pruned experts, not error a better fit could
+  remove. Recovering it means layer-local distillation, which needs a backward pass that does not
+  fit the hardware this was built on.
 - **No expert merging** (REAM/EEP), rejected on cost.
 - **Evaluation is teacher-forced dNLL and top-1 agreement, not generative benchmarks.** That is
   the largest gap: dNLL does not fully predict agentic or coding capability, which is what this

@@ -209,3 +209,87 @@ depends on the *ordering* of 288 experts, many separated by less than the noise 
 exactly why P6's split-half gate exists and why the token budget matters there but not here.
 
 Relevant to A7 in `CLOUD_COUNTERFACTUAL.md`: for this quantity, more calibration buys nothing.
+
+## Tier 1.1 — from one scalar per layer to one per expert `[MEAS 2026-08-28 20:30]`
+
+P5 replaced a *derived* scalar with a *measured* one. The next step is to notice that a scalar was
+never the right object. `scripts/heal_perexpert.py` solves the least-squares problem the scalar is
+the degenerate case of:
+
+    minimise over c ∈ R^144:   Σ_t ‖ Σ_{i∈S_t} g_i f_i(x_t)  −  Σ_{j∈S'_t} c_j g'_j f_j(x_t) ‖²
+
+Closed form, no teacher, no forward pass. The whole derivation, and why every term is available
+from artefacts already on disk, is in `research/ZENITH_ON_THOR.md` §1.1.
+
+The assumption-light solution is worth stating on its own, because it is almost embarrassingly
+simple. Under the same orthogonality the shipped scalar already assumes, the normal equations go
+diagonal and **the norms cancel**:
+
+    c_j  =  ( Σ_t 1[j∈S_t ∧ j∈S'_t] g_j g'_j ) / ( Σ_t 1[j∈S'_t] g'_j² )
+
+"Scale expert *j* by the gate it used to receive over the gate it now receives." An expert
+*promoted into* the top-8 by pruning appears in the denominator but not the numerator, so it is
+correctly shrunk — it is doing work it never did before. This needs no norm data at all, which
+means it cannot be wrong for any reason that lives in `out_sum`.
+
+### Held out, 50/50 interleaved split, 42 layers
+
+| correction | mean rel. residual `Σ‖y−ŷ‖²/Σ‖y‖²` |
+|---|---|
+| none | 0.3332 |
+| P5's shipped scalar | 0.2914 |
+| **per-expert, magnitude-preserving (ships)** | **0.2663** |
+| per-expert, pure least squares | 0.2471 |
+
+41 of 42 layers improve; median +4.8% over the shipped scalar, best +43.4%. No coefficient reaches
+the clamp bounds, so the fit is well-conditioned rather than bounded into looking sane.
+
+### The trap: MSE-optimal is not scale-optimal
+
+Pure LS lands at a **median coefficient of 0.75** where P5's magnitude-matching scalar sits at
+**0.909**. That is not a contradiction — it is regression attenuation. LS shrinks ŷ below y
+whenever the two are imperfectly correlated, trading scale bias for variance, and it is *correct*
+for the objective it optimises.
+
+It is the wrong objective here. A systematic 17% attenuation of the MoE pathway compounds
+multiplicatively over 42 layers, and mHC's Sinkhorn-normalised connection matrices were fitted
+against the original output scale — the same sensitivity (R5) that motivated healing in the first
+place. So the LS solution is rescaled to satisfy `E‖ŷ‖² = E‖y‖²`: keep the per-expert *structure*,
+which is the actual innovation, and leave the global scale exactly where P5 validated it.
+
+Had this shipped un-rescaled it would have been the third instance of the same failure mode on
+this project — a locally impeccable derivation optimising something subtly beside the point.
+
+### Orthogonality, measured at last
+
+P5's docstring promised a `--check-orthogonality` that never existed. It falls out of the Gram
+matrix this fit has to build anyway:
+
+* off-diagonal mass of `A`: **1.9%** (median over layers)
+* mean `|cos(μ_i, μ_j)|` between distinct experts: **0.091**
+* full solve *with* every cross term vs the diagonal form: **0.25258 vs 0.25258**
+
+The near-orthogonality both corrections rest on is real. Four-decimal agreement is also what
+bounds any per-token refinement: the modelling approximation is costing nothing measurable.
+
+### Why no richer hypothesis class is worth building
+
+    ‖μ_i‖² / E‖f_i‖²  =  0.034     (median over 42 layers, range 0.016–0.181)
+
+**96.6% of an expert's output energy is token-dependent residual, not its mean.** Any fixed
+rescaling — scalar, per-channel diagonal, low-rank — acts only on structure a fixed operator can
+see. With 3.4% of the energy in the mean and residuals near-orthogonal across experts, a
+per-channel refinement provably collapses back toward `c_j = C_jj/N_j`.
+
+So the 0.27 residual that remains after healing is **not** approximation error to be fitted away.
+It is information deleted along with 144 experts. Recovering it means changing the surviving
+experts' weights — distillation — which is out of scope on this box. This is the number that
+closes the question rather than deferring it.
+
+### Verification
+
+`tests/test_heal_perexpert.py` samples data satisfying the model exactly, runs the real routing
+replay, and checks the quadratic form `ssy − 2b·c + cᵀAc` against a brute-force `Σ‖y−ŷ‖²`. The
+algebra was never the risk; the index bookkeeping — local vs global expert ids, post×pre in `C`,
+the pre×pre `Q` behind `‖y‖²` — is, and a wrong ordering there fails this check immediately while
+still producing plausible-looking coefficients.
