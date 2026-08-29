@@ -1,73 +1,73 @@
 {
   "tokens": 241516,
   "tokens_captured": 338113,
-  "dNLL_mean": 0.19396062494399818,
-  "dNLL_p50": 0.0013945238897576928,
-  "dNLL_p95": 1.7467384338378906,
+  "dNLL_mean": 0.20374999089895243,
+  "dNLL_p50": 0.0018698900239542127,
+  "dNLL_p95": 1.8067376613616943,
   "excluded_placeholder_tokens": 96597,
   "teacher_nll": 1.0178722432800584,
-  "student_nll": 1.2118328681762751,
-  "flip_rate": 0.1630699415359645,
-  "top1_agreement": 0.8369300584640356,
-  "topk_KL": 0.693882612546406,
+  "student_nll": 1.2216222341096719,
+  "flip_rate": 0.16706139551830934,
+  "top1_agreement": 0.8329386044816907,
+  "topk_KL": 0.7161494908196753,
   "by_domain": {
     "agentic": {
       "tokens": 69202,
-      "dNLL_mean": 0.14412434709501395,
-      "flip_rate": 0.1292881708621138,
-      "top1_agreement": 0.8707118291378861,
+      "dNLL_mean": 0.1626631533771098,
+      "flip_rate": 0.13704806219473425,
+      "top1_agreement": 0.8629519378052657,
       "sufficient": true
     },
     "ballast": {
       "tokens": 22154,
-      "dNLL_mean": 1.057637966065352,
-      "flip_rate": 0.43292407691613255,
-      "top1_agreement": 0.5670759230838675,
+      "dNLL_mean": 1.0681825991667033,
+      "flip_rate": 0.43612891577141827,
+      "top1_agreement": 0.5638710842285817,
       "sufficient": true
     },
     "code": {
       "tokens": 15821,
-      "dNLL_mean": 0.051725763669113176,
-      "flip_rate": 0.08134757600657354,
-      "top1_agreement": 0.9186524239934265,
+      "dNLL_mean": 0.05355917893504857,
+      "flip_rate": 0.08393906832690727,
+      "top1_agreement": 0.9160609316730928,
       "sufficient": true
     },
     "finance": {
       "tokens": 22215,
-      "dNLL_mean": 0.2514456381597506,
-      "flip_rate": 0.25914922349763675,
-      "top1_agreement": 0.7408507765023633,
+      "dNLL_mean": 0.2636671713219475,
+      "flip_rate": 0.262660364618501,
+      "top1_agreement": 0.7373396353814989,
       "sufficient": true
     },
     "math": {
       "tokens": 66558,
-      "dNLL_mean": 0.021975102415242587,
-      "flip_rate": 0.08177829862676163,
-      "top1_agreement": 0.9182217013732383,
+      "dNLL_mean": 0.024031812748592306,
+      "flip_rate": 0.08437753538267376,
+      "top1_agreement": 0.9156224646173262,
       "sufficient": true
     },
     "science": {
       "tokens": 45034,
-      "dNLL_mean": 0.14871967689767152,
-      "flip_rate": 0.17839854332282276,
-      "top1_agreement": 0.8216014566771772,
+      "dNLL_mean": 0.15523229464221389,
+      "flip_rate": 0.17957543189590086,
+      "top1_agreement": 0.8204245681040991,
       "sufficient": true
     },
     "vision": {
       "tokens": 532,
-      "dNLL_mean": -2.1133256176647666,
-      "flip_rate": 0.6109022556390977,
-      "top1_agreement": 0.3890977443609023,
+      "dNLL_mean": -1.8932642305963077,
+      "flip_rate": 0.631578947368421,
+      "top1_agreement": 0.368421052631579,
       "sufficient": false
     }
   },
   "tap_drift": {
-    "5": 0.17106392979621887,
-    "14": 0.3043991029262543,
-    "24": 0.638854444026947,
-    "33": 0.6442462801933289,
-    "42": 0.5774089097976685
+    "5": 0.18265384435653687,
+    "14": 0.3120338022708893,
+    "24": 0.6413875222206116,
+    "33": 0.6410561203956604,
+    "42": 0.5656961798667908
   },
   "teacher_from_cache": true,
-  "student": "glm-5.3-flash-reap50-fp8-pass2"
+  "student": "glm-5.3-flash-reap50-nvfp4-pass2"
 }
