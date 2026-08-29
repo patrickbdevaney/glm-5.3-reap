@@ -1,0 +1,27 @@
+{
+  "label": "stock",
+  "draft": "DFlash2-stock",
+  "target": "glm-5.3-flash-reap50-fp8-pass2",
+  "block_size": 8,
+  "overall": {
+    "blocks": 6048,
+    "acceptance_length": 3.8369708994708995,
+    "full_block_rate": 0.1810515873015873,
+    "speedup_vs_AR": 3.8369708994708995
+  },
+  "by_domain": {
+    "agentic": {
+      "blocks": 3654,
+      "acceptance_length": 3.6319102353585113,
+      "full_block_rate": 0.16967706622879036,
+      "speedup_vs_AR": 3.6319102353585113
+    },
+    "math": {
+      "blocks": 2394,
+      "acceptance_length": 4.149958228905597,
+      "full_block_rate": 0.1984126984126984,
+      "speedup_vs_AR": 4.149958228905597
+    }
+  },
+  "method": "offline greedy-verification acceptance on teacher-forced context; NOT comparable to served acceptance on self-generated context"
+}

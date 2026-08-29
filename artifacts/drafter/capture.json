@@ -1,0 +1,13 @@
+{
+  "checkpoint": "glm-5.3-flash-reap50-fp8-pass2",
+  "sequences": 48,
+  "max_len": 1024,
+  "taps": [
+    5,
+    14,
+    24,
+    33,
+    42
+  ],
+  "note": "greedy is the target's argmax teacher-forced on the ground-truth prefix"
+}
