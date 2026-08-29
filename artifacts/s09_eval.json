@@ -1,0 +1,82 @@
+{
+  "tokens": 241516,
+  "tokens_captured": 338113,
+  "dNLL_mean": 0.19787034770323456,
+  "dNLL_p50": 0.0014915484935045242,
+  "dNLL_p95": 1.74268040060997,
+  "excluded_placeholder_tokens": 96597,
+  "teacher_nll": 1.0178722432800584,
+  "student_nll": 1.215742590916132,
+  "flip_rate": 0.16296642872521902,
+  "top1_agreement": 0.837033571274781,
+  "topk_KL": 0.6947918804735229,
+  "by_domain": {
+    "agentic": {
+      "tokens": 69202,
+      "dNLL_mean": 0.18198985648685978,
+      "flip_rate": 0.137192566688824,
+      "top1_agreement": 0.8628074333111759,
+      "sufficient": true
+    },
+    "ballast": {
+      "tokens": 22154,
+      "dNLL_mean": 1.0213059738072932,
+      "flip_rate": 0.4275525864403719,
+      "top1_agreement": 0.572447413559628,
+      "sufficient": true
+    },
+    "code": {
+      "tokens": 15821,
+      "dNLL_mean": 0.048451711028404704,
+      "flip_rate": 0.07881929081600404,
+      "top1_agreement": 0.921180709183996,
+      "sufficient": true
+    },
+    "finance": {
+      "tokens": 22215,
+      "dNLL_mean": 0.22022330183377456,
+      "flip_rate": 0.2593292820166554,
+      "top1_agreement": 0.7406707179833446,
+      "sufficient": true
+    },
+    "math": {
+      "tokens": 66558,
+      "dNLL_mean": 0.026117689276747014,
+      "flip_rate": 0.08069653535262478,
+      "top1_agreement": 0.9193034646473752,
+      "sufficient": true
+    },
+    "science": {
+      "tokens": 45034,
+      "dNLL_mean": 0.13797202580777732,
+      "flip_rate": 0.17149264999777947,
+      "top1_agreement": 0.8285073500022205,
+      "sufficient": true
+    },
+    "vision": {
+      "tokens": 532,
+      "dNLL_mean": -1.9582861653438075,
+      "flip_rate": 0.5469924812030075,
+      "top1_agreement": 0.4530075187969925,
+      "sufficient": false
+    }
+  },
+  "tap_drift": {
+    "5": 0.17049774527549744,
+    "14": 0.30806416273117065,
+    "24": 0.6363646984100342,
+    "33": 0.6350041031837463,
+    "42": 0.5607964396476746
+  },
+  "student": "glm-5.3-flash-reap50-fp8",
+  "teacher_from_cache": true,
+  "correction": "image/video placeholder positions excluded from the loss, as the training objective does; see scripts/eval_recompare.py",
+  "superseded": {
+    "tokens": 338113,
+    "dNLL_mean": -0.35915526453260216,
+    "top1_agreement": 0.6744076684422071,
+    "teacher_nll": 5.5672713423656885,
+    "student_nll": 5.2081160777738305,
+    "topk_KL": 4.107726672507803
+  }
+}

@@ -128,6 +128,12 @@ def score_checkpoint(ckpt: Path, rows, mm_rows, tag: str) -> dict:
 
     cfg = AutoConfig.from_pretrained(ckpt)
     tcfg = cfg.text_config
+    # NOTE: the capture deliberately keeps the mask at "not padding" and nothing more. Image
+    # placeholder positions are EXCLUDED IN `compare`, not here, so that every capture - including
+    # the cached teacher, which costs 93 minutes and whose source is deleted by surgery - stays
+    # positionally alignable with every other. Narrowing the mask at capture time would have made
+    # a new student capture (241,516 tokens) compare against the cached teacher (338,113) by
+    # `[:n]` truncation, i.e. silently against unrelated positions.
     reader = SS.ShardReader(ckpt)
 
     with init_empty_weights():
@@ -260,16 +266,69 @@ def score_checkpoint(ckpt: Path, rows, mm_rows, tag: str) -> dict:
     return res
 
 
+def gold_tokens():
+    """The gold-token array in the exact order `capture` concatenates it, plus the placeholder
+    ids to drop. `load_heldout` is deterministic, so this reproduces the alignment exactly."""
+    import torch
+    from transformers import AutoConfig
+    rows, mm = load_heldout()
+    cfg = AutoConfig.from_pretrained(ROOT / "source" / "GLM-5.3-Flash")
+    pad = cfg.text_config.pad_token_id
+    out = []
+    for i in range(0, len(rows), BATCH):
+        ch = rows[i:i + BATCH]
+        ids = torch.full((len(ch), MAX_LEN), pad, dtype=torch.long)
+        for r, (b, _) in enumerate(ch):
+            k = min(len(b), MAX_LEN)
+            ids[r, :k] = b[:k].long()
+        g = ids[:, 1:]
+        out.append(g[g != pad])
+    n_text_states = len(out)
+    for rec in mm:
+        g = rec["input_ids"].long().unsqueeze(0)[:, 1:]
+        out.append(g[g != pad])
+    skip = sorted({getattr(cfg, "image_token_id", None),
+                   getattr(cfg, "video_token_id", None)} - {None})
+    return torch.cat(out), skip, [x.numel() for x in out], n_text_states
+
+
 def compare(T: dict, S: dict) -> dict:
     import torch
     n = min(T["nll"].numel(), S["nll"].numel())
-    dn = (S["nll"][:n] - T["nll"][:n]).double()
-    flip = (S["argmax"][:n] != T["argmax"][:n]).double()
-    out = {"tokens": int(n),
+
+    # Drop image/video placeholder positions. Their embedding was replaced by an image feature
+    # before layer 0, and the gold token there is the literal placeholder id - which the training
+    # loss masks out and the model is therefore never trained to emit. Scoring them measures
+    # nothing, loudly: MEASURED 2026-08-28 the teacher's NLL at those positions is 16.94 against
+    # 1.00 on real text, and they were 99.5% of the vision bucket and 29% of all tokens. Left in,
+    # they reported dNLL -0.359 and top-1 agreement 0.674 where the true figures are +0.198 and
+    # 0.837 - a pruned student apparently BEATING its teacher, which is the tell.
+    keep = torch.ones(n, dtype=torch.bool)
+    tap_keep = None
+    try:
+        gold, skip, state_lens, n_text_states = gold_tokens()
+        if gold.numel() != T["nll"].numel():
+            raise RuntimeError(f"rebuilt gold {gold.numel()} != capture {T['nll'].numel()}")
+        g = gold[:n]
+        for sid in skip:
+            keep &= g != sid
+        # Taps were subsampled per state at capture under the pad-only mask. Image-text states
+        # are the trailing ones and are ~99.5% placeholder, so their taps carry no signal; drop
+        # them wholesale rather than try to reindex inside a subsample.
+        tap_keep = sum(max(1, int(L * TAP_SUBSAMPLE)) for L in state_lens[:n_text_states])
+    except Exception as e:
+        log(f"could not rebuild gold to exclude image placeholders ({type(e).__name__}: {e}); "
+            f"reporting UNCORRECTED metrics - the vision bucket will be meaningless",
+            STAGE, "ERROR")
+
+    dn = (S["nll"][:n] - T["nll"][:n]).double()[keep]
+    flip = (S["argmax"][:n] != T["argmax"][:n]).double()[keep]
+    out = {"tokens": int(keep.sum()), "tokens_captured": int(n),
            "dNLL_mean": float(dn.mean()), "dNLL_p50": float(dn.median()),
            "dNLL_p95": float(dn.quantile(0.95)),
-           "teacher_nll": float(T["nll"][:n].double().mean()),
-           "student_nll": float(S["nll"][:n].double().mean()),
+           "excluded_placeholder_tokens": int((~keep).sum()),
+           "teacher_nll": float(T["nll"][:n][keep].double().mean()),
+           "student_nll": float(S["nll"][:n][keep].double().mean()),
            "flip_rate": float(flip.mean()),
            # Reported explicitly because it is the metric published quantization work uses.
            # "Retains X% of top-1 accuracy" against the unpruned model is exactly 1 - flip_rate
@@ -284,13 +343,14 @@ def compare(T: dict, S: dict) -> dict:
     # multi-hour scoring passes had already been paid for, which is the most expensive possible
     # place to discover an allocation bug. Both top-k lists are sorted-by-index-searchable per
     # chunk instead, so peak memory is O(chunk * k).
-    ti, tp = T["topk_idx"][:n].long(), T["topk_logp"][:n].float()
-    si, sp = S["topk_idx"][:n].long(), S["topk_logp"][:n].float()
+    ti, tp = T["topk_idx"][:n][keep].long(), T["topk_logp"][:n][keep].float()
+    si, sp = S["topk_idx"][:n][keep].long(), S["topk_logp"][:n][keep].float()
+    n_kw = int(keep.sum())
     FLOOR = -30.0
     tot, seen = 0.0, 0
     CH = 4096
-    for a0 in range(0, n, CH):
-        a1 = min(n, a0 + CH)
+    for a0 in range(0, n_kw, CH):
+        a1 = min(n_kw, a0 + CH)
         ti_c, tp_c, si_c, sp_c = ti[a0:a1], tp[a0:a1], si[a0:a1], sp[a0:a1]
         # match[i,j,k] : teacher index j equals student index k
         eq = ti_c.unsqueeze(2) == si_c.unsqueeze(1)          # [c, K, K]
@@ -302,16 +362,24 @@ def compare(T: dict, S: dict) -> dict:
         seen += a1 - a0
     out["topk_KL"] = tot / max(1, seen)
     by = {}
-    for b in sorted(set(T["buckets"][:n])):
-        m = torch.tensor([x == b for x in T["buckets"][:n]])
+    bk = [x for x, k in zip(T["buckets"][:n], keep.tolist()) if k]
+    for b in sorted(set(bk)):
+        m = torch.tensor([x == b for x in bk])
         if int(m.sum()) == 0:
             continue
         by[b] = {"tokens": int(m.sum()), "dNLL_mean": float(dn[m].mean()),
-                 "flip_rate": float(flip[m].mean())}
+                 "flip_rate": float(flip[m].mean()),
+                 "top1_agreement": float(1.0 - flip[m].mean()),
+                 # Below this the bucket cannot support a conclusion. After placeholder removal
+                 # the vision bucket is ~532 tokens across 28 records: R3 is UNMEASURED by this
+                 # evaluation, which is different from measured-and-fine.
+                 "sufficient": bool(int(m.sum()) >= 2000)}
     out["by_domain"] = by
     drift = {}
     for li in TAP_LAYERS:
         a, b = T["taps"][li].float(), S["taps"][li].float()
+        if tap_keep:
+            a, b = a[:tap_keep], b[:tap_keep]
         m = min(a.shape[0], b.shape[0])
         a, b = a[:m], b[:m]
         drift[li] = float(((b - a).norm(dim=-1) / a.norm(dim=-1).clamp_min(1e-6)).mean())
