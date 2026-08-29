@@ -5,8 +5,8 @@
   "gain_max": 0.9495,
   "gain_median": 0.9102,
   "gain_mean": 0.9073,
-  "experts_scaled": 0,
-  "shards_rewritten": 0,
+  "experts_scaled": 6048,
+  "shards_rewritten": 59,
   "per_expert_layers": 40,
-  "per_expert_tensors": 0
+  "per_expert_tensors": 5760
 }

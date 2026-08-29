@@ -106,3 +106,41 @@ All of the above is **teacher-forced**: dNLL and top-1 agreement on ground-truth
 measures how far the student moved from the teacher, not whether the student is *smart*. Only
 generative benchmarks answer that, and they are gated on inference working at all — see
 `research/ZENITH_ON_THOR.md` Tier 3.
+
+## Pass 2 measured end-to-end: the proxies did not translate `[MEAS 2026-08-28 23:33]`
+
+Pass 2 changed two things against the published pass-1 checkpoint — a re-ranked mask (+2.5% on
+reconstruction residual) and per-expert healing (+8.6% on the same). Both were measured, both were
+real, and neither showed up:
+
+| metric | pass 1 | pass 2 | Δ | σ |
+|---|---|---|---|---|
+| top-1 agreement | 0.8370 | 0.8369 | −0.0001 | 0.00075 |
+| ΔNLL mean | 0.1979 | 0.1940 | −0.0039 | |
+| top-k KL | 0.6948 | 0.6939 | −0.0009 | |
+
+Per domain it is a redistribution: agentic **+0.0079** (5.8 σ, real), science **−0.0069** (4.1 σ,
+real), ballast −0.0054 (2.3 σ), code and maths inside noise.
+
+**Why, honestly.** Even after healing the relative reconstruction residual is 0.27. That error is
+dominated by information deleted with the experts, not by the correction quality, so removing 8%
+of it leaves the argmax where it already was — the tokens that were going to flip had already
+flipped. The continuous metric (ΔNLL) moved ~2% in the right direction; the discrete one has no
+resolution at that scale.
+
+This is the counter-lesson to §"the saliency framework predicted this" above. Per-domain retention
+predicted *where* the damage lands at r = 0.942 — a strong, useful result. The reconstruction
+residual did **not** predict end-to-end movement between two masks that agree on 91% of experts.
+A proxy can be well-founded, measured on held-out data, and still be measuring something the
+downstream metric cannot see.
+
+**Confound, stated plainly.** Mask and healing changed together, so neither is individually
+credited or blamed. Separating them is cheap because healing is a multiply on F32 block scales and
+therefore invertible: a pass-2-mask + scalar-healing arm costs one re-heal (~15 min) and one eval
+(~80 min). That ablation is the honest next measurement, and it is the one that would decide
+whether per-expert healing earns its place or is simply harmless.
+
+**One regression worth tracking.** Tap drift at the DFlash2 tap layers moved the wrong way at the
+deep taps — layer 33 +0.0092, layer 42 +0.0166, layer 14 −0.0037. Small, but those are exactly the
+features the drafter consumes, so it is the one number here that bears on downstream speculative
+decoding rather than on generation quality.

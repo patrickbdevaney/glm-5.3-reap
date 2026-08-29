@@ -275,13 +275,56 @@ Both masks keep 144 of 288 experts, both fitted and scored identically:
 −5.8% to +10.1%; the masks agree on **91.0%** of experts, so the 2.5% is bought by moving about one
 expert in eleven.
 
-Two things follow. First, the answer to "was the second run worth doing" is **yes, modestly** —
-consistent in sign and order of magnitude with the +1.52% proxy, but now derived from a quantity
-the ranking criterion never optimised. Second, mask selection is no longer an argument about
-proxies: any candidate mask — balanced-retention, staged-greedy, a different criterion from the
-shootout — can be *scored* for the cost of one 8-minute run. That is the tool `ZENITH_ON_THOR.md`
-§1.3 was missing.
+Two things follow. First, the pass-2 mask really does reconstruct the unpruned layer better, on a
+quantity the ranking criterion never optimised. Second, mask selection is no longer an argument
+about proxies: any candidate mask — balanced-retention, staged-greedy, a different criterion from
+the shootout — can be *scored* for the cost of one 8-minute run. That is the tool
+`ZENITH_ON_THOR.md` §1.3 was missing.
 
-A caveat worth keeping: this residual measures how well the pruned layer reproduces the unpruned
-layer's *output vector* on calibration-like text. It is a better proxy than retained saliency mass.
-It is still not a measure of whether the model is smart — only Tier-3 generative benchmarks are.
+### …but it did not survive contact with the end-to-end evaluation `[MEAS 2026-08-28 23:33]`
+
+**Correction to the paragraph this section originally ended with.** It concluded "the second sweep
+bought a real, if modest, improvement." The paired evaluation of the finished pass-2 checkpoint
+says otherwise, and the measurement outranks the proxy.
+
+Pass-1 (published, re-healed) vs pass-2 (new mask **and** per-expert healing), same 241,516
+held-out tokens, same cached teacher:
+
+| metric | pass 1 | pass 2 | Δ |
+|---|---|---|---|
+| **top-1 agreement** | 0.8370 | 0.8369 | **−0.0001** |
+| ΔNLL mean | 0.1979 | 0.1940 | −0.0039 (−2.0%) |
+| top-k KL | 0.6948 | 0.6939 | −0.0009 |
+
+The standard error on top-1 agreement at this n is **0.00075**, so the aggregate difference is
+**exactly zero to within noise**. Per domain it is a redistribution rather than a lift:
+
+| domain | Δ top-1 | significance |
+|---|---|---|
+| agentic | **+0.0079** | 5.8 σ — real |
+| science | **−0.0069** | 4.1 σ — real |
+| ballast | −0.0054 | 2.3 σ — marginal |
+| code | −0.0025 | 0.9 σ — noise |
+| math | −0.0011 | 0.8 σ — noise |
+
+So: a 2.5% reduction in reconstruction residual from the mask, plus an 8.6% reduction from
+per-expert healing, produced **no measurable change in top-1 agreement** and a ~2% improvement in
+ΔNLL. The continuous metric moved in the right direction; the discrete one could not resolve it.
+
+That is not surprising in hindsight, and the honest lesson is about the proxy rather than the work.
+Even after healing the relative reconstruction residual is **0.27** — the intermediate error is
+dominated by information genuinely deleted with the experts, and shaving 8% off it leaves the
+argmax where it already was. Tokens whose top-1 was going to flip had already flipped.
+
+**Two caveats keep this from being a verdict on either change.** The comparison is *confounded*:
+pass 2 changed the mask and the healing method together, so neither can be credited or blamed
+individually. Separating them is affordable — healing is a multiply on F32 block scales and is
+therefore invertible, so a pass-2-mask + scalar-healing arm costs one re-heal (~15 min) and one
+eval (~80 min). And this is teacher-forced agreement on calibration-like text; it is the metric
+least likely to show a gain that is real but small, which is exactly the regime here.
+
+**Pass 2 still ships**, but for reasons that are not "it is more accurate": it preserves the MTP
+block at layer 45 (pass 1 did not, and the DFlash2 drafter work needs it), its ΔNLL and top-k KL
+are marginally better, and its healing rests on a measured least-squares fit rather than a scalar.
+The model card claims the reconstruction-residual reduction, which is measured, and does **not**
+claim an accuracy improvement over pass 1, which is not.

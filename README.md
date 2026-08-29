@@ -90,6 +90,13 @@ against the unpruned model on identical inputs. Figures below are the **pass-1**
 | general / ballast | 0.487 | **0.572** | +1.021 |
 | vision | 0.682 | *532 tokens — unmeasured* | |
 
+Pass 2 (new mask + per-expert healing) measures **0.8369** — identical to within noise (σ =
+0.00075), with ΔNLL 2% better and a redistribution across domains (agentic +0.008 real, science
+−0.007 real, the rest noise). The reconstruction-residual gains that motivated it (2.5% from the
+mask, 8.6% from healing) did **not** translate into top-1 agreement. Pass 2 ships because it
+preserves the MTP block that the drafter work needs, not because it is more accurate. See
+`wiki/30-reap.md`.
+
 **Per-domain retention was computed from routing statistics before any of these tokens were
 scored, and predicts the measured agreement at Pearson r = 0.942.** That is the strongest
 validation here of REAP itself — and it confirms empirically what the prune was designed to do:
