@@ -68,6 +68,40 @@ proven not to reflect who holds the memory.
 Two thresholds were tuned **down**, against intuition: the level floor sits *below* the measured
 healthy plateau (2–3 GiB available), because a floor above it kills working runs.
 
+## Measured, against the unpruned teacher
+
+Teacher-forced paired evaluation, **241,516 held-out tokens** the calibration never saw, scored
+against the unpruned model on identical inputs. Figures below are the **pass-1** REAP-50 FP8
+(the published checkpoint); pass 2 supersedes it.
+
+| | |
+|---|---|
+| **Top-1 agreement** | **0.837** |
+| ΔNLL (student − teacher), mean / median | +0.198 / +0.001 |
+| Top-k KL (teacher ‖ student) | 0.695 |
+
+| domain | predicted retention | measured top-1 | ΔNLL |
+|---|---|---|---|
+| code | 0.728 | **0.921** | +0.048 |
+| math | 0.713 | **0.919** | +0.026 |
+| agentic | 0.747 | **0.863** | +0.182 |
+| science | 0.720 | **0.829** | +0.138 |
+| finance | 0.651 | **0.741** | +0.220 |
+| general / ballast | 0.487 | **0.572** | +1.021 |
+| vision | 0.682 | *532 tokens — unmeasured* | |
+
+**Per-domain retention was computed from routing statistics before any of these tokens were
+scored, and predicts the measured agreement at Pearson r = 0.942.** That is the strongest
+validation here of REAP itself — and it confirms empirically what the prune was designed to do:
+the damage lands on generic ballast (0.572), the one capability retrieval can repair, while code,
+maths and agentic behaviour — which retrieval cannot supply — hold above 0.86.
+
+Two things this is **not**. It is teacher-forced agreement, not capability: it measures how far
+the student moved, not whether it is smart. And vision is *unmeasured*, not measured-and-fine —
+the held-out image-text records carry ~19 real text tokens each against ~3,450 image placeholders.
+See `wiki/97-evaluation.md`, including the bug that made every one of these numbers wrong until
+2026-08-28.
+
 ## Hard-won facts
 
 - **The published checkpoint is FP8, not BF16.** The 642 GB BF16 repo elsewhere on the Hub is a
@@ -80,6 +114,13 @@ healthy plateau (2–3 GiB available), because a floor above it kills working ru
   for hand-written kernels in any serving work.
 - **transformers does not instantiate the MTP block** (layer 45). It is excluded and left
   unmodified upstream rather than inconsistently pruned.
+- **Image-placeholder positions must be excluded from any loss you compute.** Their embedding is
+  replaced by an image feature before layer 0 and the training objective masks them; scoring them
+  put teacher NLL at 16.94 against 1.00 on real text and inverted the sign of every headline
+  evaluation number. See `wiki/97-evaluation.md`.
+- **Expert outputs are near-orthogonal and mostly token-dependent**: mean |cos(μ_i,μ_j)| = 0.091,
+  and only 3.4% of an expert's output energy is its mean. Together these say a *fixed* rescaling
+  cannot do better than one coefficient per expert — which is what healing now fits.
 - `llm-compressor` needs a shim for `glm5_next` (`scripts/glm5_next_support.py`): auto-derivation
   loses `swiglu_limit`, which `_apply_gate` reads.
 
