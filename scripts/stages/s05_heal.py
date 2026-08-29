@@ -35,6 +35,7 @@ erosion (R1). It is labelled as such in the model card.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -222,18 +223,47 @@ def run() -> dict:
     # and needs no runtime support.
     from safetensors.torch import load_file, save_file
     src = Path(kv_get("pruned_model_path", str(PRUNED)))
+    if not (src / "model.safetensors.index.json").exists():
+        # s06_emit MOVES the tree out of output/pruned-fp8, so a re-run of this stage after emit
+        # finds an empty directory. Follow the move rather than silently healing nothing.
+        alt = ROOT / "output" / str(kv_get("emit_name") or "")
+        if (alt / "model.safetensors.index.json").exists():
+            log(f"pruned_model_path {src} is empty; s06_emit moved the tree, healing {alt}",
+                STAGE)
+            src = alt
+        else:
+            raise RuntimeError(f"no checkpoint to heal at {src} (or {alt})")
 
     # This stage MUTATES the checkpoint in place, so it must be idempotent. Without a ledger a
     # retry after a partial pass would apply the gain a SECOND time to already-scaled shards -
     # silently, since a doubly-scaled expert is still a valid tensor. Track completed shards.
+    #
+    # The ledger MUST be scoped to the checkpoint it describes. Shard filenames repeat exactly
+    # across runs (`model-00001-of-00062.safetensors`), so a pass-1 ledger names every pass-2
+    # shard. MEASURED 2026-08-28: pass 2 loaded a pass-1 ledger, skipped all 62 shards, applied
+    # the correction to ZERO tensors, logged "resuming: 62 shards already healed" and reported
+    # success - and s06_emit then shipped an unhealed checkpoint whose card said healed. An
+    # idempotence guard that cannot tell WHICH artifact it made idempotent is a silent no-op.
+    fingerprint = {"target": str(src.resolve()),
+                   "keep_set_sha": hashlib.sha256(retained_p.read_bytes()).hexdigest()[:16]}
     done: set[str] = set()
     if LEDGER.exists():
         try:
-            done = set(json.loads(LEDGER.read_text()))
+            led = json.loads(LEDGER.read_text())
+            if isinstance(led, dict) and led.get("fingerprint") == fingerprint:
+                done = set(led.get("shards") or [])
+            else:
+                log(f"discarding a healing ledger for a DIFFERENT checkpoint "
+                    f"({(led.get('fingerprint') if isinstance(led, dict) else 'legacy list')}); "
+                    f"this run heals {fingerprint['target']} under keep-set "
+                    f"{fingerprint['keep_set_sha']}", STAGE, "WARN")
         except Exception:
             done = set()
+    shard_names = {f.name for f in src.glob("*.safetensors")}
+    done &= shard_names
     if done:
-        log(f"resuming: {len(done)} shards already healed, skipping them", STAGE)
+        log(f"resuming: {len(done)}/{len(shard_names)} shards already healed under this exact "
+            f"fingerprint, skipping them", STAGE)
 
     applied, touched_files, perexpert_applied = 0, 0, 0
     for shard in sorted(src.glob("*.safetensors")):
@@ -279,9 +309,15 @@ def run() -> dict:
             tmp.replace(shard)
             touched_files += 1
         done.add(shard.name)
-        LEDGER.write_text(json.dumps(sorted(done)))
+        LEDGER.write_text(json.dumps({"fingerprint": fingerprint, "shards": sorted(done)}))
         del tensors
 
+    # A stage that rewrote nothing has not healed anything. Reaching here with applied == 0 is
+    # only legitimate when a previous run under THIS fingerprint already covered every shard.
+    if applied == 0 and len(done) < len(shard_names):
+        raise RuntimeError(
+            f"healing applied to 0 expert tensors but only {len(done)} of {len(shard_names)} "
+            f"shards are recorded as done for this checkpoint - refusing to report success")
     ADAPTERS.mkdir(parents=True, exist_ok=True)
     (ADAPTERS / "first_moment_gains.json").write_text(json.dumps(
         {"method": ("per-expert least-squares output matching (closed form, no teacher)"

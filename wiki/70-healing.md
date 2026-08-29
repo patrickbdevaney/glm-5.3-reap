@@ -293,3 +293,57 @@ replay, and checks the quadratic form `ssy − 2b·c + cᵀAc` against a brute-f
 algebra was never the risk; the index bookkeeping — local vs global expert ids, post×pre in `C`,
 the pre×pre `Q` behind `‖y‖²` — is, and a wrong ordering there fails this check immediately while
 still producing plausible-looking coefficients.
+
+## The ledger that made healing a silent no-op `[BUG 2026-08-28 21:42]`
+
+`s05_heal` mutates the checkpoint in place, so it keeps a ledger of completed shards to stay
+idempotent across retries. The ledger was a bare list of shard *filenames*.
+
+Shard filenames repeat exactly across runs — `model-00001-of-00062.safetensors` is pass 1's first
+shard and pass 2's first shard. So pass 2 loaded pass 1's ledger, found all 62 of its shards
+already named in it, skipped every one, and logged:
+
+```
+resuming: 62 shards already healed, skipping them
+correction applied to 0 expert tensors across 0 shards
+DONE -> {..., 'experts_scaled': 0, 'per_expert_layers': 40, 'per_expert_tensors': 0}
+```
+
+It then set `healed = True`. `s06_emit` ran next and wrote a model card stating that healing was
+"fitted **per retained expert** (40 of 42 MoE layers)" — describing, in detail and with correct
+numbers, a correction present in **none** of the weights it was shipping.
+
+Nothing failed. The stage reported success, the counts in its own output were internally
+consistent, and the only evidence was three zeros in a dict that also contained a 40.
+
+### What was wrong with the guard, specifically
+
+An idempotence ledger that cannot say **which artifact** it made idempotent is not a guard, it is
+a silent skip. The fix scopes it to a fingerprint of what is actually being healed:
+
+```python
+fingerprint = {"target": str(src.resolve()),
+               "keep_set_sha": sha256(reap_retained_experts.json)[:16]}
+```
+
+A ledger whose fingerprint does not match — including any legacy bare list — is discarded with a
+loud `WARN` rather than trusted. Two further defences, because the failure mode here was *reporting
+success*:
+
+* the stage now raises if it scaled zero tensors while fewer shards than exist are recorded as
+  done under this fingerprint;
+* `scripts/verify_heal.py` reads the weights back and checks that `shipped_scale / pre_heal_scale`
+  equals the fitted coefficient, from a probe captured before the run. That is independent of the
+  stage's own bookkeeping, which is the whole point — the thing that failed was bookkeeping.
+
+### The general lesson, again
+
+This is the third time on this project that a stage produced a confident, well-formed, *wrong*
+result: the first-moment healing derivation (P5), the eval scoring image placeholders, and now
+this. None of them threw. All three were caught by asking whether a number could be true rather
+than whether the code ran — a gain of 0.696 where renormalisation had already conserved the mass,
+a pruned student beating its teacher, a healing stage that scaled zero tensors.
+
+The generalisable defence is not more assertions inside the stage. It is that **every artifact
+which claims a transformation should be verifiable from the artifact itself**, by something that
+did not compute it.

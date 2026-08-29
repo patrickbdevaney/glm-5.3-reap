@@ -1,10 +1,12 @@
 {
   "layers": 42,
   "skipped": 0,
-  "gain_min": 0.5635,
-  "gain_max": 0.8557,
-  "gain_median": 0.6964,
-  "gain_mean": 0.697,
-  "experts_scaled": 6048,
-  "shards_rewritten": 59
+  "gain_min": 0.8335,
+  "gain_max": 0.9495,
+  "gain_median": 0.9102,
+  "gain_mean": 0.9073,
+  "experts_scaled": 0,
+  "shards_rewritten": 0,
+  "per_expert_layers": 40,
+  "per_expert_tensors": 0
 }
