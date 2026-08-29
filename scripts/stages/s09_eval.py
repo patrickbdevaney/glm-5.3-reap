@@ -428,6 +428,11 @@ def run() -> dict:
     res["student"] = student.name
 
     (ARTIFACTS / "s09_eval.json").write_text(json.dumps(res, indent=2))
+    # ALSO keep a per-student copy. s09_eval.json is overwritten by every successive eval - FP8
+    # then NVFP4 - so by the time the cards are written the first result is gone, and
+    # card_addendum silently fell back to "not evaluated" for BOTH artifacts. A stage whose output
+    # is clobbered by its own next invocation has no output.
+    (OUT / f"eval_{student.name}.json").write_text(json.dumps(res, indent=2))
     for k, v in res.items():
         if isinstance(v, (int, float)):
             metric(STAGE, f"eval_{k}", v)
