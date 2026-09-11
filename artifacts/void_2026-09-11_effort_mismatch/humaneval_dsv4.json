@@ -1,0 +1,827 @@
+{
+ "n": 164,
+ "pass": 127,
+ "pass@1": 0.774390243902439,
+ "rows": [
+  {
+   "task_id": "HumanEval/0",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/1",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/2",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/3",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/4",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/5",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/6",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/7",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/8",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/9",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/10",
+   "pass": false,
+   "detail": "dule>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 5\n    Let's understand the algorithm.\n       ^\nSyntaxError: unterminated string literal (detected at line 5)\n"
+  },
+  {
+   "task_id": "HumanEval/11",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/12",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/13",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/14",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/15",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/16",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/17",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/18",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/19",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/20",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/21",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/22",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/23",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/24",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/25",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/26",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/27",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/28",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/29",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/30",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/31",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/32",
+   "pass": false,
+   "detail": "module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 7\n    METADATA = {}\n    ^\nIndentationError: expected an indented block after function definition on line 1\n"
+  },
+  {
+   "task_id": "HumanEval/33",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/34",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/35",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/36",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/37",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/38",
+   "pass": false,
+   "detail": ".argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 27, in <module>\n  File \"<string>\", line 22, in check\nNameError: name 'encode_cyclic' is not defined. Did you mean: 'decode_cyclic'?\n"
+  },
+  {
+   "task_id": "HumanEval/39",
+   "pass": false,
+   "detail": ", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 2\n    \"\"\"\n    ^\nSyntaxError: unterminated triple-quoted string literal (detected at line 26)\n"
+  },
+  {
+   "task_id": "HumanEval/40",
+   "pass": false,
+   "detail": ", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 2\n    \"\"\"\n    ^\nSyntaxError: unterminated triple-quoted string literal (detected at line 24)\n"
+  },
+  {
+   "task_id": "HumanEval/41",
+   "pass": false,
+   "detail": "                                                                                                                                        ^\nSyntaxError: unterminated string literal (detected at line 5)\n"
+  },
+  {
+   "task_id": "HumanEval/42",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/43",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/44",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/45",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/46",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/47",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/48",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/49",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/50",
+   "pass": false,
+   "detail": "ys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 26, in <module>\n  File \"<string>\", line 21, in check\nNameError: name 'encode_shift' is not defined. Did you mean: 'decode_shift'?\n"
+  },
+  {
+   "task_id": "HumanEval/51",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/52",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/53",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/54",
+   "pass": false,
+   "detail": ", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 2\n    \"\"\"\n    ^\nSyntaxError: unterminated triple-quoted string literal (detected at line 22)\n"
+  },
+  {
+   "task_id": "HumanEval/55",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/56",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/57",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/58",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/59",
+   "pass": false,
+   "detail": " <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 15\n    Let's test with examples:\n       ^\nSyntaxError: unterminated string literal (detected at line 15)\n"
+  },
+  {
+   "task_id": "HumanEval/60",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/61",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/62",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/63",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/64",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/65",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/66",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/67",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/68",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/69",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/70",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/71",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/72",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/73",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/74",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/75",
+   "pass": false,
+   "detail": " primes. Our loop would not include 0, returns False. Good.\n                                                                           ^\nSyntaxError: unterminated string literal (detected at line 20)\n"
+  },
+  {
+   "task_id": "HumanEval/76",
+   "pass": false,
+   "detail": " 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 7\n    if n == 1:\n    ^\nIndentationError: expected an indented block after 'if' statement on line 3\n"
+  },
+  {
+   "task_id": "HumanEval/77",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/78",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/79",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/80",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/81",
+   "pass": false,
+   "detail": "                                                                                                                                       ^\nSyntaxError: unterminated string literal (detected at line 18)\n"
+  },
+  {
+   "task_id": "HumanEval/82",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/83",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/84",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/85",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/86",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/87",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/88",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/89",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/90",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/91",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/92",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/93",
+   "pass": false,
+   "detail": "9mo6wflx/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 18\n    result.append(ch\n                 ^\nSyntaxError: '(' was never closed\n"
+  },
+  {
+   "task_id": "HumanEval/94",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/95",
+   "pass": false,
+   "detail": "eptable? The example with \"STATE\", \"ZIP\", \"12345\" returns True, so yes.\n                                                               ^\nSyntaxError: unterminated string literal (detected at line 26)\n"
+  },
+  {
+   "task_id": "HumanEval/96",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/97",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/98",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/99",
+   "pass": false,
+   "detail": " so yes.\n                                                                                                                              ^\nSyntaxError: unterminated string literal (detected at line 10)\n"
+  },
+  {
+   "task_id": "HumanEval/100",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/101",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/102",
+   "pass": false,
+   "detail": "g>\", line 23\n    What if x=12, y=13.0, n=12, 12>=12, return 12. That's correct.\n                                                       ^\nSyntaxError: unterminated string literal (detected at line 23)\n"
+  },
+  {
+   "task_id": "HumanEval/103",
+   "pass": false,
+   "detail": ").read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 17\n    But let's double-check: For n=1,m=5, (1+5)/2=3. Correct.\n           ^\nSyntaxError: unterminated string literal (detected at line 17)\n"
+  },
+  {
+   "task_id": "HumanEval/104",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/105",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/106",
+   "pass": false,
+   "detail": "\"/tmp/tmp3x483qf8/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 23, in <module>\n  File \"<string>\", line 17, in check\nAssertionError\n"
+  },
+  {
+   "task_id": "HumanEval/107",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/108",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/109",
+   "pass": false,
+   "detail": "_name__\": \"__main__\"})\n  File \"<string>\", line 13\n    But is that sufficient? Let's test with examples:\n                               ^\nSyntaxError: unterminated string literal (detected at line 13)\n"
+  },
+  {
+   "task_id": "HumanEval/110",
+   "pass": false,
+   "detail": "                                                                                                                                        ^\nSyntaxError: unterminated string literal (detected at line 5)\n"
+  },
+  {
+   "task_id": "HumanEval/111",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/112",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/113",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/114",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/115",
+   "pass": false,
+   "detail": "                                                                                                                                        ^\nSyntaxError: unterminated string literal (detected at line 1)\n"
+  },
+  {
+   "task_id": "HumanEval/116",
+   "pass": false,
+   "detail": "                                                                                                                                        ^\nSyntaxError: unterminated string literal (detected at line 3)\n"
+  },
+  {
+   "task_id": "HumanEval/117",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/118",
+   "pass": false,
+   "detail": "                                                                                                                                       ^\nSyntaxError: unterminated string literal (detected at line 21)\n"
+  },
+  {
+   "task_id": "HumanEval/119",
+   "pass": false,
+   "detail": "                                                                                                                                        ^\nSyntaxError: unterminated string literal (detected at line 5)\n"
+  },
+  {
+   "task_id": "HumanEval/120",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/121",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/122",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/123",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/124",
+   "pass": false,
+   "detail": "ern ensures exactly two digits for month and day, and four for year. So \"04-0-2040\" fails because day part is \"0\" length 1, pattern requires two digits. Good.\n        ^^^^\nSyntaxError: invalid syntax\n"
+  },
+  {
+   "task_id": "HumanEval/125",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/126",
+   "pass": false,
+   "detail": "cate = appears twice. More than 1 duplicate = appears more than twice. Yes.\n                                                           ^\nSyntaxError: unterminated string literal (detected at line 15)\n"
+  },
+  {
+   "task_id": "HumanEval/127",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/128",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/129",
+   "pass": false,
+   "detail": "valent to: among all paths of length k starting at node 1, find the one with lexicographically smallest sequence of node labels.\n       ^\nSyntaxError: unterminated string literal (detected at line 9)\n"
+  },
+  {
+   "task_id": "HumanEval/130",
+   "pass": false,
+   "detail": "                                                                                                                                        ^\nSyntaxError: unterminated string literal (detected at line 1)\n"
+  },
+  {
+   "task_id": "HumanEval/131",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/132",
+   "pass": false,
+   "detail": "alid subsequence with nesting? Let's analyze.\n                                                                                          ^\nSyntaxError: unterminated string literal (detected at line 7)\n"
+  },
+  {
+   "task_id": "HumanEval/133",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/134",
+   "pass": false,
+   "detail": " char 'g', previous space -> True. That's fine.\n                                                                                       ^\nSyntaxError: unterminated string literal (detected at line 18)\n"
+  },
+  {
+   "task_id": "HumanEval/135",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/136",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/137",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/138",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/139",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/140",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/141",
+   "pass": false,
+   "detail": "\"__main__\"})\n  File \"<string>\", line 48, in <module>\n  File \"<string>\", line 15, in check\n  File \"<string>\", line 10, in file_name_check\nNameError: name 'file' is not defined. Did you mean: 'filter'?\n"
+  },
+  {
+   "task_id": "HumanEval/142",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/143",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/144",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/145",
+   "pass": false,
+   "detail": "                                                                                                                                        ^\nSyntaxError: unterminated string literal (detected at line 1)\n"
+  },
+  {
+   "task_id": "HumanEval/146",
+   "pass": false,
+   "detail": " <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 14\n    Let's test with examples:\n       ^\nSyntaxError: unterminated string literal (detected at line 14)\n"
+  },
+  {
+   "task_id": "HumanEval/147",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/148",
+   "pass": false,
+   "detail": "                                                                                                                                        ^\nSyntaxError: unterminated string literal (detected at line 3)\n"
+  },
+  {
+   "task_id": "HumanEval/149",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/150",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/151",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/152",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/153",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/154",
+   "pass": false,
+   "detail": " <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 17\n    Let's test with examples:\n       ^\nSyntaxError: unterminated string literal (detected at line 17)\n"
+  },
+  {
+   "task_id": "HumanEval/155",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/156",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/157",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/158",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/159",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/160",
+   "pass": false,
+   "detail": "                                                                                                                                       ^\nSyntaxError: unterminated string literal (detected at line 11)\n"
+  },
+  {
+   "task_id": "HumanEval/161",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/162",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/163",
+   "pass": false,
+   "detail": "                                                                                                                                       ^\nSyntaxError: unterminated string literal (detected at line 11)\n"
+  }
+ ]
+}

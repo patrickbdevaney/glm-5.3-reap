@@ -1,0 +1,567 @@
+{
+ "n": 112,
+ "pass": 51,
+ "pass@1": 0.45535714285714285,
+ "rows": [
+  {
+   "task_id": "HumanEval/0",
+   "pass": false,
+   "detail": "\"/tmp/tmpfcps_cy7/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 22, in <module>\nNameError: name 'has_close_elements' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/1",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/2",
+   "pass": false,
+   "detail": "le \"/tmp/tmpurhiouq_/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 17, in <module>\nNameError: name 'truncate_number' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/3",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/4",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/5",
+   "pass": false,
+   "detail": "  File \"/tmp/tmpydx90y5j/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 17, in <module>\nNameError: name 'intersperse' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/6",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/7",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/8",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/9",
+   "pass": false,
+   "detail": "  File \"/tmp/tmpw7dyd200/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 18, in <module>\nNameError: name 'rolling_max' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/10",
+   "pass": false,
+   "detail": "le \"/tmp/tmp7ta801in/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 19, in <module>\nNameError: name 'make_palindrome' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/11",
+   "pass": false,
+   "detail": "\n  File \"/tmp/tmpcg11yruj/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 17, in <module>\nNameError: name 'string_xor' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/12",
+   "pass": false,
+   "detail": "t):\n  File \"/tmp/tmpzoc9xj2u/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 17, in <module>\nNameError: name 'longest' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/13",
+   "pass": false,
+   "detail": "/tmp_i5hgwrq/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 18, in <module>\nNameError: name 'greatest_common_divisor' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/14",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/15",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/16",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/17",
+   "pass": false,
+   "detail": "p653nbmin/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 1, in <module>\nNameError: name 'List' is not defined. Did you mean: 'list'?\n"
+  },
+  {
+   "task_id": "HumanEval/18",
+   "pass": false,
+   "detail": "ile \"/tmp/tmpxg2xjra0/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 18, in <module>\nNameError: name 'how_many_times' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/19",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/20",
+   "pass": false,
+   "detail": "mp/tmp4gcfvh76/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 20, in <module>\nNameError: name 'find_closest_elements' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/21",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/22",
+   "pass": false,
+   "detail": "le \"/tmp/tmp42gbohtp/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 17, in <module>\nNameError: name 'filter_integers' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/23",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/24",
+   "pass": false,
+   "detail": "le \"/tmp/tmph_rh8nmd/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 19, in <module>\nNameError: name 'largest_divisor' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/25",
+   "pass": false,
+   "detail": ":\n  File \"/tmp/tmp6dacaoz5/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 22, in <module>\nNameError: name 'factorize' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/26",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/27",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/28",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/29",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/30",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/31",
+   "pass": false,
+   "detail": "):\n  File \"/tmp/tmpjrwjx7yn/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 25, in <module>\nNameError: name 'is_prime' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/32",
+   "pass": false,
+   "detail": ":\n  File \"/tmp/tmpv9qg4rtj/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 26, in <module>\nNameError: name 'find_zero' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/33",
+   "pass": false,
+   "detail": "\n  File \"/tmp/tmp7ow91k0_/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 19, in <module>\nNameError: name 'sort_third' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/34",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/35",
+   "pass": false,
+   "detail": "  File \"/tmp/tmppmx59g8n/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 13, in <module>\nNameError: name 'max_element' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/36",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/37",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/38",
+   "pass": false,
+   "detail": ".argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 29, in <module>\n  File \"<string>\", line 24, in check\nNameError: name 'encode_cyclic' is not defined. Did you mean: 'decode_cyclic'?\n"
+  },
+  {
+   "task_id": "HumanEval/39",
+   "pass": false,
+   "detail": ":\n  File \"/tmp/tmpw8sh0a53/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 22, in <module>\nNameError: name 'prime_fib' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/40",
+   "pass": false,
+   "detail": "/tmp/tmp2gtzvxzx/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 21, in <module>\nNameError: name 'triples_sum_to_zero' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/41",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/42",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/43",
+   "pass": false,
+   "detail": " \"/tmp/tmp11qkajii/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 22, in <module>\nNameError: name 'pairs_sum_to_zero' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/44",
+   "pass": false,
+   "detail": "  File \"/tmp/tmp0p1iiiwd/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 20, in <module>\nNameError: name 'change_base' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/45",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/46",
+   "pass": false,
+   "detail": "last):\n  File \"/tmp/tmpo168l8ja/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 16, in <module>\nNameError: name 'fib4' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/47",
+   "pass": false,
+   "detail": "st):\n  File \"/tmp/tmp9kw9a8a1/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 17, in <module>\nNameError: name 'median' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/48",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/49",
+   "pass": false,
+   "detail": "last):\n  File \"/tmp/tmpzqw2r3gq/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 19, in <module>\nNameError: name 'modp' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/50",
+   "pass": false,
+   "detail": "ys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 26, in <module>\n  File \"<string>\", line 21, in check\nNameError: name 'encode_shift' is not defined. Did you mean: 'decode_shift'?\n"
+  },
+  {
+   "task_id": "HumanEval/51",
+   "pass": false,
+   "detail": "File \"/tmp/tmp41gcyyyd/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 19, in <module>\nNameError: name 'remove_vowels' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/52",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/53",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/54",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/55",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/56",
+   "pass": false,
+   "detail": "\"/tmp/tmpfta3d_4s/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 24, in <module>\nNameError: name 'correct_bracketing' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/57",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/58",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/59",
+   "pass": false,
+   "detail": "  exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 2\n    \"\"\"Return the largest prime\n    ^\nSyntaxError: unterminated triple-quoted string literal (detected at line 18)\n"
+  },
+  {
+   "task_id": "HumanEval/60",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/61",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/62",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/63",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/64",
+   "pass": false,
+   "detail": " File \"/tmp/tmpzue7ewee/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 19, in <module>\nNameError: name 'vowels_count' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/65",
+   "pass": false,
+   "detail": "ile \"/tmp/tmpwh8yxa_a/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 16, in <module>\nNameError: name 'circular_shift' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/66",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/67",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/68",
+   "pass": false,
+   "detail": "ast):\n  File \"/tmp/tmpjau3k40l/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 21, in <module>\nNameError: name 'pluck' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/69",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/70",
+   "pass": false,
+   "detail": " \"/tmp/tmp08tq0wpu/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 21, in <module>\nNameError: name 'strange_sort_list' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/71",
+   "pass": false,
+   "detail": "File \"/tmp/tmpp_7yv4sc/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 20, in <module>\nNameError: name 'triangle_area' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/72",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/73",
+   "pass": false,
+   "detail": "b/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 15\n    if arr[i] != arr[n -\n                    ^\nSyntaxError: '[' was never closed\n"
+  },
+  {
+   "task_id": "HumanEval/74",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/75",
+   "pass": false,
+   "detail": " \"/tmp/tmpxvmo7cao/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 18, in <module>\nNameError: name 'is_multiply_prime' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/76",
+   "pass": false,
+   "detail": "le \"/tmp/tmphnih10yh/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 21, in <module>\nNameError: name 'is_simple_power' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/77",
+   "pass": false,
+   "detail": "st):\n  File \"/tmp/tmpu6sygmrr/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 20, in <module>\nNameError: name 'iscube' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/78",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/79",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/80",
+   "pass": false,
+   "detail": "):\n  File \"/tmp/tmpf2ofw8_i/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 16, in <module>\nNameError: name 'is_happy' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/81",
+   "pass": false,
+   "detail": "p/tmp4g0guou9/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 18, in <module>\nNameError: name 'numerical_letter_grade' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/82",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/83",
+   "pass": false,
+   "detail": "le \"/tmp/tmp6z58_zk4/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 18, in <module>\nNameError: name 'starts_one_ends' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/84",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/85",
+   "pass": false,
+   "detail": " last):\n  File \"/tmp/tmpqm3q1yc5/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 15, in <module>\nNameError: name 'add' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/86",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/87",
+   "pass": false,
+   "detail": "t):\n  File \"/tmp/tmpo0ya0dyn/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 37, in <module>\nNameError: name 'get_row' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/88",
+   "pass": false,
+   "detail": "\n  File \"/tmp/tmpyacfjlcc/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 20, in <module>\nNameError: name 'sort_array' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/89",
+   "pass": false,
+   "detail": "t):\n  File \"/tmp/tmpgvf4xj2f/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 20, in <module>\nNameError: name 'encrypt' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/90",
+   "pass": false,
+   "detail": "File \"/tmp/tmpqa4kr3ea/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 19, in <module>\nNameError: name 'next_smallest' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/91",
+   "pass": false,
+   "detail": "):\n  File \"/tmp/tmpvh_q65g7/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 18, in <module>\nNameError: name 'is_bored' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/92",
+   "pass": false,
+   "detail": "t):\n  File \"/tmp/tmpzj1erzii/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 21, in <module>\nNameError: name 'any_int' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/93",
+   "pass": false,
+   "detail": "st):\n  File \"/tmp/tmpryxn455k/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 16, in <module>\nNameError: name 'encode' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/94",
+   "pass": false,
+   "detail": ":\n  File \"/tmp/tmpxo850_vv/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 28, in <module>\nNameError: name 'skjkasdkd' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/95",
+   "pass": false,
+   "detail": "le \"/tmp/tmpncdhv7q5/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 19, in <module>\nNameError: name 'check_dict_case' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/96",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/97",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/98",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/99",
+   "pass": false,
+   "detail": "le \"/tmp/tmpgb74696p/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 16, in <module>\nNameError: name 'closest_integer' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/100",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/101",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/102",
+   "pass": false,
+   "detail": "\n  File \"/tmp/tmp55aczbzi/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 19, in <module>\nNameError: name 'choose_num' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/103",
+   "pass": false,
+   "detail": "  File \"/tmp/tmpq2b1fiag/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 24, in <module>\nNameError: name 'rounded_avg' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/104",
+   "pass": false,
+   "detail": "File \"/tmp/tmpgj2ta520/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 16, in <module>\nNameError: name 'unique_digits' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/105",
+   "pass": false,
+   "detail": ":\n  File \"/tmp/tmp88alfpee/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 18, in <module>\nNameError: name 'by_length' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/106",
+   "pass": false,
+   "detail": "ll last):\n  File \"/tmp/tmpg9u36as1/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 11, in <module>\nNameError: name 'f' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/107",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/108",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "task_id": "HumanEval/109",
+   "pass": false,
+   "detail": "File \"/tmp/tmpt9cnwa5m/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 14, in <module>\nNameError: name 'move_one_ball' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/110",
+   "pass": false,
+   "detail": "):\n  File \"/tmp/tmp5lf_l9z6/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 18, in <module>\nNameError: name 'exchange' is not defined\n"
+  },
+  {
+   "task_id": "HumanEval/111",
+   "pass": false,
+   "detail": " File \"<string>\", line 2\n    \"\"\"Given a string representing a space separated lowercase letters, return a dictionary\n    ^\nSyntaxError: unterminated triple-quoted string literal (detected at line 27)\n"
+  }
+ ]
+}

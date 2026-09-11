@@ -1,0 +1,43 @@
+{
+ "n": 3,
+ "pass": 1,
+ "pass@1": 0.3333333333333333,
+ "max_tokens": 8192,
+ "truncated": 2,
+ "label": "glm5",
+ "rows": [
+  {
+   "task_id": "HumanEval/0",
+   "pass": false,
+   "detail": "\"/tmp/tmppot_aprq/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 22, in <module>\nNameError: name 'has_close_elements' is not defined\n",
+   "completion_tokens": 8192,
+   "finish_reason": "length",
+   "truncated": true,
+   "has_def": false,
+   "reply_head": "",
+   "reply_tail": ""
+  },
+  {
+   "task_id": "HumanEval/1",
+   "pass": true,
+   "detail": "",
+   "completion_tokens": 809,
+   "finish_reason": "stop",
+   "truncated": false,
+   "has_def": true,
+   "reply_head": "```python\nfrom typing import List\n\n\ndef separate_paren_groups(paren_string: str) -> List[str]:\n    \"\"\" Input to this function is a string containing multiple groups of nested parentheses. Your goal is to\n    separate those group into separate strings and return the list of those.\n    Separate groups are balanced (each open brace is properly closed) and not nested within each other\n    Ignore any s",
+   "reply_tail": "tring:\n        if char == '(':\n            current_depth += 1\n            current_string.append(char)\n        elif char == ')':\n            current_depth -= 1\n            current_string.append(char)\n            if current_depth == 0:\n                result.append(''.join(current_string))\n                current_string = []\n        # Ignore any other characters (e.g., spaces)\n\n    return result\n```"
+  },
+  {
+   "task_id": "HumanEval/2",
+   "pass": false,
+   "detail": "le \"/tmp/tmphzdsh4wi/run.py\", line 5, in <module>\n    exec(open(sys.argv[1]).read(), {\"__name__\": \"__main__\"})\n  File \"<string>\", line 17, in <module>\nNameError: name 'truncate_number' is not defined\n",
+   "completion_tokens": 8192,
+   "finish_reason": "length",
+   "truncated": true,
+   "has_def": false,
+   "reply_head": "",
+   "reply_tail": ""
+  }
+ ]
+}

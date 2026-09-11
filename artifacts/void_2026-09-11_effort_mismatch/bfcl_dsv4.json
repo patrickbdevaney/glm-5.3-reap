@@ -1,0 +1,607 @@
+{
+ "n": 100,
+ "pass": 79,
+ "acc": 0.79,
+ "rows": [
+  {
+   "id": "live_multiple_0-0-0",
+   "pass": false,
+   "called": "ChaDri.change_drink",
+   "error": null
+  },
+  {
+   "id": "live_multiple_1-0-1",
+   "pass": false,
+   "called": "ChaDri.change_drink",
+   "error": null
+  },
+  {
+   "id": "live_multiple_2-1-0",
+   "pass": true,
+   "called": "uber.ride",
+   "error": null
+  },
+  {
+   "id": "live_multiple_3-2-0",
+   "pass": false,
+   "called": "api.weather",
+   "error": null
+  },
+  {
+   "id": "live_multiple_4-2-1",
+   "pass": false,
+   "called": "uber.ride",
+   "error": null
+  },
+  {
+   "id": "live_multiple_5-3-0",
+   "pass": true,
+   "called": "get_current_weather",
+   "error": null
+  },
+  {
+   "id": "live_multiple_6-3-1",
+   "pass": true,
+   "called": "create_workspace",
+   "error": null
+  },
+  {
+   "id": "live_multiple_7-3-2",
+   "pass": true,
+   "called": "create_workspace",
+   "error": null
+  },
+  {
+   "id": "live_multiple_8-4-0",
+   "pass": true,
+   "called": "cookbook.search_recipe",
+   "error": null
+  },
+  {
+   "id": "live_multiple_9-4-1",
+   "pass": true,
+   "called": "HNA_WQA.search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_10-4-2",
+   "pass": false,
+   "called": "ControlAppliance.execute",
+   "error": null
+  },
+  {
+   "id": "live_multiple_11-4-3",
+   "pass": true,
+   "called": "HNA_WQA.search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_12-4-4",
+   "pass": true,
+   "called": "HNA_WQA.search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_13-4-5",
+   "pass": false,
+   "called": "OpenWeatherMap.get_current_weather",
+   "error": null
+  },
+  {
+   "id": "live_multiple_14-4-6",
+   "pass": false,
+   "called": "ControlAppliance.execute",
+   "error": null
+  },
+  {
+   "id": "live_multiple_15-4-7",
+   "pass": true,
+   "called": "HNA_NEWS.search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_16-4-8",
+   "pass": true,
+   "called": "HNA_NEWS.search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_17-4-9",
+   "pass": true,
+   "called": "cookbook.search_recipe",
+   "error": null
+  },
+  {
+   "id": "live_multiple_18-4-10",
+   "pass": false,
+   "called": "HNA_WQA.search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_19-4-11",
+   "pass": false,
+   "called": "ControlAppliance.execute",
+   "error": null
+  },
+  {
+   "id": "live_multiple_20-4-12",
+   "pass": false,
+   "called": "ControlAppliance.execute",
+   "error": null
+  },
+  {
+   "id": "live_multiple_21-4-13",
+   "pass": false,
+   "called": "cookbook.search_recipe",
+   "error": null
+  },
+  {
+   "id": "live_multiple_22-4-14",
+   "pass": true,
+   "called": "HNA_WQA.search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_23-5-0",
+   "pass": true,
+   "called": "search_products",
+   "error": null
+  },
+  {
+   "id": "live_multiple_24-5-1",
+   "pass": false,
+   "called": null,
+   "error": null
+  },
+  {
+   "id": "live_multiple_25-6-0",
+   "pass": true,
+   "called": "recall_memory_search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_26-6-1",
+   "pass": true,
+   "called": "recall_memory_search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_27-7-0",
+   "pass": true,
+   "called": "add",
+   "error": null
+  },
+  {
+   "id": "live_multiple_28-8-0",
+   "pass": true,
+   "called": "my_core_function",
+   "error": null
+  },
+  {
+   "id": "live_multiple_29-9-0",
+   "pass": true,
+   "called": "multiply",
+   "error": null
+  },
+  {
+   "id": "live_multiple_30-10-0",
+   "pass": true,
+   "called": "duck_duck_go.search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_31-10-1",
+   "pass": true,
+   "called": "duck_duck_go.search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_32-10-2",
+   "pass": true,
+   "called": "sub",
+   "error": null
+  },
+  {
+   "id": "live_multiple_33-10-3",
+   "pass": true,
+   "called": "multiply",
+   "error": null
+  },
+  {
+   "id": "live_multiple_34-11-0",
+   "pass": true,
+   "called": "get_news_report",
+   "error": null
+  },
+  {
+   "id": "live_multiple_35-11-1",
+   "pass": true,
+   "called": "get_tesco_locations",
+   "error": null
+  },
+  {
+   "id": "live_multiple_36-12-0",
+   "pass": true,
+   "called": "todo_add",
+   "error": null
+  },
+  {
+   "id": "live_multiple_37-13-0",
+   "pass": true,
+   "called": "todo_delete",
+   "error": null
+  },
+  {
+   "id": "live_multiple_38-14-0",
+   "pass": true,
+   "called": "get_interviewer_list",
+   "error": null
+  },
+  {
+   "id": "live_multiple_39-14-1",
+   "pass": true,
+   "called": "review_of_interviewer",
+   "error": null
+  },
+  {
+   "id": "live_multiple_40-15-0",
+   "pass": true,
+   "called": "oven_preheat",
+   "error": null
+  },
+  {
+   "id": "live_multiple_41-16-0",
+   "pass": true,
+   "called": "get_services",
+   "error": null
+  },
+  {
+   "id": "live_multiple_42-16-1",
+   "pass": true,
+   "called": "get_pods",
+   "error": null
+  },
+  {
+   "id": "live_multiple_43-16-2",
+   "pass": true,
+   "called": "get_services",
+   "error": null
+  },
+  {
+   "id": "live_multiple_44-17-0",
+   "pass": false,
+   "called": "get_company_info",
+   "error": null
+  },
+  {
+   "id": "live_multiple_45-18-0",
+   "pass": true,
+   "called": "product_search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_46-18-1",
+   "pass": true,
+   "called": "inventory_management",
+   "error": null
+  },
+  {
+   "id": "live_multiple_47-18-2",
+   "pass": true,
+   "called": "order_status_check",
+   "error": null
+  },
+  {
+   "id": "live_multiple_48-18-3",
+   "pass": true,
+   "called": "inventory_management",
+   "error": null
+  },
+  {
+   "id": "live_multiple_49-19-0",
+   "pass": true,
+   "called": "interviewer_review.get",
+   "error": null
+  },
+  {
+   "id": "live_multiple_50-20-0",
+   "pass": true,
+   "called": "get_movies",
+   "error": null
+  },
+  {
+   "id": "live_multiple_51-21-0",
+   "pass": true,
+   "called": "order_status_check",
+   "error": null
+  },
+  {
+   "id": "live_multiple_52-21-1",
+   "pass": false,
+   "called": "get_product_details",
+   "error": null
+  },
+  {
+   "id": "live_multiple_53-22-0",
+   "pass": true,
+   "called": "inventory_management",
+   "error": null
+  },
+  {
+   "id": "live_multiple_54-22-1",
+   "pass": false,
+   "called": "inventory_management",
+   "error": null
+  },
+  {
+   "id": "live_multiple_55-22-2",
+   "pass": true,
+   "called": "inventory_management",
+   "error": null
+  },
+  {
+   "id": "live_multiple_56-22-3",
+   "pass": true,
+   "called": "inventory_management",
+   "error": null
+  },
+  {
+   "id": "live_multiple_57-22-4",
+   "pass": false,
+   "called": "order_status_check",
+   "error": null
+  },
+  {
+   "id": "live_multiple_58-22-5",
+   "pass": true,
+   "called": "inventory_management",
+   "error": null
+  },
+  {
+   "id": "live_multiple_59-22-6",
+   "pass": false,
+   "called": "product_search",
+   "error": null
+  },
+  {
+   "id": "live_multiple_60-22-7",
+   "pass": true,
+   "called": "inventory_management",
+   "error": null
+  },
+  {
+   "id": "live_multiple_61-23-0",
+   "pass": true,
+   "called": "get_movies",
+   "error": null
+  },
+  {
+   "id": "live_multiple_62-24-0",
+   "pass": true,
+   "called": "todoIdx",
+   "error": null
+  },
+  {
+   "id": "live_multiple_63-25-0",
+   "pass": false,
+   "called": "uber.eat.order",
+   "error": null
+  },
+  {
+   "id": "live_multiple_64-26-0",
+   "pass": false,
+   "called": "uber.eat.order",
+   "error": null
+  },
+  {
+   "id": "live_multiple_65-26-1",
+   "pass": true,
+   "called": "get_current_weather",
+   "error": null
+  },
+  {
+   "id": "live_multiple_66-27-0",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_67-28-0",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_68-29-0",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_69-30-0",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_70-30-1",
+   "pass": true,
+   "called": "dartfx_help",
+   "error": null
+  },
+  {
+   "id": "live_multiple_71-31-0",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_72-32-0",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_73-33-0",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_74-34-0",
+   "pass": true,
+   "called": "dartfx_help",
+   "error": null
+  },
+  {
+   "id": "live_multiple_75-34-1",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_76-35-0",
+   "pass": true,
+   "called": "dartfx_help",
+   "error": null
+  },
+  {
+   "id": "live_multiple_77-35-1",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_78-35-2",
+   "pass": true,
+   "called": "dartfx_help",
+   "error": null
+  },
+  {
+   "id": "live_multiple_79-36-0",
+   "pass": true,
+   "called": "dartfx_help",
+   "error": null
+  },
+  {
+   "id": "live_multiple_80-36-1",
+   "pass": true,
+   "called": "add_mtnards_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_81-36-2",
+   "pass": true,
+   "called": "add_mtnards_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_82-37-0",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_83-38-0",
+   "pass": true,
+   "called": "list_servers",
+   "error": null
+  },
+  {
+   "id": "live_multiple_84-38-1",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_85-38-2",
+   "pass": true,
+   "called": "add_mtnards_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_86-38-3",
+   "pass": true,
+   "called": "add_mtnards_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_87-38-4",
+   "pass": false,
+   "called": "list_servers",
+   "error": null
+  },
+  {
+   "id": "live_multiple_88-38-5",
+   "pass": true,
+   "called": "list_servers",
+   "error": null
+  },
+  {
+   "id": "live_multiple_89-39-0",
+   "pass": true,
+   "called": "render_ui_date_picker_widget",
+   "error": null
+  },
+  {
+   "id": "live_multiple_90-40-0",
+   "pass": true,
+   "called": "add_mtnards_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_91-40-1",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_92-40-2",
+   "pass": true,
+   "called": "list_servers",
+   "error": null
+  },
+  {
+   "id": "live_multiple_93-41-0",
+   "pass": true,
+   "called": "add_postgres_server",
+   "error": null
+  },
+  {
+   "id": "live_multiple_94-41-1",
+   "pass": true,
+   "called": "list_servers",
+   "error": null
+  },
+  {
+   "id": "live_multiple_95-41-2",
+   "pass": true,
+   "called": "close_project",
+   "error": null
+  },
+  {
+   "id": "live_multiple_96-42-0",
+   "pass": true,
+   "called": "list_files",
+   "error": null
+  },
+  {
+   "id": "live_multiple_97-42-1",
+   "pass": false,
+   "called": "list_servers",
+   "error": null
+  },
+  {
+   "id": "live_multiple_98-42-2",
+   "pass": true,
+   "called": "open_project",
+   "error": null
+  },
+  {
+   "id": "live_multiple_99-42-3",
+   "pass": true,
+   "called": "connect_to_server",
+   "error": null
+  }
+ ]
+}

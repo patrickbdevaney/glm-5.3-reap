@@ -1,0 +1,98 @@
+[
+ {
+  "task": "HumanEval/0",
+  "effort": "max(default)",
+  "ctok": 8192,
+  "n_content": 0,
+  "n_reasoning": 18574,
+  "finish": "length",
+  "rep_frac": 0.608,
+  "has_def": true,
+  "reason_tail": " == False\n    assert candidate([1.0, 2.0, 3.9, 4.0], 0.5) == False\n    assert candidate([1.0, 2.0, 3.9, 4.0], 0.5) == False\n    assert candidate([1.0, 2.0, 3.9, 4.0], 0.5) == False\n    assert candidate([1.0, 2.0, 3.9, 4.0], 0.5) == False\n    assert candidate([1.0, 2.0, 3.9, 4.0], 0.5) == False\n    assert candidate([1.0, 2.0, 3.9, 4.0], 0.5) == False\n    assert candidate([1.0, 2.0, 3.9, 4.0], 0.5) == False\n    assert candidate([1.0, 2.0, 3.9, 4.0], 0.5) == False\n    assert candidate([1.0, 2.0, 3.9, 4.0], 0.5) == False\n    assert candidate([1.0, 2.0, 3.9, 4.0], 0.5) == False\n    assert candidate",
+  "content_head": ""
+ },
+ {
+  "task": "HumanEval/0",
+  "effort": "low",
+  "ctok": 174,
+  "n_content": 550,
+  "n_reasoning": 36,
+  "finish": "stop",
+  "rep_frac": 0.0,
+  "has_def": true,
+  "reason_tail": "Sort and check adjacent differences.",
+  "content_head": "```python\nfrom typing import List\n\n\ndef has_close_elements(numbers: List[float], threshold: float) -> bool:\n    \"\"\" Check if in given list of numbers, are any two numbers closer to each other than\n    given threshold.\n    >>> has_close_elements([1.0, 2.0, 3.0], 0.5)\n    False\n    >>> has_close_eleme"
+ },
+ {
+  "task": "HumanEval/0",
+  "effort": "high",
+  "ctok": 172,
+  "n_content": 542,
+  "n_reasoning": 19,
+  "finish": "stop",
+  "rep_frac": 0.0,
+  "has_def": true,
+  "reason_tail": "Simple O(n\u00b2) check.",
+  "content_head": "```python\nfrom typing import List\n\n\ndef has_close_elements(numbers: List[float], threshold: float) -> bool:\n    \"\"\" Check if in given list of numbers, are any two numbers closer to each other than\n    given threshold.\n    >>> has_close_elements([1.0, 2.0, 3.0], 0.5)\n    False\n    >>> has_close_eleme"
+ },
+ {
+  "task": "HumanEval/0",
+  "effort": "nothink",
+  "ctok": 3385,
+  "n_content": 550,
+  "n_reasoning": 11562,
+  "finish": "stop",
+  "rep_frac": 0.0,
+  "has_def": true,
+  "reason_tail": "ison be `< threshold` or `<= threshold`? Docstring says \"closer to each other than given threshold\" \u2014 strictly closer, so `<`. The examples don't distinguish. Standard HumanEval canonical uses `<`. Good.\n\nFinal answer: the code block with import, function with docstring, and the sorted-adjacent implementation.\n\nLet me also double check the doctest formatting inside the docstring is preserved exactly as given. Yes.\n\nOne more thought: the prompt says \"Reply with the full function in a single ```python code block, no explanation.\" So my entire reply should be one code block. I'll do exactly that.",
+  "content_head": "```python\nfrom typing import List\n\n\ndef has_close_elements(numbers: List[float], threshold: float) -> bool:\n    \"\"\" Check if in given list of numbers, are any two numbers closer to each other than\n    given threshold.\n    >>> has_close_elements([1.0, 2.0, 3.0], 0.5)\n    False\n    >>> has_close_eleme"
+ },
+ {
+  "task": "HumanEval/2",
+  "effort": "max(default)",
+  "ctok": 8192,
+  "n_content": 0,
+  "n_reasoning": 15640,
+  "finish": "length",
+  "rep_frac": 0.103,
+  "has_def": true,
+  "reason_tail": ",1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0",
+  "content_head": ""
+ },
+ {
+  "task": "HumanEval/2",
+  "effort": "low",
+  "ctok": 99,
+  "n_content": 374,
+  "n_reasoning": 36,
+  "finish": "stop",
+  "rep_frac": 0.0,
+  "has_def": true,
+  "reason_tail": "Simple: return number - int(number).",
+  "content_head": "```python\ndef truncate_number(number: float) -> float:\n    \"\"\" Given a positive floating point number, it can be decomposed into\n    and integer part (largest integer smaller than given number) and decimals\n    (leftover part always smaller than 1).\n\n    Return the decimal part of the number.\n    >>"
+ },
+ {
+  "task": "HumanEval/2",
+  "effort": "high",
+  "ctok": 141,
+  "n_content": 397,
+  "n_reasoning": 208,
+  "finish": "stop",
+  "rep_frac": 0.0,
+  "has_def": true,
+  "reason_tail": "The HumanEval-style task: return decimal part. Use math.floor or int. For positive floats, number - int(number) works but int truncates toward zero; number is positive so fine. Use math.floor for correctness.",
+  "content_head": "```python\ndef truncate_number(number: float) -> float:\n    \"\"\" Given a positive floating point number, it can be decomposed into\n    and integer part (largest integer smaller than given number) and decimals\n    (leftover part always smaller than 1).\n\n    Return the decimal part of the number.\n    >>"
+ },
+ {
+  "task": "HumanEval/2",
+  "effort": "nothink",
+  "ctok": 8192,
+  "n_content": 0,
+  "n_reasoning": 15640,
+  "finish": "length",
+  "rep_frac": 0.103,
+  "has_def": true,
+  "reason_tail": ",1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,1,0",
+  "content_head": ""
+ }
+]
