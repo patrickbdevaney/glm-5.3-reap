@@ -1,0 +1,2 @@
+./scripts/mtp_offload.sh: line 27: 3962855 Segmentation fault      GGML_OP_OFFLOAD_MIN_BATCH=$MB timeout 3600 "$BIN/llama-bench" -m "$M" -ngl 24 -p 2,3,4,8,16,32 -n 1 -r 2 -t 8 >> "$LOG" 2>&1
+./scripts/mtp_offload.sh: line 27: 3963323 Segmentation fault      GGML_OP_OFFLOAD_MIN_BATCH=$MB timeout 3600 "$BIN/llama-bench" -m "$M" -ngl 24 -p 2,3,4,8,16,32 -n 1 -r 2 -t 8 >> "$LOG" 2>&1

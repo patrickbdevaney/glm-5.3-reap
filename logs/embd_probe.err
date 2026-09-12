@@ -1,0 +1,8 @@
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 125771 MiB):
+  Device 0: NVIDIA Thor, compute capability 11.0, VMM: yes, VRAM: 125771 MiB
+main: n_parallel == 1 -> unified KV cache is enabled
+common_init_result: fitting params to device memory, for bugs during this step try to reproduce them with -fit off, or provide --verbose logs if the bug only occurs with -fit on
+/home/patrickd/glm5-llama.cpp/ggml/src/ggml.c:1744: GGML_ASSERT(obj_new) failed
+warning: 30	../sysdeps/unix/sysv/linux/wait4.c: No such file or directory
+timeout: the monitored command dumped core
+./scripts/overnight.sh: line 27: 2573431 Aborted                 "$@"

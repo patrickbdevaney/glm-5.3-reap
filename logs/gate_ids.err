@@ -1,0 +1,196 @@
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 125771 MiB):
+  Device 0: NVIDIA Thor, compute capability 11.0, VMM: yes, VRAM: 125771 MiB
+main: n_parallel == 1 -> unified KV cache is enabled
+common_init_result: fitting params to device memory, for bugs during this step try to reproduce them with -fit off, or provide --verbose logs if the bug only occurs with -fit on
+llama_params_fit_impl: projected to use 42283 MiB of device memory vs. 58667 MiB of free device memory
+llama_params_fit_impl: will leave 16384 >= 1024 MiB of free device memory, no changes needed
+llama_params_fit: successfully fit params to free device memory
+llama_params_fit: fitting params to free memory took 8.84 seconds
+llama_model_load_from_file_impl: using device CUDA0 (NVIDIA Thor) (0000:01:00.0) - 85367 MiB free
+llama_model_loader: loaded meta data with 62 key-value pairs and 1412 tensors from gguf/GLM-5.3-Flash-REAP50-IQ3_M.gguf (version GGUF V3 (latest))
+llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
+llama_model_loader: - kv   0:                       general.architecture str              = glm5-next
+llama_model_loader: - kv   1:                               general.type str              = model
+llama_model_loader: - kv   2:                     general.sampling.top_p f32              = 0.950000
+llama_model_loader: - kv   3:                      general.sampling.temp f32              = 1.000000
+llama_model_loader: - kv   4:                               general.name str              = Glm 5.3 Flash Reap50 Fp8 Pass2
+llama_model_loader: - kv   5:                         general.size_label str              = 144x10B
+llama_model_loader: - kv   6:                            general.license str              = mit
+llama_model_loader: - kv   7:                   general.base_model.count u32              = 1
+llama_model_loader: - kv   8:                  general.base_model.0.name str              = GLM 5.3 Flash
+llama_model_loader: - kv   9:          general.base_model.0.organization str              = Zai Org
+llama_model_loader: - kv  10:              general.base_model.0.repo_url str              = https://huggingface.co/zai-org/GLM-5....
+llama_model_loader: - kv  11:                               general.tags arr[str,6]       = ["reap", "moe", "pruning", "glm5_next...
+llama_model_loader: - kv  12:                      glm5-next.block_count u32              = 46
+llama_model_loader: - kv  13:                   glm5-next.context_length u32              = 1048576
+llama_model_loader: - kv  14:                 glm5-next.embedding_length u32              = 4096
+llama_model_loader: - kv  15:              glm5-next.feed_forward_length u32              = 12288
+llama_model_loader: - kv  16:             glm5-next.attention.head_count u32              = 64
+llama_model_loader: - kv  17:          glm5-next.attention.head_count_kv arr[i32,46]      = [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, ...
+llama_model_loader: - kv  18: glm5-next.attention.layer_norm_rms_epsilon f32              = 0.000010
+llama_model_loader: - kv  19:                glm5-next.expert_used_count u32              = 8
+llama_model_loader: - kv  20:               glm5-next.expert_group_count u32              = 1
+llama_model_loader: - kv  21:          glm5-next.expert_group_used_count u32              = 1
+llama_model_loader: - kv  22:               glm5-next.expert_gating_func u32              = 2
+llama_model_loader: - kv  23:             glm5-next.attention.key_length u32              = 512
+llama_model_loader: - kv  24:           glm5-next.attention.value_length u32              = 0
+llama_model_loader: - kv  25:                       glm5-next.vocab_size u32              = 154880
+llama_model_loader: - kv  26:                  glm5-next.ssm.conv_kernel u32              = 4
+llama_model_loader: - kv  27:                     glm5-next.kda.head_dim u32              = 128
+llama_model_loader: - kv  28:             glm5-next.ssm.gate_lower_bound f32              = -5.000000
+llama_model_loader: - kv  29:             glm5-next.rope.dimension_count u32              = 0
+llama_model_loader: - kv  30:            glm5-next.attention.q_lora_rank u32              = 1536
+llama_model_loader: - kv  31:           glm5-next.attention.kv_lora_rank u32              = 512
+llama_model_loader: - kv  32:         glm5-next.attention.key_length_mla u32              = 256
+llama_model_loader: - kv  33:       glm5-next.attention.value_length_mla u32              = 256
+llama_model_loader: - kv  34:                     glm5-next.expert_count u32              = 144
+llama_model_loader: - kv  35:       glm5-next.expert_feed_forward_length u32              = 2048
+llama_model_loader: - kv  36:              glm5-next.expert_shared_count u32              = 1
+llama_model_loader: - kv  37:        glm5-next.leading_dense_block_count u32              = 3
+llama_model_loader: - kv  38:             glm5-next.expert_weights_scale f32              = 2.500000
+llama_model_loader: - kv  39:              glm5-next.expert_weights_norm bool             = true
+llama_model_loader: - kv  40:                     glm5-next.swiglu_limit f32              = 10.000000
+llama_model_loader: - kv  41:     glm5-next.attention.indexer.head_count u32              = 32
+llama_model_loader: - kv  42:     glm5-next.attention.indexer.key_length u32              = 128
+llama_model_loader: - kv  43:          glm5-next.attention.indexer.top_k u32              = 2048
+llama_model_loader: - kv  44:                glm5-next.attention.hc.mult u32              = 4
+llama_model_loader: - kv  45:      glm5-next.attention.hc.sinkhorn_iters u32              = 20
+llama_model_loader: - kv  46:                 glm5-next.attention.hc.eps f32              = 0.000001
+llama_model_loader: - kv  47:             glm5-next.nextn_predict_layers u32              = 1
+llama_model_loader: - kv  48:                       tokenizer.ggml.model str              = gpt2
+llama_model_loader: - kv  49:                         tokenizer.ggml.pre str              = glm4
+llama_model_loader: - kv  50:                      tokenizer.ggml.tokens arr[str,154880]  = ["!", "\"", "#", "$", "%", "&", "'", ...
+llama_model_loader: - kv  51:                  tokenizer.ggml.token_type arr[i32,154880]  = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ...
+llama_model_loader: - kv  52:                      tokenizer.ggml.merges arr[str,321649]  = ["Ġ Ġ", "Ġ ĠĠĠ", "ĠĠ ĠĠ", "...
+llama_model_loader: - kv  53:                tokenizer.ggml.eos_token_id u32              = 154820
+llama_model_loader: - kv  54:            tokenizer.ggml.padding_token_id u32              = 154820
+llama_model_loader: - kv  55:                    tokenizer.chat_template str              = [gMASK]<sop>\n{%- set effective_reason...
+llama_model_loader: - kv  56:               general.quantization_version u32              = 2
+llama_model_loader: - kv  57:                          general.file_type u32              = 27
+llama_model_loader: - kv  58:                      quantize.imatrix.file str              = artifacts/imatrix-GLM-5.3-Flash-REAP5...
+llama_model_loader: - kv  59:                   quantize.imatrix.dataset str              = artifacts/imatrix_calib.txt
+llama_model_loader: - kv  60:             quantize.imatrix.entries_count u32              = 765
+llama_model_loader: - kv  61:              quantize.imatrix.chunks_count u32              = 347
+llama_model_loader: - type  f32:  728 tensors
+llama_model_loader: - type q4_K:   87 tensors
+llama_model_loader: - type q6_K:    1 tensors
+llama_model_loader: - type iq4_nl:   68 tensors
+llama_model_loader: - type iq3_s:  528 tensors
+print_info: file format = GGUF V3 (latest)
+print_info: file type   = IQ3_S mix - 3.66 bpw
+print_info: file size   = 67.17 GiB (3.50 BPW) 
+load: 0 unused tokens
+load: printing all EOG tokens:
+load:   - 154820 ('<|endoftext|>')
+load: special tokens cache size = 36
+load: token to piece cache size = 0.9811 MB
+print_info: arch                  = glm5-next
+print_info: vocab_only            = 0
+print_info: no_alloc              = 0
+print_info: n_ctx_train           = 1048576
+print_info: n_embd                = 4096
+print_info: n_embd_inp            = 4096
+print_info: n_layer               = 46
+print_info: n_head                = 64
+print_info: n_head_kv             = [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1]
+print_info: n_rot                 = 0
+print_info: n_swa                 = 0
+print_info: is_swa_any            = 0
+print_info: n_embd_head_k         = 512
+print_info: n_embd_head_v         = 0
+print_info: n_gqa                 = [0, 0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 64, 0, 0, 0, 64, 0, 64]
+print_info: n_embd_k_gqa          = [0, 0, 0, 512, 0, 0, 0, 512, 0, 0, 0, 512, 0, 0, 0, 512, 0, 0, 0, 512, 0, 0, 0, 512, 0, 0, 0, 512, 0, 0, 0, 512, 0, 0, 0, 512, 0, 0, 0, 512, 0, 0, 0, 512, 0, 512]
+print_info: n_embd_v_gqa          = 0
+print_info: f_norm_eps            = 0.0e+00
+print_info: f_norm_rms_eps        = 1.0e-05
+print_info: f_clamp_kqv           = 0.0e+00
+print_info: f_max_alibi_bias      = 0.0e+00
+print_info: f_logit_scale         = 0.0e+00
+print_info: f_attn_scale          = 0.0e+00
+print_info: n_ff                  = 12288
+print_info: n_expert              = 144
+print_info: n_expert_used         = 8
+print_info: n_expert_groups       = 1
+print_info: n_group_used          = 1
+print_info: causal attn           = 1
+print_info: pooling type          = -1
+print_info: rope type             = -1
+print_info: rope scaling          = linear
+print_info: freq_base_train       = 10000.0
+print_info: freq_scale_train      = 1
+print_info: n_ctx_orig_yarn       = 1048576
+print_info: rope_yarn_log_mul     = 0.0000
+print_info: rope_finetuned        = unknown
+print_info: model type            = A13B
+print_info: model params          = 164.91 B
+print_info: general.name          = Glm 5.3 Flash Reap50 Fp8 Pass2
+print_info: vocab type            = BPE
+print_info: n_vocab               = 154880
+print_info: n_merges              = 321649
+print_info: EOS token             = 154820 '<|endoftext|>'
+print_info: EOT token             = 154820 '<|endoftext|>'
+print_info: PAD token             = 154820 '<|endoftext|>'
+print_info: LF token              = 198 'Ċ'
+print_info: FIM PRE token         = 154838 '<|code_prefix|>'
+print_info: FIM SUF token         = 154840 '<|code_suffix|>'
+print_info: FIM MID token         = 154839 '<|code_middle|>'
+print_info: EOG token             = 154820 '<|endoftext|>'
+print_info: max token length      = 1024
+load_tensors: loading model tensors, this can take a while... (mmap = true, direct_io = false)
+load_tensors: offloading output layer to GPU
+load_tensors: offloading 15 repeating layers to GPU
+load_tensors: offloaded 16/47 layers to GPU
+load_tensors:   CPU_Mapped model buffer size = 66710.49 MiB
+load_tensors:        CUDA0 model buffer size = 23979.13 MiB
+....................................................................................................
+common_init_result: added <|endoftext|> logit bias = -inf
+llama_init_from_model: model default pooling_type is [-1], but [0] was specified
+llama_context: constructing llama_context
+llama_context: n_seq_max     = 256
+llama_context: n_ctx         = 2048
+llama_context: n_ctx_seq     = 2048
+llama_context: n_batch       = 2048
+llama_context: n_ubatch      = 2048
+llama_context: causal_attn   = 1
+llama_context: flash_attn    = auto
+llama_context: kv_unified    = true
+llama_context: freq_base     = 10000.0
+llama_context: freq_scale    = 1
+llama_context: n_ctx_seq (2048) < n_ctx_train (1048576) -- the full capacity of the model will not be utilized
+llama_context:  CUDA_Host  output buffer size =   155.25 MiB
+llama_kv_cache:        CPU KV buffer size =    14.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =     8.00 MiB
+llama_kv_cache: size =   22.00 MiB (  2048 cells,  11 layers, 256/1 seqs), K (f16):   22.00 MiB, V (f16):    0.00 MiB
+llama_kv_cache: attn_rot_k = 0
+llama_kv_cache: attn_rot_v = 0
+llama_memory_recurrent:        CPU RS buffer size = 26304.00 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size = 10960.00 MiB
+llama_memory_recurrent: size = 37264.00 MiB (   256 cells,  46 layers, 256 seqs), R (f32): 2448.00 MiB, S (f32): 34816.00 MiB
+sched_reserve: reserving ...
+sched_reserve: layer 3 is assigned to device CPU but the Flash Attention tensor is assigned to device CUDA0 (usually due to missing support)
+sched_reserve: Flash Attention was auto, set to disabled
+sched_reserve: resolving fused Gated Delta Net support:
+sched_reserve: layer 0 is assigned to device CPU but the fused Gated Delta Net tensor is assigned to device CUDA0 (usually due to missing support)
+sched_reserve: fused Gated Delta Net (autoregressive) not supported, set to disabled
+sched_reserve: layer 0 is assigned to device CPU but the fused Gated Delta Net tensor is assigned to device CUDA0 (usually due to missing support)
+sched_reserve: fused Gated Delta Net (chunked) not supported, set to disabled
+sched_reserve:      CUDA0 compute buffer size =  7336.00 MiB
+sched_reserve:  CUDA_Host compute buffer size =  1072.03 MiB
+sched_reserve: graph nodes  = 12267 (with bs=2048), 9717 (with bs=1)
+sched_reserve: graph splits = 837
+sched_reserve: reserve took 15740.33 ms, sched copies = 1
+common_init_from_params: warming up the model with an empty run - please wait ... (--no-warmup to disable)
+
+system_info: n_threads = 14 (n_threads_batch = 14) / 14 | CUDA : ARCHS = 1100 | USE_GRAPHS = 1 | PEER_MAX_BATCH_SIZE = 128 | CPU : NEON = 1 | ARM_FMA = 1 | FP16_VA = 1 | MATMUL_INT8 = 1 | SVE = 1 | DOTPROD = 1 | SVE_CNT = 16 | OPENMP = 1 | REPACK = 1 | 
+main: last token in the prompt is not SEP or EOS
+main: 'tokenizer.ggml.add_eos_token' should be set to 'true' in the GGUF header
+main: last token in the prompt is not SEP or EOS
+main: 'tokenizer.ggml.add_eos_token' should be set to 'true' in the GGUF header
+batch_decode: n_tokens = 18, n_seq = 2
+main: wrote 18 x 4096 fp16 to artifacts/gate_ids.bin
+main: wrote 18 ids over 2 seqs to artifacts/gate_ids.bin.ids
+llama_perf_context_print:        load time =   84728.72 ms
+llama_perf_context_print: prompt eval time =  101673.31 ms /    18 tokens ( 5648.52 ms per token,     0.18 tokens per second)
+llama_perf_context_print:        eval time =       0.00 ms /     1 runs   (    0.00 ms per token,      inf tokens per second)
+llama_perf_context_print:       total time =  102161.98 ms /    19 tokens
+llama_perf_context_print:    graphs reused =          0

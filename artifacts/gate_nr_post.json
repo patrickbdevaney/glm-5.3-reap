@@ -1,0 +1,50 @@
+[
+ {
+  "prompt": "What is the capital of France? One word.",
+  "text": "1.  The user asks for the capital of France in one word.\n2.  The capital of France is Paris.\n3.  The instruction is \"One word.\" so the response should be just \"Paris\".\n4.  No additional explanation or punctuation is needed.\u0000Paris",
+  "model": "gate",
+  "tokens": 58
+ },
+ {
+  "prompt": "List the first 20 prime numbers, comma separated.",
+  "text": "\u0000<think>1.  **Analyze the User's Request**:\n    *   Task: List the first 20 prime numbers.\n    *   Format: Comma separated.\n    *   Constraint: Must be the *first* 20 prime numbers (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71).\n\n2.  **Verify the prime numbers**:\n    *   2 (prime)\n    *   3 (prime)\n    *   5 (prime)\n    *   7 (prime)\n    *   11 (prime)\n    *   13 (prime)\n    *   17 (prime)\n    *   19 (prime)\n    *   23 (prime)\n    *   29 (prime)\n    *   31 (prime)\n    *   37 (prime)\n    *   41 (prime)\n    *   43 (prime)\n    *   47 (prime)\n    *   53 (prime)\n    *   59 (prime)\n    *   61 (prime)\n    *   67 (prime)\n    *   ",
+  "model": "gate",
+  "tokens": 256
+ },
+ {
+  "prompt": "Write a Python function reverse_words(s) that reverses the word order. Code only.",
+  "text": "We need to write a Python function reverse_words(s) that reverses the word order. The user says \"Code only.\" So we should output just the code, no explanation. The function should take a string s and return a string with words reversed. We need to handle whitespace? Typically, we split by whitespace and join in reverse order. But we should consider multiple spaces? The problem says \"reverses the word order\" - likely just split on whitespace and reverse. We'll implement: return ' '.join(s.split()[::-1]) or similar. But we need to be careful about leading/trailing spaces? Usually split() handles that. So code:\n\ndef reverse_words(s):\n    return ' '.join(s.split()[::-1])\n\nBut we might want to preserve multiple spaces? The problem doesn't specify. Usually it's just word order. So that's fine.\n\nWe'll output just the function definition.\u0000```python\ndef reverse_words(s):\n    return ' '.join(s.split()[::-1])\n```",
+  "model": "gate",
+  "tokens": 210
+ },
+ {
+  "prompt": "What is 17 * 23? Just the number.",
+  "text": "We need answer just number. 17*23=391.\u0000391",
+  "model": "gate",
+  "tokens": 16
+ },
+ {
+  "prompt": "Explain in two sentences why a MoE layer routes each token to only a few experts.",
+  "text": "1.  The user asks for an explanation in exactly two sentences about why a Mixture-of-Experts (MoE) layer routes each token to only a few experts.\n2.  Key reasons: computational efficiency (sparse activation reduces FLOPs per token) and maintaining model capacity (total parameters can be large without proportional compute cost), plus it helps prevent overfitting/optimization issues by keeping expert specialization manageable.\n3.  Need to condense into two clear sentences. First sentence: efficiency/sparse compute. Second sentence: capacity/specialization without proportional cost.\u0000A MoE layer routes each token to only a few experts to keep computational cost per token low, since activating all experts would be prohibitively expensive. This sparse routing also preserves a large total parameter count for high model capacity while ensuring each expert specializes on a subset of patterns, improving efficiency and performance.",
+  "model": "gate",
+  "tokens": 178
+ },
+ {
+  "prompt": "Sort [5,3,9,1,7] ascending. Just the list.",
+  "text": "We need answer just list. Need sort ascending: [1,3,5,7,9]. Ensure just list.\u0000[1, 3, 5, 7, 9]",
+  "model": "gate",
+  "tokens": 42
+ },
+ {
+  "prompt": "Write a Python one-liner that sums the squares of 1..n.",
+  "text": "\u0000<think>We need to write a Python one-liner that sums the squares of 1..n. The user likely expects a lambda or expression. We can provide something like: sum(i*i for i in range(1, n+1)) but that's not a one-liner? It is a one-liner. Or we can use a lambda: lambda n: sum(i*i for i in range(1, n+1)). Or use formula: n*(n+1)*(2*n+1)//6. But the prompt says \"Write a Python one-liner that sums the squares of 1..n.\" So we can give a lambda or a function. Probably they want a concise expression. I'll provide both a lambda and a formula. But the instruction says \"one-liner\", so I'll give a lambda. Also note that it's \"sums the squares of 1..n\" meaning sum of i^2 for i from 1 to n inclusive. So answer: lambda n: sum(i*i for i in range(1, n+1)) or using formula: lambda n: n*(n+1)*(2*n+1)//6. I'll present both, but the formula is more efficient. The user might want",
+  "model": "gate",
+  "tokens": 256
+ },
+ {
+  "prompt": "What is the chemical symbol for gold? One word.",
+  "text": "1.  The user asks for the chemical symbol for gold, one word. The symbol is \"Au\". That's one word. I'll respond with just that.\u0000Au",
+  "model": "gate",
+  "tokens": 37
+ }
+]
