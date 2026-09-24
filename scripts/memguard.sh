@@ -32,6 +32,16 @@ CACHE_MB="${CACHE_MB:-16000}"     # tier 1: drop page cache below this
 # earlier real collapse was observed at 317 MB with a 1730 MB/s slope. A 900 MB floor killed
 # a healthy s07 at 866 MB. The LEVEL test keeps moving below the observed plateau; the SLOPE
 # test is what actually distinguishes a load from a runaway.
+# SINGLETON. Stacked instances happened three times here: each restart left the previous one
+# running, so several guards polled independently and could each fire. flock releases on exit,
+# including on kill, so a dead holder never wedges the next start.
+LOCK=/tmp/glm53-memguard.lock
+exec 8>"$LOCK"
+if ! flock -n 8; then
+    echo "[memguard $(date -Is)] another instance holds the lock - exiting" >> logs/memguard.log
+    exit 0
+fi
+
 FLOOR_MB="${FLOOR_MB:-250}"       # tier 2: kill our stage below this
 # A NORMAL MoE layer build legitimately drops ~28 GiB in ~8 s (~3500 MB/s), so a 900 MB/s
 # slope threshold fires on healthy work - it killed a run at 11 GB available doing exactly
@@ -72,7 +82,27 @@ while true; do
     while read -r _k _v _; do
       if [ "$_k" = "MemAvailable:" ]; then after=$((_v/1024)); break; fi
     done < /proc/meminfo 2>/dev/null
-    say "tier1 drop_caches at ${avail}MB -> ${after:-?}MB"
+    # MEASURED 2026-09-23: `echo 1` reclaimed NOTHING on this box for 9 hours straight
+    # (3050MB -> 3051MB, every 10 s, 8640 times a day) while 115 GiB sat unreferenced -- not in
+    # any RSS (all processes summed to 2.06 GiB), not in Cached (579 MB), not in Slab (585 MB).
+    # A single `echo 3` returned the box to 119 GiB available instantly. The pool is the nvmap
+    # driver allocator, which /proc/meminfo attributes to no one, and only the full shrinker
+    # pass releases it. Tier 1 therefore ESCALATES rather than assuming page cache, and a drop
+    # that reclaims nothing is logged as a FAILURE -- the previous version logged the no-op in
+    # exactly the same words as a success, which is why a dead guard looked healthy for months.
+    esc=""
+    if [ -n "$after" ] && [ $((after - avail)) -lt 500 ] && [ "$after" -lt "$CACHE_MB" ]; then
+      sudo -n sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null
+      esc=" escalated=3"
+      while read -r _k _v _; do
+        if [ "$_k" = "MemAvailable:" ]; then after=$((_v/1024)); break; fi
+      done < /proc/meminfo 2>/dev/null
+    fi
+    if [ -n "$after" ] && [ $((after - avail)) -lt 200 ]; then
+      say "tier1 NO-OP: ${avail}MB -> ${after}MB${esc} -- nothing reclaimable; if avail stays low the memory is held by a live allocation, not cache"
+    else
+      say "tier1 drop_caches at ${avail}MB -> ${after:-?}MB${esc}"
+    fi
     prev=""; bad=0; srate=0
     napp; continue
   fi
@@ -90,7 +120,38 @@ while true; do
 
   if [ -n "$trip" ]; then
     # match both absolute and relative launches of our stage runner
+    # The license is still narrow: this project's own compute children only, never "the biggest
+    # RSS" (RSS is precisely the number proven not to track Tegra unified allocations). It now
+    # also covers the llama.cpp workers, because the GGUF pipeline runs 93-175 GiB models
+    # OUTSIDE run_stage.py and a runaway one was previously outside the guard's remit entirely.
+    # Prefer a stage child if both exist - the orchestrator knows how to retry those.
     pid=$(pgrep -f "run_stage\.py" | head -1)
+    if [ -z "$pid" ]; then
+      # The MiMo REAP stages. Added 2026-09-23: the kernel OOM killer scores by RSS, which on
+      # Tegra is precisely the number that does NOT track the real consumer, so it repeatedly
+      # picked the wrong victim -- and with the session itself at oom_score_adj=200 the wrong
+      # victim can be the session or the desktop. Both MiMo stages now resume exactly (bucket
+      # checkpoints for the corpus, per-chunk accumulators for the pass), so a controlled kill
+      # costs one chunk and the systemd Restart=on-failure brings it straight back. That is
+      # strictly better than letting the kernel choose.
+      # video_topup added 2026-09-24: it runs the VISION TOWER, which is the allocation site
+      # that OOM-killed this box four times (MiMoVisionAttention materialises a dense
+      # [1, heads, L, L] sink bias). It was outside the licence, so a runaway there would
+      # have found no valid victim and left the kernel to choose by RSS -- the number proven
+      # not to track Tegra unified allocations. It resumes from the finished corpus and
+      # writes nothing until it completes, so killing it costs only the partial chunk.
+      pid=$(pgrep -f "python.* scripts/(build_corpus|calib_pass|video_topup|router_kd_run)\.py" | head -1)
+    fi
+    if [ -z "$pid" ]; then
+      pid=$(pgrep -f "llama-(completion|perplexity|quantize|imatrix)" | head -1)
+    fi
+    if [ -z "$pid" ]; then
+      # The Hub uploader too. Xet's upload buffers made it the largest consumer on this box and
+      # it OOMed the machine while memguard watched, because the license covered run_stage.py and
+      # the llama workers but not this. Killing it is safe: uploads resume and dedup what already
+      # landed, so nothing is lost.
+      pid=$(pgrep -f "hf upload|huggingface_hub" | head -1)
+    fi
     if [ -n "$pid" ]; then
       stg=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | awk '{print $3}')
       say "!!! $trip — killing stage ${stg:-?} pid $pid (orchestrator will retry)"
@@ -99,7 +160,7 @@ while true; do
       say "killed; MemAvailable now $(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)MB"
       bad=0; srate=0; prev=""; last_drop=$(date +%s)
     elif [ "$warned" = 0 ]; then
-      say "WARN $trip — no run_stage.py child running; doing nothing (narrow license)"
+      say "WARN $trip — no run_stage.py or llama-* child running; doing nothing (narrow license)"
       warned=1
     fi
   else
