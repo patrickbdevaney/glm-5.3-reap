@@ -7,7 +7,15 @@ neither — because that, not cleverness, is what decides feasibility here.
 
 These use accumulators and the router cache we already have. Minutes to hours of compute.
 
-### 1.1 Per-expert healing fitted in closed form  — **DONE, 2026-08-28**
+### 1.1 Per-expert healing fitted in closed form  — **BUILT 2026-08-28, REVERTED 2026-08-29**
+
+> **The end-to-end ablation rejected it.** Per-expert healing measured top-1 agreement 0.83693
+> against the per-layer scalar's 0.84238 — 11.8σ worse, every metric, every sufficiently-sampled
+> domain — despite improving held-out reconstruction residual in 41 of 42 layers. The coefficient
+> is the expert's pre-prune gate mass over its post-prune gate mass, so it suppresses precisely
+> the experts the pruned router depends on most. Reverted; the shipped correction is the scalar.
+> `research/HEALING_ABLATION.md`. The derivation below stands as written and its by-products
+> (§1.1b orthogonality, §1.1c the mean/residual split) survive the verdict.
 
 Healing was **one scalar per layer**. That scalar is the degenerate case of a least-squares
 problem: choose a coefficient per *retained* expert minimising
@@ -118,7 +126,14 @@ fit procedure, same held-out tokens, both masks keeping 144 of 288:
 **Pass 2 reduces reconstruction error by 2.5%, winning in 30 of 42 layers** (per-layer spread
 −5.8% to +10.1%; the two masks agree on 91.0% of experts). This independently corroborates the
 saliency-mass proxy measured earlier (+1.52%) — same sign, same order of magnitude, derived from
-a completely different quantity. The second sweep bought a real, if modest, improvement.
+a completely different quantity.
+
+**Confirmed end-to-end `[MEAS 2026-08-29]`**, once the healing confound was removed: pass 2 with
+scalar healing measures **0.84238** against pass 1's **0.83703**, `+0.00545` at 9.3σ. Both proxies
+had the right sign and both understated the size. Note the asymmetry this section and §1.1 make
+together: the residual was a **good** predictor for choosing a *mask* and a **bad** one for
+accepting a *correction*, because a correction can lower squared error by discarding
+token-dependent signal while a mask cannot.
 
 ## Tier 2 — needs the unpruned teacher, which surgery deletes
 
@@ -184,8 +199,12 @@ table for other reasons.
 
 ## Recommended order
 
-1. ~~Implement 1.1 and run it before `s05_heal`~~ — **done 2026-08-28**; 40 of 42 layers ship a
-   per-expert vector, mean reconstruction error 0.2914 → 0.2663 against P5's scalar.
+1. ~~Implement 1.1 and run it before `s05_heal`~~ — built 2026-08-28 (40 of 42 layers shipped a
+   per-expert vector, reconstruction error 0.2914 → 0.2663), **reverted 2026-08-29**: the
+   end-to-end ablation put it 11.8σ *behind* the scalar it replaced. The residual improved and the
+   model got worse. Rule adopted: **no weight-space correction ships on a reconstruction proxy
+   alone** — an invertible change costs one eval to test properly, and a published checkpoint to
+   not test.
 2. Let the pipeline finish and **measure** — `s09_eval`'s ΔNLL, top-1 agreement and per-domain
    drift are the first absolute numbers this project will have.
 3. Generative benchmarks once inference exists (Tier 3). Highest information per unit of work,
