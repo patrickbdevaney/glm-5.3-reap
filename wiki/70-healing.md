@@ -212,6 +212,14 @@ Relevant to A7 in `CLOUD_COUNTERFACTUAL.md`: for this quantity, more calibration
 
 ## Tier 1.1 — from one scalar per layer to one per expert `[MEAS 2026-08-28 20:30]`
 
+> **SUPERSEDED `[MEAS 2026-08-29]`.** Everything in this section is arithmetically correct and the
+> reconstruction numbers reproduce. It was nevertheless **reverted off the shipped checkpoint**:
+> an end-to-end ablation measured per-expert healing at top-1 agreement 0.83693 against the
+> per-layer scalar's 0.84238 — 11.8σ worse, on every metric, in every sufficiently-sampled domain.
+> The shipped correction is the per-layer scalar. Read this section for the derivation and the
+> by-products that survive (orthogonality, the mean/residual split), then read
+> `research/HEALING_ABLATION.md` for why the residual improved while the model got worse.
+
 P5 replaced a *derived* scalar with a *measured* one. The next step is to notice that a scalar was
 never the right object. `scripts/heal_perexpert.py` solves the least-squares problem the scalar is
 the degenerate case of:
@@ -347,3 +355,67 @@ a pruned student beating its teacher, a healing stage that scaled zero tensors.
 The generalisable defence is not more assertions inside the stage. It is that **every artifact
 which claims a transformation should be verifiable from the artifact itself**, by something that
 did not compute it.
+
+## The verdict on Tier 1.1: reverted `[MEAS 2026-08-29]`
+
+`scripts/heal_ablation.py` re-scored the shipped pass-2 checkpoint with `multiplier_j =
+scalar_gain / c_j` injected at load, isolating the healing method from the mask. Full analysis in
+`research/HEALING_ABLATION.md`; the load-bearing numbers:
+
+| metric | per-expert | **per-layer scalar** | Δ |
+|---|---|---|---|
+| top-1 agreement | 0.83693 | **0.84238** | **+0.00545** (11.8σ) |
+| ΔNLL | 0.19396 | **0.17601** | −0.01795 |
+| top-k KL | 0.69388 | **0.65248** | −0.04141 |
+
+*(0.84238 is the load-time ablation. Re-measured on the reverted weights that actually ship: **0.84249**, ΔNLL 0.17563, top-k KL 0.65030. The 1.1e-4 gap is one multiply versus a divide-then-multiply in F32.)*
+
+### The mechanism, in one line
+
+Under the measured near-orthogonality the diagonal solution is exactly `c_j = (gate mass before
+pruning) / (gate mass after)`. This section reads that as "an expert promoted into the top-8 is
+correctly shrunk — it is doing work it never did before." **The promoted expert is doing that work
+because the expert that used to do it was deleted.** Damping it by its promotion ratio does not
+bring the deleted expert back; it removes the substitute as well and leaves a hole. 62.0% of the
+5,760 coefficients sit below their layer's scalar, 238 experts are suppressed more than 1.5× and
+45 more than 2×, worst case 3.3× — and by construction those are the experts the post-prune router
+depends on most.
+
+### Why the magnitude-preserving rescale did not save it
+
+The rescale to `E‖ŷ‖² = E‖y‖²` was introduced above precisely because pure LS attenuates. It fixes
+the **aggregate**: one number per layer. Attenuation here is **per-expert**. After rescaling, layer
+energy is correct and its *allocation* is still tilted away from promoted experts toward
+incumbents. The diagnosis was right and the treatment was applied one level too coarse.
+
+### Why the held-out residual said the opposite
+
+41 of 42 layers improved on `Σ‖y−ŷ‖²/Σ‖y‖²`, measured out of sample. Two reasons that is not a
+contradiction:
+
+* **Squared error pays for variance reduction with signal.** With `‖μ‖²/E‖f‖² = 0.034`, 96.6% of
+  expert output energy is token-dependent. A damped wrong answer scores better than a loud wrong
+  answer under MSE; under argmax it is just less informative. The residual cannot tell the
+  difference between removing noise and removing signal.
+* **A per-layer fit does not compose.** Every layer is fitted against unpruned inputs and deployed
+  on inputs from 44 pruned predecessors. Open-loop, validated in a regime the model is never in.
+
+A hold-out protects against overfitting the objective. It does nothing about the objective being
+wrong. **Operational rule: a weight-space correction ships only after an end-to-end arm.** That is
+affordable exactly when the correction is invertible, which weight-space rescalings always are.
+
+### Revert
+
+`scripts/heal_revert_to_scalar.py` multiplies `down_proj.weight_scale_inv` by `scalar_gain / c_j`
+across 5,760 tensors in 40 layers (multiplier range 0.7902–3.3029), idempotent under a
+`{target, keep_set_sha, op}` fingerprint, verified against `artifacts/preheal_probe.json` — the
+post-revert scale over the pre-heal scale must equal the layer scalar, which differs from `c_j` by
+6–27% on the probed experts. NVFP4 is rebuilt from the corrected FP8 base.
+
+### What survives
+
+The orthogonality measurement (off-diagonal mass 1.9%) now validates the assumption the *shipped
+scalar* rests on. The mean/residual split (`0.034`) still closes off per-token output matching, and
+is half the explanation for this result. `--keep-set` mask scoring remains useful as a cheap
+filter — it had the right sign on pass 1 vs pass 2 — but its verdicts need end-to-end confirmation
+before they are acted on.

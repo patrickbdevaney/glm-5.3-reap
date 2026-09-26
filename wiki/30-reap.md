@@ -328,3 +328,33 @@ block at layer 45 (pass 1 did not, and the DFlash2 drafter work needs it), its �
 are marginally better, and its healing rests on a measured least-squares fit rather than a scalar.
 The model card claims the reconstruction-residual reduction, which is measured, and does **not**
 claim an accuracy improvement over pass 1, which is not.
+
+### …and the de-confounded answer: the mask WAS worth it `[MEAS 2026-08-29]`
+
+The ablation the caveat above called for has now run (`research/HEALING_ABLATION.md`). It removes
+the confound in the direction that reverses this section a second time.
+
+Pass 1 shipped **scalar** healing; pass 2 shipped **per-expert**. Re-evaluating pass 2 with its
+per-expert coefficients overridden back to the layer scalar makes the two comparable:
+
+| | mask | healing | top-1 agreement |
+|---|---|---|---|
+| pass 1 (published) | pass 1 | scalar | 0.83703 |
+| **pass 2, corrected** | **pass 2** | **scalar** | **0.84238** |
+| pass 2 as originally shipped | pass 2 | per-expert | 0.83693 |
+
+*(Pass-2-corrected re-measured on the reverted weights: **0.84249**. Paired McNemar against pass 1: `chi2 = 86.9`, z = 9.3.)*
+
+**The pass-2 mask is worth +0.00545 — 9.3σ, not the −0.0001 recorded above.** Per-expert healing
+cost −0.00545 on the same tokens, and the two cancelled almost exactly. The null this section was
+built on was two real effects of opposite sign, not the absence of an effect.
+
+So the reconstruction-residual proxy was **right about the mask** (−2.5%, correct sign, if
+understating the size) and **wrong about the healing** (−8.6% residual, +0.0055 worse end-to-end).
+The proxy is usable as a cheap filter for *mask* selection, which is what §"Was the second sweep
+worth it?" built it for. It is not usable to accept a *correction*, because a correction can lower
+squared error by discarding token-dependent signal — see `HEALING_ABLATION.md` for why the two
+cases differ.
+
+Pass 2 now ships for the plain reason as well as the MTP one: with the healing corrected it is
+**measurably more accurate than pass 1**, on every metric and in every sufficiently-sampled domain.

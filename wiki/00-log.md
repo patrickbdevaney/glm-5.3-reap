@@ -510,3 +510,136 @@ is computed and persisted, and `s07` needs no calibration data at all.
 > I added*, not from the original design: dropping the `.cache`, keeping activations on-device
 > because unified memory made copies look wasteful, and auto-publishing artifacts. Each was
 > locally correct and globally wrong. The original naive version worked in all three cases.
+
+### The correction that lowered reconstruction error and made the model worse `[MEAS 2026-08-29]`
+
+Per-expert healing — the flagship Tier 1.1 result, a closed-form least-squares coefficient per
+retained expert instead of one scalar per layer — was **shipped and then reverted**. The
+end-to-end ablation, which the pass-2 writeup had itself called for and correctly noted was cheap
+because healing is invertible:
+
+| metric | per-expert (shipped) | per-layer scalar | Δ |
+|---|---|---|---|
+| top-1 agreement | 0.83693 | **0.84238** | **+0.00545** (11.8σ) |
+| ΔNLL | 0.19396 | **0.17601** | −0.01795 |
+| top-k KL | 0.69388 | **0.65248** | −0.04141 |
+
+*(0.84238 is the load-time ablation. Re-measured on the reverted weights that actually ship: **0.84249**, ΔNLL 0.17563, top-k KL 0.65030. The 1.1e-4 gap is one multiply versus a divide-then-multiply in F32.)*
+
+Every domain improved with the scalar. The technique had improved held-out reconstruction residual
+in **41 of 42 layers**.
+
+The mechanism is worth stating because it is not subtle in hindsight. Under the measured
+near-orthogonality the coefficient collapses to `c_j = (gate mass before pruning)/(gate mass
+after)`. `70-healing.md` read that as "an expert promoted into the top-8 is correctly shrunk — it
+is doing work it never did before." But it is doing that work *because the expert that used to do
+it was deleted*. Damping the substitute does not restore the original; it leaves a hole. 62% of
+coefficients landed below their layer scalar, 45 experts were suppressed by more than 2×, the
+worst by 3.3× — precisely the experts the pruned router leans on hardest.
+
+> **The pattern this belongs to.** The two entries above name it: three of the worst incidents came
+> from optimisations I added, each locally correct and globally wrong. This is the same shape with
+> a sharper edge, because this one had *five* layers of internal validation — a unit test against a
+> brute-force simulation, a held-out split, clamp-bound checks, a two-candidate ship gate, and an
+> orthogonality report. All passing. All measuring the wrong quantity. A hold-out set defends
+> against overfitting the objective and does nothing whatever about the objective being wrong.
+>
+> Rule adopted: **a weight-space correction ships only after an end-to-end arm.** It is affordable
+> exactly when the correction is invertible, which weight-space rescalings always are — one eval
+> to find out, one published checkpoint to not. `[EST]`
+
+A second result fell out. Pass 1 shipped scalar healing and pass 2 shipped per-expert, so the
+pass-1/pass-2 comparison had never been like-for-like. With healing held fixed, the **pass-2 mask
+is worth +0.00545 (9.3σ)**, not the −0.0001 previously recorded — two real effects of opposite
+sign that had cancelled into a null, which was then written up as "the mask improvement did not
+translate." It translated. `research/HEALING_ABLATION.md` has the full analysis.
+
+### Attention NVFP4: three arms, and the protection argument pointed the wrong way `[MEAS 2026-08-29]`
+
+`nvfp4_attn_mode` builds three variants off the corrected FP8 base — one variable moved each time,
+all scored on the same 241,516 held-out tokens:
+
+| arm | quantised | GiB | top-1 | Δ | z | milli-top1/GiB |
+|---|---|---|---|---|---|---|
+| shipped v2 | — | 98.2 | 0.83857 | — | — | — |
+| `kda` | KDA q/k/v | 93.6 | 0.83627 | −0.00230 | 5.8 | **0.500** |
+| `post` | o_proj + MLA | 94.8 | 0.83306 | −0.00551 | 12.3 | 1.621 |
+| `all` | both | 90.2 | 0.83184 | −0.00673 | 14.5 | 0.841 |
+
+Two things were wrong going in. The cost was predicted at ~0.004 top-1 for the full set by analogy
+with the experts; it is 0.0067. And the *protection* argument was aimed at the wrong tensors: KDA
+q/k/v were expected to be fragile because they feed the delta-rule state, the same reasoning that
+protects the gates and conv1ds. They are the most tolerant part of attention, 3.2× more
+byte-efficient than `o_proj` plus the MLA projections.
+
+> **The evidence I cited for that hypothesis was not evidence.** Tap drift grew with depth (+2.2%
+> at L5 to +6.1% at L33) and I read it as sequence-compounding through the recurrence. Depth
+> compounding happens for *any* perturbation, whichever tensors carry it — the observation was
+> equally consistent with plain bulk quantisation error, which is what it turned out to be. A
+> measurement that cannot discriminate between two hypotheses is not support for either. `[EST]`
+
+**Damage is sub-additive**: `kda` (0.00230) + `post` (0.00551) = 0.00781, but `all` costs 0.00673,
+14% less. So per-GiB cost is not a property of a tensor set — it depends on what else is already
+quantised, and any lever priced by subtracting two arms is mispriced. Subtraction predicted `kda`
+at −0.00122; it measured −0.00230, off by 1.9×. That is why the arm was built rather than inferred.
+
+**Declined for the shipped artifact.** The cheapest arm costs 42% of the entire pass-2 gain, and
+the justification for spending it — 13.5 → 23.5 tok/s — is a *roofline*, with no decode throughput
+yet measured on this box for this architecture. Trading measured intelligence for unmeasured speed
+is the wrong side of that trade, and 98.2 GiB already fits with 18.8 GiB to spare. Revisit after
+the CUDA server produces a real tok/s number. `[EST]`
+
+---
+
+## 2026-09-26 — GPU lost to a suspend/resume during an OOM I caused; two coverage gaps found
+
+**Pass 3 halted at s03_saliency, `RuntimeError: No CUDA GPUs are available`.** Not a pipeline
+bug. `nvidia-smi`: *"Unable to determine the device handle for GPU0: 0000:01:00.0: Unknown
+Error"*. The GPU is off the bus — `NVRM: _intrServiceStallCommonCheckBegin: Failed GPU reg read
+: 0xffffffff`.
+
+Root cause, from `journalctl -k`, is mine:
+
+```
+18:18:04  tailscaled: time jump detected (slept 24s), probably wake from sleep
+18:18:54  NVRM: memdescAlloc: Failed to allocate memory ... status: 51
+          kgspCreateRadix3(... gspfwSRMeta.sizeOfSuspendResumeData) NV_ERR_NO_MEMORY
+          nvidia 0000:01:00.0: can't suspend (nvidia_isr_kthread_bh returned -5)
+19:19:05  Out of memory: Killed process 3859142 (python) total-vm:275261420kB
+```
+
+That 275 GB process is `diag_router_kd.py`'s fixture — the `[N,C,H,H]` gather bug. The box
+suspended, and on the resume path the GSP could not allocate its suspend/resume buffer because
+my allocation had eaten the machine. The GPU never came back. I had reported that incident as
+"memory came back clean" — **true of RAM, and I never checked the GPU.** `[EST]`
+
+Aggravating detail worth keeping: `Restart=on-failure` then re-ran the chain **three times
+against a dead device**, each failing in 6 s and logging `rc=1`. That is CLAUDE.md §2 in its
+operational form — *a gate that passes against a dead engine is worse than no gate* — except
+here it was a stage failing against one, fast enough to look like a config error. Nothing lost:
+`artifacts/saliency/` was still empty, all 62 source shards intact, corpus complete and cached.
+
+Two fixes owed: the box must not suspend while a pass is running, and a stage must distinguish
+"GPU absent" from "GPU busy" and refuse to burn restarts on the former.
+
+### Capability coverage audited → [91-capability-coverage.md](91-capability-coverage.md)
+
+MEASURED on the real pass-3 corpus (10,141 samples): the corpus meets its difficulty spec
+(31.0 % hard band vs 30 % target, mean 4,761 tok, max 16,384) and `s03`'s `MAX_LEN=2048` then
+**discards 73.5 % of all collected tokens** (35.5 M of 48.3 M). 38.2 % of samples are truncated.
+Long context is collected and thrown away, not weighted down.
+
+MiMo's `exp_seqlen_saliency.py` asked this and never ran. Its S-invariance argument was SWA-128
+specific and **inverts on GLM**, which is ~3/4 KDA linear-attention layers carrying recurrent
+state over the full context. Prediction with a sign: GLM saliency should be S-*sensitive*.
+
+Also MEASURED: the calibration corpus is **0.3 % CJK-bearing** on a bilingual model, with no eval
+bucket that could detect the damage.
+
+### Global router KD scoped → [98-router-kd-global.md](98-router-kd-global.md)
+
+The sequencing constraint dissolves: cache the teacher's **top-64 logprobs** before surgery
+(384 B/token → 0.9 GB for a 2.4 M-token budget), then train student-only afterwards. Teacher
+never resident, no second full-precision copy, surgery free to delete shards. Cost is
+~4 min/step from streaming 306 GB twice per step, ≈25–30 h for 300 steps. Ranked **below** the
+sequence-length test, which is cheaper and can invalidate the mask itself.
