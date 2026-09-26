@@ -50,13 +50,56 @@ import torch
 # --------------------------------------------------------------------------------------------
 
 # Bucket 0 is the catch-all so an unset bucket is never silently attributed to a real domain.
+# The list itself is FROZEN: it is written into every dump as "buckets", and changing the order
+# would silently re-label every accumulator a resume reads back.
 BUCKETS = ["general", "code", "math", "agentic", "finance", "science", "bio", "vision"]
 BUCKET_ID = {b: i for i, b in enumerate(BUCKETS)}
+
+# corpus_spec renamed two buckets for pass 3 -- general -> "ballast", vision -> "multimodal" --
+# and that rename was never propagated here. set_bucket() did `BUCKET_ID.get(name, 0)`, so
+# "ballast" resolved to 0. Bucket 0 happens to BE general, so the mass landed in the right slot
+# by luck, but it landed there through the catch-all, which is the one path documented to mean
+# "nobody set a bucket". A genuinely unset batch and the pass-3 headline domain would have been
+# indistinguishable in the accumulators -- and ballast going from 4.8% to 15% of tokens is the
+# entire point of pass 3. Name the mapping, and refuse anything that is not in it.
+BUCKET_ALIAS = {"ballast": "general", "multimodal": "vision"}
+
+
+def bucket_id(name: str | None) -> int:
+    if name is None:
+        return 0
+    canon = BUCKET_ALIAS.get(name, name)
+    if canon not in BUCKET_ID:
+        raise KeyError(
+            f"unknown calibration bucket {name!r} (canonical {canon!r}); known: "
+            f"{sorted(BUCKET_ID)} plus aliases {BUCKET_ALIAS}. Add it to BUCKETS (appending "
+            f"only -- the order is frozen) or to BUCKET_ALIAS. Falling back to the catch-all "
+            f"here would attribute a whole domain to 'general' and look completely normal.")
+    return BUCKET_ID[canon]
 
 HIST_BINS = 36
 HIST_LO, HIST_HI = -6.0, 3.0        # log10(g*||f||); empirically ~[-3, 1] at 2048 tokens
 
 ACC: dict[str, dict[str, torch.Tensor]] = {}
+
+# --------------------------------------------------------------------------------------------
+# HOPE: the per-layer E x E co-activation matrix (pass 3).
+#
+# arXiv 2609.18916: REAP is exactly HOPE with the off-diagonal of F zeroed. Every scalar
+# criterion above is recoverable OFFLINE from the per-expert accumulators, as often as we like.
+# The off-diagonal is not -- it needs the per-token CO-ACTIVATION structure, which no per-expert
+# accumulator retains. Miss it on this forward and the only way back is another full pass over
+# 328 GB of weights. That is what makes it the one statistic with a deadline, and why it goes in
+# now rather than after the sweep.
+#
+# Keyed by layer NAME rather than index because this pass streams one layer at a time and never
+# holds a layer count. Each entry is a FAccumulator sized for a single layer, so the arithmetic
+# is literally the same code MiMo's run used -- a second implementation of the outer-product
+# update is a second place for it to be subtly wrong.
+#
+# Cost: 288^2 * 8 B * 2 tensors = 1.33 MB per layer, 55.7 MB for all 42. Against a 116 GiB
+# envelope that is not worth a conditional.
+FACC: dict[str, "object"] = {}
 
 # Back-compat aliases. s04_sweep reads these; dump() keeps writing the same keys.
 SAL_SUM: dict[str, torch.Tensor] = {}
@@ -80,7 +123,7 @@ def set_bucket(name: str | None):
     Batches must be homogeneous in bucket. The s03 driver groups samples by bucket before
     batching, which is free - it only changes the order samples are packed in.
     """
-    _CTX["bucket"] = BUCKET_ID.get(name or "general", 0)
+    _CTX["bucket"] = bucket_id(name)
 
 
 def set_valid_mask(valid: torch.Tensor | None):
@@ -106,6 +149,17 @@ def _ensure(lname: str, n_experts: int, hidden: int, dev) -> dict[str, torch.Ten
         SAL_SUM[lname] = a["sum"]
         SAL_CNT[lname] = a["cnt"]
     return a
+
+
+def _ensure_f(lname: str, n_experts: int, dev):
+    fa = FACC.get(lname)
+    if fa is None:
+        from hope_fmatrix import FAccumulator
+        # n_layers=1: this object holds ONE layer, selected by name. Every call therefore uses
+        # layer slot 0.
+        fa = FAccumulator(1, n_experts, device=dev)
+        FACC[lname] = fa
+    return fa
 
 
 def dequant_fp8_block(w: torch.Tensor, scale_inv: torch.Tensor,
@@ -197,6 +251,13 @@ def patch_experts_for_saliency():
         acc = None
         if lname is not None:
             acc = _ensure(lname, self.num_experts, hidden_states.shape[-1], dev)
+            fa = _ensure_f(lname, self.num_experts, dev)
+            # HOPE needs g*||f|| for all K slots of a token TOGETHER, but this loop walks one
+            # expert at a time over scattered rows. Gather the scores back into token-major
+            # [n_rows, K] as they are computed, then do the outer products once after the loop.
+            # Slots left at zero are slots no expert wrote, which cannot happen -- one_hot()
+            # above would already have raised on an index outside [0, num_experts).
+            S_buf = torch.zeros_like(top_k_weights, dtype=torch.float32)
             bkt = _CTX["bucket"]
             valid = _CTX["valid"]
             if valid is not None and valid.shape[0] != hidden_states.shape[0]:
@@ -221,12 +282,17 @@ def patch_experts_for_saliency():
                     if valid is not None:
                         keep = valid[token_idx]
                         fj_v, gj_v = f_j[keep], g_j[keep]
+                        rows_v, pos_v = token_idx[keep], top_k_pos[keep]
                     else:
                         fj_v, gj_v = f_j, g_j
+                        rows_v, pos_v = token_idx, top_k_pos
                     if fj_v.shape[0]:
                         nrm = fj_v.to(torch.float32).norm(dim=-1)
                         gg = gj_v.to(torch.float32)
                         s = gg * nrm
+                        # Same s, no recomputation: scattering here is what lets the F update
+                        # below see the padding-masked scores rather than raw ones.
+                        S_buf[rows_v, pos_v] = s
                         sd = s.double()
                         acc["sum"][bkt, expert_idx] += sd.sum()
                         acc["sq"][bkt, expert_idx] += (sd * sd).sum()
@@ -247,6 +313,15 @@ def patch_experts_for_saliency():
                         acc["hist"][expert_idx].scatter_add_(
                             0, bins, torch.ones_like(bins, dtype=torch.int64))
             final.index_add_(0, token_idx, (f_j * g_j[:, None]).to(final.dtype))
+        if lname is not None:
+            with torch.no_grad():
+                # Restrict to real tokens. A padding row routes like any other row, so folding
+                # it in would manufacture co-activation structure out of the pad embedding --
+                # the same bug that biased every pass-1 scalar, in its pairwise form.
+                if valid is not None:
+                    fa.update(0, top_k_index[valid], S_buf[valid])
+                else:
+                    fa.update(0, top_k_index, S_buf)
         return final
 
     Glm5NextTextExperts.forward = forward
@@ -317,6 +392,7 @@ def reset_accumulators():
     ACC.clear()
     SAL_SUM.clear()
     SAL_CNT.clear()
+    FACC.clear()
     ROUTER_CACHE.clear()
 
 
@@ -399,6 +475,10 @@ def load_accumulators(dirpath: Path, device) -> int:
         ACC[lname] = a
         SAL_SUM[lname] = a["sum"]
         SAL_CNT[lname] = a["cnt"]
+        if "f_sum" in d:
+            fa = _ensure_f(lname, a["sum"].shape[1], device)
+            fa.sum[0] = d["f_sum"].to(device)
+            fa.cnt[0] = d["f_cnt"].to(device)
         n += 1
     return n
 
@@ -433,5 +513,12 @@ def dump(dirpath: Path, layer_name_fmt: str = "model.language_model.layers.{i}.m
             "hist_range": (HIST_LO, HIST_HI, HIST_BINS),
             "out_sum": a["osum"].detach().cpu(),
         }
+        # pass-3 addition: HOPE's co-activation matrix. Absent from pass-1 and pass-2 dumps, so
+        # readers must treat it as optional -- but a pass-3 dump without it is a pass that threw
+        # away the only statistic it could not recompute, which is worth being loud about.
+        fa = FACC.get(lname)
+        if fa is not None:
+            rec["f_sum"] = fa.sum[0].detach().cpu()
+            rec["f_cnt"] = fa.cnt[0].detach().cpu()
         torch.save(rec, dirpath / f"{lname.replace('.', '__')}.pt")
     return len(ACC)

@@ -20,3 +20,4 @@ artifacts/saliency_snapshots/
 artifacts/saliency_pass1/
 artifacts/eval/
 *.pt
+artifacts/saliency_pass2/

@@ -1,0 +1,16 @@
+0.0
+# PER-DOMAIN PROTECTION FRACTION for pass 3's HOPE selection.
+#
+# 0.0 is a PLACEHOLDER, not a decision. The right value is a property of THIS run's
+# accumulators, which do not exist yet: it is read off a measured sweep of worst-domain
+# retention against HOPE's own objective (p^T F p) and set at the knee, the same way MiMo's
+# 0.08 was. Writing a guess here would make that measurement decorative.
+#
+# Set it after the saliency pass, before s04b_surgery. s04b logs a WARN while this is 0,
+# because 0 means nothing stops the global ranking from dropping an expert that only one thin
+# domain uses -- which is exactly how pass 2 lost ballast (dNLL 0.989, top-1 0.580).
+#
+# Do NOT assume MiMo's 0.08 transfers. MiMo had 256 experts over 9 domains; this model has 288
+# over 8, a different corpus, and a different F. The curve is also not monotone near zero --
+# on MiMo, pf=0.01 was WORSE than pf=0, because too few protected experts constrain the greedy
+# without covering anything.

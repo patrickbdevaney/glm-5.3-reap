@@ -40,9 +40,38 @@ MTP_LAYER = 45
 MIN_KEEP_FRAC, MAX_KEEP_FRAC = 0.30, 0.75
 
 
+# PASS 3: rank by total saliency MASS (sum) rather than REAP's published per-token MEAN.
+#
+# REAP as published is S_j = (1/N_j) * sum_t g_j(t)*||f_j(t)||, verified against the
+# llm-compressor reference -- a frequency-INVARIANT conditional mean, chosen so that
+# selection does not preferentially retain high-traffic experts. Dropping the 1/N_j is
+# therefore a deliberate deviation from the paper, taken on model-specific evidence.
+#
+# Measured on the pass-2 accumulators (42 layers, 144/288 kept, identical budget):
+#
+#                          mean (published)   mass (this)
+#   recon error ||dropped out_sum||   0.26974      0.19594   -27.4%
+#   routing score retained            0.92639      0.96465
+#   general                           0.4865       0.5234
+#   code / math / science       0.728/0.713/0.720  0.806/0.823/0.805
+#
+# A STRICT PARETO WIN: better on all 7 domains, on reconstruction, and on routing. The
+# per-domain row is the load-bearing evidence -- reconstruction error is itself
+# frequency-weighted (total contribution = frequency x per-token contribution) so it
+# structurally favours `mass`, and on its own would be circular.
+#
+# The reason for caution, recorded so it gets tested rather than assumed: mass weighting
+# makes the mask MORE dependent on the calibration mixture than the published mean is.
+# Pass 3 also rebalances that mixture (corpus_spec.TOKEN_TARGET), so the two changes
+# INTERACT and must be validated jointly, not composed on faith. Set
+# GLM5_REAP_CRITERION=mean to reproduce the published criterion exactly.
 def _layer_curves():
     """Per layer: expert order (best first) and the cumulative saliency-mass fraction."""
+    import os
     import torch
+    crit = os.environ.get("GLM5_REAP_CRITERION", "mass")
+    if crit not in ("mass", "mean"):
+        raise ValueError(f"GLM5_REAP_CRITERION must be 'mass' or 'mean', got {crit!r}")
     out = {}
     for f in sorted(SALIENCY.glob("*.pt")):
         d = torch.load(f, weights_only=False)
@@ -51,7 +80,8 @@ def _layer_curves():
                         torch.zeros_like(c))
         # An expert with zero routed tokens has an UNDEFINED mean, not a low one - rank it
         # last explicitly rather than letting a 0.0 outrank a genuinely weak observed expert.
-        rank_key = torch.where(c > 0, m, torch.full_like(m, float("-inf")))
+        key = m if crit == "mean" else m * c
+        rank_key = torch.where(c > 0, key, torch.full_like(m, float("-inf")))
         order = torch.argsort(rank_key, descending=True)
         contrib = (m * c)[order]
         total = contrib.sum().clamp(min=1e-12)
@@ -142,6 +172,66 @@ def _mtp_keep_set(n_keep: int, n_orig: int) -> list[int] | None:
     return keep
 
 
+def _protect_frac() -> float:
+    """Read the per-domain protection fraction, late, from a file.
+
+    It is deliberately NOT a constant. The right value is a property of the accumulators this
+    run produced, and those do not exist when the pipeline starts -- it is picked off a measured
+    sweep of worst-domain retention against HOPE's own objective, at the knee. Baking a guess in
+    here would make that measurement decorative.
+    """
+    import os
+    f = Path(os.environ.get("PROTECT_FRAC_FILE", ROOT / "conf" / "protect_frac_override.txt"))
+    if not f.exists():
+        return 0.0
+    return float(f.read_text().split("#")[0].strip())
+
+
+def _retained_hope(ratio: float) -> dict[str, list[int]]:
+    """Select with HOPE: minimise p^T F p, interactions included.
+
+    The scalar path below ranks each expert alone and takes the top-k. That is REAP, which
+    arXiv 2609.18916 shows is exactly HOPE with F's off-diagonal zeroed -- two experts that
+    duplicate each other are cheap to drop together and two that complement each other are not,
+    and a per-expert ranking cannot see the difference.
+
+    Pass 2 shipped the scalar path and measured what it cost: ballast dNLL 0.989, top-1
+    agreement 0.580, against 0.916 for code. That hole is the reason for pass 3, and it has two
+    causes -- a corpus that gave ballast 4.8% of routed tokens (fixed in corpus_spec) and a
+    selector that could not protect a domain the global ranking did not favour (fixed here).
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "scripts"))
+    from glm_acc_bridge import build
+    from reap_select import run as select_run
+    import torch as _torch
+
+    accf = SALIENCY / "accumulators.pt"
+    d = build(SALIENCY)                      # raises MissingF if the pass skipped HOPE
+    _torch.save(d, accf)
+
+    pf = _protect_frac()
+    if pf <= 0:
+        log("protect_frac is 0: no domain floor. Nothing stops the global ranking from "
+            "dropping an expert only one thin domain uses -- which is how pass 2 lost ballast. "
+            "Write conf/protect_frac_override.txt to set it.", STAGE, "WARN")
+    out = ARTIFACTS / "masks" / "mask.json"
+    res = select_run(accf, out, ratio, "hope", "reap_1_1_1", protect_frac=pf)
+    log(f"HOPE mask: worst domain {res['worst_domain']} at {res['worst_retention']:.5f}, "
+        f"mean {res['mean_retention']:.5f}, pFp {res['interaction_cost']:.6f} "
+        f"(protect_frac {pf})", STAGE)
+    for b, v in sorted(res["retention_by_domain"].items(), key=lambda kv: kv[1]):
+        log(f"   retention {b:<10} {v:.5f}", STAGE)
+
+    mask = json.loads(out.read_text())["mask"]
+    n_exp = d["f_sum"].shape[1]
+    retained = {}
+    for lname, pruned in mask.items():
+        drop = set(pruned)
+        retained[lname] = sorted(i for i in range(n_exp) if i not in drop)
+    return retained
+
+
 def compute_retained(ratio: float, uniform: bool = True) -> dict[str, list[int]]:
     """Allocate the expert budget across layers by EQUALISING retained saliency mass.
 
@@ -170,6 +260,15 @@ def compute_retained(ratio: float, uniform: bool = True) -> dict[str, list[int]]
     retained saliency mass and cleared all 12 layers that sat below 0.60 - a real gain, and
     unusable. Keep the code; it becomes deployable the day the config grows a per-layer field.
     """
+    import os
+    mode = os.environ.get("GLM5_SELECT_MODE", kv_get("select_mode", "hope") or "hope")
+    if mode == "hope":
+        return _retained_hope(ratio)
+    if mode != "reap":
+        raise ValueError(f"GLM5_SELECT_MODE must be 'hope' or 'reap', got {mode!r}")
+    log("selecting with the pass-2 scalar ranking (mode=reap); HOPE's interaction terms are "
+        "being discarded", STAGE, "WARN")
+
     curves = _layer_curves()
     if not curves:
         raise RuntimeError("no saliency available")
