@@ -1,0 +1,21 @@
+[Unit]
+Description=GLM-5.3-Flash REAP pass 3 -- corpus + HOPE saliency (stops before surgery)
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/patrickd/glm-5.3-reap
+ExecStart=/bin/bash /home/patrickd/glm-5.3-reap/scripts/pass3_chain.sh
+# Every stage in this chain is resumable at chunk granularity, so a restart costs one chunk,
+# not the run. Without this a reboot silently ends a ~20 h pass and nothing says so until
+# somebody looks at a log.
+Restart=on-failure
+RestartSec=5min
+StartLimitBurst=6
+StartLimitIntervalSec=24h
+# The saliency pass is the thing the box exists to run right now; it should not be what the
+# kernel picks off when a driver allocation squeezes memory.
+OOMScoreAdjust=-100
+
+[Install]
+WantedBy=default.target
