@@ -21,6 +21,7 @@ it, its experts are ranked by weight norm rather than activation saliency; see `
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 import time
@@ -330,6 +331,27 @@ def _save_ledger(done: set[str]) -> None:
 
 def run() -> dict:
     import re
+    import torch
+
+    # ---- INTERLOCK: the teacher must be captured before it is destroyed --------------------
+    # This stage deletes source shards as it writes survivors. Once it runs, the unpruned
+    # teacher is gone and cannot be recovered without re-downloading 328 GB.
+    #
+    # One long-context test is only possible while the teacher exists: whether the fraction of
+    # routed slots landing on a PRUNED expert rises with token position, i.e. whether a mask
+    # calibrated at 2,048 tokens is still the right mask at position 100,000. The capture is
+    # 0.66 GiB for 1M tokens and takes 1-2 h; losing the chance costs 328 GB and a re-download.
+    # See wiki/99-long-context-assurance.md.
+    #
+    # Refusing is the correct behaviour rather than warning: a warning in a log nobody reads at
+    # 04:00 is how an irreversible stage eats the only copy of something.
+    cap = ROOT / "artifacts" / "teacher_routing" / "manifest.json"
+    if not cap.exists() and not os.environ.get("SURGERY_SKIP_ROUTING_CAPTURE"):
+        raise RuntimeError(
+            "REFUSING to delete source shards: the unpruned teacher's long-context routing has "
+            "not been captured. Run scripts/capture_teacher_routing.py first (1-2 h, 0.66 GiB), "
+            "or set SURGERY_SKIP_ROUTING_CAPTURE=1 to give up that measurement permanently.")
+
     import torch
     from safetensors.torch import save_file
     from safetensors import safe_open
