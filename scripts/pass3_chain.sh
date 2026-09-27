@@ -33,6 +33,20 @@ EOF
 done
 say "source staged"
 
+# ---- GPU preflight -----------------------------------------------------------------------------
+# MEASURED 2026-09-26: a suspend/resume during an OOM took the GPU off the bus, and s03 then
+# failed in 6 s with "No CUDA GPUs are available". Restart=on-failure re-ran the whole chain
+# three times against a dead device. A stage failing against absent hardware is CLAUDE.md §2 in
+# operational form -- it looks like a config error and burns the restart budget. Exit 0 here so
+# systemd does NOT restart: a missing GPU is not something a retry can fix, and the status file
+# is the thing a human reads.
+if ! $PY scripts/gpu_preflight.py >> "$LOG" 2>&1; then
+  say "GPU preflight FAILED -- device absent or unusable; not retrying"
+  status "HALTED: GPU absent or unusable. Check nvidia-smi and dmesg; a wedged GPU needs a reboot."
+  exit 0
+fi
+say "GPU preflight ok"
+
 # ---- corpus ------------------------------------------------------------------------------------
 # Re-run even though pass 2 built one: corpus_spec's pass-3 quotas are different (ballast 860 ->
 # ~2095 samples), and s02 tops buckets up rather than rebuilding, so this is additive.
