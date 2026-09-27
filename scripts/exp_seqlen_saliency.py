@@ -80,7 +80,7 @@ def main() -> None:
     from s03_saliency import _build_layer
     from transformers import AutoConfig
 
-    cfg = AutoConfig.from_pretrained(SRC, trust_remote_code=True)
+    cfg = AutoConfig.from_pretrained(SRC)
     tcfg = getattr(cfg, "text_config", cfg)
     tcfg._attn_implementation = "eager"
     reader = SS.ShardReader(SRC)
@@ -114,10 +114,14 @@ def main() -> None:
     arms = [(f"S{S}", S, A) for S in SEQS] + [("control_S2048_disjoint", 2048, B)]
 
     # ---- embedding table, the only large part that stays resident -------------------------
+    # Glm5NextConfig is not registered for AutoModelForCausalLM; s03 builds the concrete class
+    # directly and so must this. Only embed_tokens is materialised -- everything else stays on
+    # meta and costs nothing, and the decoder layers are streamed one at a time below.
     from accelerate import init_empty_weights
-    from transformers import AutoModelForCausalLM
+    from transformers.models.glm5_next.modeling_glm5_next import (
+        Glm5NextForConditionalGeneration)
     with init_empty_weights():
-        shell = AutoModelForCausalLM.from_config(cfg, trust_remote_code=True)
+        shell = Glm5NextForConditionalGeneration._from_config(cfg)
     emb = shell.model.language_model.embed_tokens
     emb.to_empty(device="cpu")
     pfx = "model.language_model.embed_tokens."
