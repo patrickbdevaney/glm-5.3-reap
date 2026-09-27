@@ -46,6 +46,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import memfence as MF  # noqa: E402
 from common import ROOT, ARTIFACTS, log, metric, kv_get, publish  # noqa: E402
 
 STAGE = "s09_eval"
@@ -198,6 +199,17 @@ def score_checkpoint(ckpt: Path, rows, mm_rows, tag: str) -> dict:
 
     t0 = time.time()
     for li in range(tcfg.num_hidden_layers):
+        # MEASURED 2026-09-27 (scripts/probe_layer_mem.py): a layer's forward consumes ~5.76 GiB
+        # that is NEVER returned while the process lives -- empty_cache() gave back 0.03 GiB
+        # against 13.54 consumed. This loop is 45 layers in ONE process, the same shape that made
+        # s03_saliency unable to complete a single chunk, and the leak is dominated by layer
+        # WEIGHTS rather than activations so a smaller eval batch does not avoid it.
+        #
+        # The real fix is the block-per-process treatment s03 now has (wiki/97). Until then this
+        # fence makes the stage FAIL rather than wedge the box: nothing outside the process can
+        # stop a runaway here, because SIGKILL does not land on a process blocked in the GPU
+        # driver and cgroup MemoryMax does not bind Tegra unified allocations.
+        MF.require(5.76, f"{tag} layer {li}")
         layer = _build_layer(tcfg, li, reader, torch.bfloat16)
         for st in states:
             with torch.no_grad():
