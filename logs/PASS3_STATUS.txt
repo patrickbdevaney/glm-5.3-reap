@@ -1,0 +1,23 @@
+pass 3 -- HALTED for reboot, 2026-09-26
+
+WHY: the GPU went off the bus (suspend/resume during an OOM). Recovery is a reboot.
+Nothing lost: 62 source shards intact, corpus complete, artifacts/saliency/ was empty.
+
+DONE BEFORE REBOOT
+  - sleep/suspend/hibernate/hybrid-sleep targets MASKED; GNOME idle-suspend set to 'nothing'
+  - reap-pass3.service DISABLED (will not auto-start saliency at 2048)
+  - scripts/gpu_preflight.py added; chain now halts instead of burning restarts on a dead GPU
+
+AFTER REBOOT, IN ORDER
+  1. ./.venv/bin/python scripts/gpu_preflight.py        # expect "GPU OK"
+  2. setsid nohup ./scripts/run_seqlen_exp.sh >> logs/seqlen_exp.log 2>&1 < /dev/null &
+     -> reads artifacts/exp_seqlen/comparison.json; verdict printed at the end.
+        If every S arm is WITHIN the control noise floor, MAX_LEN=2048 is vindicated.
+        If any arm is BELOW it, raise calib_max_len before pass 3 commits to a mask.
+  3. systemctl --user enable --now reap-pass3.service   # only after step 2 has a verdict
+
+STILL PENDING AT THE PASS-3 STOP POINT (unchanged)
+  - sweep protect_frac on artifacts/saliency, write conf/protect_frac_override.txt at the knee
+  - mask.json worst domain must beat pass 2's general 0.487
+  - s04b_surgery is irreversible: it deletes source shards
+  - gate: must beat HEALED pass-2 -- FP8 top-1 0.84249 / dNLL 0.17563 / ballast top-1 0.58008
