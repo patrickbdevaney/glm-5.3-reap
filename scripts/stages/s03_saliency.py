@@ -343,6 +343,11 @@ def _build_layer(cfg, i, reader, dtype):
 # block). The orchestrator never touches CUDA, so it never leaks; each worker exits and its
 # memory comes back.
 S03_ROLE = os.environ.get("S03_ROLE", "orchestrator")
+# Cap the sweep for tests only. The equivalence gate needs an UNBLOCKED reference arm, and an
+# unblocked 45-layer sweep is precisely the thing that cannot run here (259 GiB). Capping to a
+# handful of layers makes both arms feasible so the comparison is possible at all. Unset in
+# production, where it must never truncate the sweep.
+S03_MAX_LAYERS = int(os.environ.get("S03_MAX_LAYERS", "0")) or None
 LAYERS_PER_BLOCK = int(os.environ.get("S03_LAYERS_PER_BLOCK", "9"))
 LAYER_COST_GIB = 5.76          # MEASURED, per layer, not returned in-process
 # Both overridable, so an equivalence test cannot pollute the real ledger or state files.
@@ -379,7 +384,12 @@ def _orchestrate(n_layers: int, n_chunks: int) -> dict:
 
     blocks = [(lo, min(lo + LAYERS_PER_BLOCK, n_layers))
               for lo in range(0, n_layers, LAYERS_PER_BLOCK)]
-    need = LAYERS_PER_BLOCK * LAYER_COST_GIB
+    # Size the budget on the LARGEST ACTUAL block, not on the configured maximum. A model with
+    # 4 layers and S03_LAYERS_PER_BLOCK=64 runs one 4-layer block costing ~23 GiB, but the
+    # configured size predicted 369 GiB and refused to start -- found by
+    # gate_s03_equivalence.sh, whose arm A deliberately uses an oversized block to mean
+    # "unblocked".
+    need = max(hi - lo for lo, hi in blocks) * LAYER_COST_GIB
     done = set()
     if BLOCK_LEDGER.exists():
         try:
@@ -408,12 +418,23 @@ def _orchestrate(n_layers: int, n_chunks: int) -> dict:
             # expandable_segments is wrong on Tegra (unsloth-zoo#1235) and this device reports
             # is_integrated=1; make sure an inherited value cannot reach the worker.
             env.pop("PYTORCH_CUDA_ALLOC_CONF", None)
-            rc = subprocess.run([sys.executable, str(ROOT / "scripts" / "run_stage.py"),
-                                 "s03_saliency", "stages.s03_saliency"],
+            # Fingerprint the dumps so a worker that exits 0 without doing anything cannot be
+            # mistaken for one that succeeded -- exactly what happened when workers were spawned
+            # through run_stage.py and silently lost the stage flock.
+            before = {p.name: (p.stat().st_mtime_ns, p.stat().st_size)
+                      for p in SALIENCY.glob("*.pt")}
+            rc = subprocess.run([sys.executable,
+                                 str(ROOT / "scripts" / "s03_worker_main.py")],
                                 env=env, cwd=str(ROOT)).returncode
             if rc != 0:
                 log(f"chunk {ci} block {bi} worker rc={rc}", STAGE, "ERROR")
                 raise RuntimeError(f"s03 worker failed rc={rc} at chunk {ci} block {bi}")
+            after = {p.name: (p.stat().st_mtime_ns, p.stat().st_size)
+                     for p in SALIENCY.glob("*.pt")}
+            if after == before:
+                raise RuntimeError(
+                    f"chunk {ci} block {bi}: worker exited 0 but no layer dump changed. "
+                    f"A zero exit from a worker that never ran is not success.")
             done.add((ci, bi))
             BLOCK_LEDGER.parent.mkdir(parents=True, exist_ok=True)
             BLOCK_LEDGER.write_text(json.dumps({"done": sorted(done)}))
@@ -459,7 +480,11 @@ def run() -> dict:
         _n_chunks = max(1, -(-len(_text_rows) // _per_chunk))
         del _text_rows
         gc.collect()
-        return _orchestrate(_t.num_hidden_layers, _n_chunks)
+        _nl = min(_t.num_hidden_layers, S03_MAX_LAYERS or _t.num_hidden_layers)
+        if _nl != _t.num_hidden_layers:
+            log(f"S03_MAX_LAYERS={_nl} -- TEST MODE, sweeping only the first {_nl} layers",
+                STAGE, "WARN")
+        return _orchestrate(_nl, _n_chunks)
     strategy = kv_get("load_strategy", "stream")
     if strategy != "stream":
         log(f"load strategy is '{strategy}', but this stage implements the streaming path only",
@@ -694,7 +719,8 @@ def run() -> dict:
     _sweep(states, f"chunk {CI+1}/{len(text_chunks)}", LO, HI)
     SS.dump(SALIENCY)
 
-    if HI < tcfg.num_hidden_layers:
+    _n_layers = min(tcfg.num_hidden_layers, S03_MAX_LAYERS or tcfg.num_hidden_layers)
+    if HI < _n_layers:
         torch.save(states, spath)
         log(f"chunk {CI} block ends at layer {HI-1}; states saved for the next worker", STAGE)
         return {"chunk": CI, "block": [LO, HI], "more": True}

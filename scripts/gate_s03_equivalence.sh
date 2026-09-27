@@ -24,7 +24,9 @@ T=artifacts/_s03_eqtest
 rm -rf $T; mkdir -p $T/A $T/B $T/state
 # Small but REAL: 4 layers over the true checkpoint and the true corpus. A toy model would test
 # the plumbing and not the thing that matters.
-COMMON="S03_MAX_LEN=512 S03_CALIB_TOKENS=8192 S03_CHUNK_TOKENS=4096"
+# 6 layers, not 45: the unblocked reference arm must itself be runnable, and an unblocked
+# 45-layer sweep is the 259 GiB case that cannot run on this box at all. 6 x 5.76 = 35 GiB.
+COMMON="S03_MAX_LEN=512 S03_CALIB_TOKENS=8192 S03_CHUNK_TOKENS=4096 S03_MAX_LAYERS=6"
 
 run_arm(){ # dir, layers_per_block, label
   echo "--- arm $3: layers_per_block=$2 ---"
@@ -43,9 +45,9 @@ run_arm(){ # dir, layers_per_block, label
 }
 
 # A: one block covering all layers -- the unblocked reference
-run_arm A 64 "A (single block = unblocked reference)" || { echo "FAIL: arm A rc!=0"; tail -20 $T/A.log; exit 1; }
+run_arm A 6 "A (one 6-layer block = unblocked reference)" || { echo "FAIL: arm A rc!=0"; tail -20 $T/A.log; exit 1; }
 # B: the same sweep cut into blocks of 2, so every boundary is exercised
-run_arm B 2  "B (blocks of 2 -- boundaries exercised)" || { echo "FAIL: arm B rc!=0"; tail -20 $T/B.log; exit 1; }
+run_arm B 2 "B (three 2-layer blocks -- every boundary exercised)" || { echo "FAIL: arm B rc!=0"; tail -20 $T/B.log; exit 1; }
 
 $PY - <<'PYEOF'
 import sys, torch
