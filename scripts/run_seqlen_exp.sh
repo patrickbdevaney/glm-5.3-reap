@@ -20,6 +20,20 @@ if pgrep -f 'run_stage\.py' > /dev/null 2>&1; then
   exit 3
 fi
 
+# MANDATORY LOOKAHEAD. Every wedge on 2026-09-26 was a ceiling discovered by hitting it, and
+# every recovery mechanism failed in turn: tier 1 cannot reclaim a live allocation, tier 2's
+# SIGKILL does not land on a process blocked in the GPU driver (it killed the right PID twice
+# while MemAvailable kept falling), and MemoryMax does not bind Tegra unified allocations. When
+# detection, killing and cgroup limits all fail, not starting is the only control left.
+for S in 2048 8192 16384; do
+  if ! ./.venv/bin/python scripts/mem_lookahead.py --seq "$S" --attn sparse --quiet; then
+    echo "[$(date -Is)] REFUSING: arm S=$S is predicted not to fit. Run" >&2
+    echo "  ./.venv/bin/python scripts/mem_lookahead.py --seq $S --attn sparse" >&2
+    echo "  for the binding term." >&2
+    exit 4
+  fi
+done
+
 # MemoryMax is not tuning -- it keeps a bug in THIS script from taking the box down. memguard's
 # floor is deliberately 250 MB (a higher floor killed healthy runs twice, see memguard.sh), so
 # the cgroup ceiling is the thing that bounds a runaway, not the guard.

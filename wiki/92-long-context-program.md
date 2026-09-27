@@ -48,6 +48,14 @@ force is out. But it is also **unnecessary**, and the reason is structural:
 
 - **DSA sets `index_topk = 2048`.** Those layers attend to at most 2,048 selected keys *no matter
   how long the context is*. Their input distribution is bounded by construction.
+
+  > **CORRECTION 2026-09-26.** This page originally added "so it never reaches the quadratic
+  > regime". That is **false for memory**. `index_topk` caps what is ATTENDED; the indexer must
+  > still SCORE every key to choose the top 2,048, so the score matrix is `[B, heads, L, L]` —
+  > 32 GiB at L=16,384 with 64 heads in bf16, before softmax and copies. This wedged the box
+  > entering the first DSA layer. The *routing-distribution* argument for saturation is
+  > unaffected — bounded attended-set still bounds what the router sees — but the **cost**
+  > argument was wrong. See [95-memory-lookahead.md](95-memory-lookahead.md). `[EST]`
 - **KDA carries a fixed-size recurrent state** (64 × 128 × 128 per layer). A fixed-size state has
   bounded capacity; its distribution reaches a steady state.
 

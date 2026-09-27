@@ -102,7 +102,11 @@ def main() -> None:
 
     cfg = AutoConfig.from_pretrained(SRC)
     tcfg = getattr(cfg, "text_config", cfg)
-    tcfg._attn_implementation = "eager"
+    # Do NOT force "eager". MEASURED 2026-09-26: eager materialises the DSA indexer's full
+    # [B, heads, L, L] score matrix -- 32 GiB at L=16384 before the x3 for softmax and copies --
+    # and wedged the box entering the first DSA layer. s03_saliency does not set this at all, so
+    # it gets the config default; matching it is both correct and the validated path.
+    # `index_topk` caps what is ATTENDED, never what is SCORED.
     reader = SS.ShardReader(SRC)
 
     # ---- token pool: real long samples, two DISJOINT halves ------------------------------
