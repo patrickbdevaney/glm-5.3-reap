@@ -141,9 +141,26 @@ Workers return early, so the audit and `kv_set("saliency_ready", True)` had to m
 parent — otherwise the pipeline would wait forever on a stage that had actually finished.
 `_audit()` only `torch.load`s the dumps on CPU, so the parent still never initialises CUDA.
 
+### Validated at production scale, 2026-09-27
+
+The first real block boundary, on the full 45-layer / 10-chunk pass-3 sweep:
+
+```
+02:31:14  chunk 0 block 0 (layers 0-8) starting, 113.8 GiB available
+02:53:56  chunk 0 block 0 done                         (9 layers, 21.4 min)
+02:54:17  chunk 0 block 1 (layers 9-17) starting, 113.4 GiB available
+```
+
+**113.8 GiB before nine layers, 113.4 GiB after.** Unblocked, those nine layers cost ~52 GiB
+that never came back. Process exit plus `drop_caches 3` returned all of it, and the orchestrator's
+pre-block check confirmed the return before committing to the next worker. The mechanism holds on
+the real model at real scale, not only on the 6-layer gate.
+
+Cost: ~22 min per 9-layer block, 50 blocks (10 chunks x 5) -> **~18 h** for the full pass.
+
 ### Still open
 
-End-to-end GPU validation of the blocked stage has **not** run yet — the ladder holds the GPU.
+Block-level equivalence at production scale was not separately measured — the ladder holds the GPU.
 The block plan, ledger and budget arithmetic are gated; the equivalence of blocked vs unblocked
 accumulators on real weights is not. `[OPEN]`
 
