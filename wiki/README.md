@@ -33,6 +33,7 @@ scrollback, not only in a chat reply.
 | [90-open-risks.md](90-open-risks.md) | Open risks, contradictions with the directive, decision log |
 | [91-capability-coverage.md](91-capability-coverage.md) | What calibration protects: long-context and non-English gaps |
 | [92-long-context-program.md](92-long-context-program.md) | Holding the REAP at native 1M: arithmetic, saturation, NIAH/LongPPL plan |
+| [93-seqlen-cost-and-memory.md](93-seqlen-cost-and-memory.md) | Sequence length is ~free at fixed tokens; the memory wedge and its two fixes |
 | [98-router-kd-global.md](98-router-kd-global.md) | Global router KD: scope, cost, sequencing |
 
 ## Status

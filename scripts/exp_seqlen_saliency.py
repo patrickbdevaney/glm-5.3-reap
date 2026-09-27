@@ -41,6 +41,26 @@ sys.path.insert(0, "scripts/stages")
 
 from common import ROOT, log  # noqa: E402
 
+
+def _reclaim_page_cache() -> None:
+    """Drop page cache between layers -- the safeguard s03_saliency has and this script lacked.
+
+    MEASURED 2026-09-26: without it, this experiment drove MemAvailable from 78 GB to 530 MB in
+    nine seconds at an arm boundary and wedged the box. No oom-kill line appeared, which is
+    exactly the failure s03's own docstring records having hit six times: Tegra under-reports
+    mmap'd shard pages in MemAvailable and will not reclaim them fast enough to satisfy a driver
+    allocation. Each layer faults in ~7 GB of shard; 12 layers x 4 arms is ~336 GB of clean
+    file-backed pages that are never re-read.
+    """
+    import subprocess
+    try:
+        subprocess.run(["sync"], timeout=30, check=False)
+        subprocess.run(["sudo", "-n", "sh", "-c", "echo 1 > /proc/sys/vm/drop_caches"],
+                       timeout=30, check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass                 # the memguard service is the backstop
+
 STAGE = "exp_seqlen"
 SRC = ROOT / "source" / "GLM-5.3-Flash"
 OUT = ROOT / "artifacts" / "exp_seqlen"
@@ -186,6 +206,7 @@ def main() -> None:
             reader.release()
             gc.collect()
             torch.cuda.empty_cache()
+            _reclaim_page_cache()
             log(f"{tag} layer {li+1}/{L_MAX} ({tcfg.layer_types[li]}) "
                 f"elapsed {(time.time()-t0)/60:.1f} min", STAGE)
         SS.dump(adir)
@@ -193,6 +214,7 @@ def main() -> None:
         del states
         gc.collect()
         torch.cuda.empty_cache()
+        _reclaim_page_cache()
 
     # ---- compare ---------------------------------------------------------------------------
     def load(tag):
