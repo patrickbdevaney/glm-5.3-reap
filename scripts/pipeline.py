@@ -173,10 +173,35 @@ RELAUNCH_COOLDOWN_S = 120
 
 def launch_background(s: Stage) -> bool:
     """Spawn the stage in its own process. Returns True if it is now running."""
+    # Trust the recorded pid ONLY while the stage claims to be running, and only if the process
+    # is still ours.
+    #
+    # MEASURED 2026-09-27: s03_saliency was 'pending' with a stale pid 2222 from before a reboot.
+    # After the reboot pid 2222 belonged to dockerd. _pid_alive said yes, this returned True
+    # without launching anything, the caller set progressed=True regardless of the return value,
+    # and the loop spun at 100% CPU for five minutes without launching the stage or logging a
+    # single line. A pid outlives the process it named; across a reboot it names something else.
     pid = stage_pid(s.name)
-    if _pid_alive(pid):
+    if pid and status(s.name) == "running" and _pid_alive(pid) and _is_our_stage(pid, s.name):
         return True
+    if pid:
+        with db() as con:
+            con.execute("UPDATE stages SET pid=NULL WHERE name=?", (s.name,))
+    return _launch_background_body(s)
 
+
+def _is_our_stage(pid: int, name: str) -> bool:
+    """Is this pid actually our stage runner, or a reused number?"""
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as fh:
+            cl = fh.read().replace(b"\0", b" ").decode("utf-8", "replace")
+    except OSError:
+        return False
+    return "run_stage.py" in cl and name in cl
+
+
+def _launch_background_body(s: "Stage") -> bool:
+    """The actual spawn. Separated only so the stale-pid guard above stays readable."""
     if s.name in HEAVY_STAGES:
         # Relaunching a memory-heavy stage immediately compounds the failure: the previous
         # attempt's mmap page cache is still resident, and the new attempt's own mappings stop
@@ -292,8 +317,12 @@ def main() -> int:
                     set_status(s.name, "retry", error="background process vanished")
                     log("background process vanished; will relaunch", s.name, "WARN")
                 if attempts(s.name) < s.max_attempts:
-                    launch_background(s)
-                    progressed = True
+                    # progressed must reflect whether a launch ACTUALLY happened. Setting it
+                    # unconditionally turned a launch that declined (cooldown, or the stale-pid
+                    # bug above) into a hot loop: progressed=True skips the 60 s sleep, so the
+                    # loop spun at 100% CPU forever, silently.
+                    if launch_background(s):
+                        progressed = True
                 continue
             if run_stage(s):
                 progressed = True
