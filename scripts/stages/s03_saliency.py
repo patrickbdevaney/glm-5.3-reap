@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import gc
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -317,6 +318,114 @@ def _build_layer(cfg, i, reader, dtype):
     return layer.to(DEV).eval()
 
 
+# ---------------------------------------------------------------------------------------------
+# Block execution. MEASURED 2026-09-27 (scripts/probe_layer_mem.py): each layer's forward
+# consumes ~5.76 GiB of host memory that is NEVER returned while the process lives --
+# empty_cache() gave back 0.03 GiB against 13.54 GiB consumed. 45 layers is ~259 GiB on a
+# 122 GiB box, so this stage could not complete a single chunk: the pass-3 ledger was empty
+# after five attempts because it died around layer 17-28 of chunk 0 every time. It was looping,
+# not progressing.
+#
+# Only two things recover that memory, and BOTH are required:
+#     process exit (CUDA context teardown) ..... 88.71 -> 93.66 GiB
+#     then `echo 3 > drop_caches` .............. 93.66 -> 121.23 GiB  (full baseline)
+#
+# So the stage now runs as an ORCHESTRATOR that spawns one worker process per (chunk, layer
+# block). The orchestrator never touches CUDA, so it never leaks; each worker exits and its
+# memory comes back.
+S03_ROLE = os.environ.get("S03_ROLE", "orchestrator")
+LAYERS_PER_BLOCK = int(os.environ.get("S03_LAYERS_PER_BLOCK", "9"))
+LAYER_COST_GIB = 5.76          # MEASURED, per layer, not returned in-process
+STATES_DIR = ROOT / "artifacts" / "s03_states"
+BLOCK_LEDGER = ROOT / "state" / "s03_blocks.json"
+
+
+def _avail_gib() -> float:
+    with open("/proc/meminfo") as fh:
+        for line in fh:
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) / 1048576
+    return 0.0
+
+
+def _full_reclaim() -> float:
+    """process exit is only half of it; `echo 3` releases the nvmap pool. MEASURED: +27.5 GiB."""
+    import subprocess
+    import time as _t
+    try:
+        subprocess.run(["sync"], timeout=60, check=False)
+        subprocess.run(["sudo", "-n", "sh", "-c", "echo 3 > /proc/sys/vm/drop_caches"],
+                       timeout=60, check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+    _t.sleep(3)
+    return _avail_gib()
+
+
+def _orchestrate(n_layers: int, n_chunks: int) -> dict:
+    """Spawn one worker per (chunk, block); never import CUDA in this process."""
+    import subprocess
+
+    blocks = [(lo, min(lo + LAYERS_PER_BLOCK, n_layers))
+              for lo in range(0, n_layers, LAYERS_PER_BLOCK)]
+    need = LAYERS_PER_BLOCK * LAYER_COST_GIB
+    done = set()
+    if BLOCK_LEDGER.exists():
+        try:
+            done = {tuple(x) for x in json.loads(BLOCK_LEDGER.read_text()).get("done", [])}
+        except Exception:
+            done = set()
+    log(f"orchestrating {n_chunks} chunks x {len(blocks)} blocks of <={LAYERS_PER_BLOCK} layers "
+        f"(~{need:.0f} GiB per worker, measured {LAYER_COST_GIB} GiB/layer)", STAGE)
+
+    for ci in range(n_chunks):
+        for bi, (lo, hi) in enumerate(blocks):
+            if (ci, bi) in done:
+                continue
+            avail = _full_reclaim()
+            # Refuse rather than start a worker that cannot finish. A run that begins below
+            # baseline is the run that wedges the box.
+            if avail < need + 18.0:
+                log(f"ABORT before chunk {ci} block {bi}: {avail:.1f} GiB available, need "
+                    f"{need:.0f} + 18 reserve. Memory did not return after the last worker.",
+                    STAGE, "ERROR")
+                raise RuntimeError(f"memory did not return: {avail:.1f} GiB available")
+            log(f"chunk {ci} block {bi} (layers {lo}-{hi-1}) starting, {avail:.1f} GiB available",
+                STAGE)
+            env = dict(os.environ, S03_ROLE="worker", S03_CHUNK=str(ci),
+                       S03_LO=str(lo), S03_HI=str(hi))
+            # expandable_segments is wrong on Tegra (unsloth-zoo#1235) and this device reports
+            # is_integrated=1; make sure an inherited value cannot reach the worker.
+            env.pop("PYTORCH_CUDA_ALLOC_CONF", None)
+            rc = subprocess.run([sys.executable, str(ROOT / "scripts" / "run_stage.py"),
+                                 "s03_saliency", "stages.s03_saliency"],
+                                env=env, cwd=str(ROOT)).returncode
+            if rc != 0:
+                log(f"chunk {ci} block {bi} worker rc={rc}", STAGE, "ERROR")
+                raise RuntimeError(f"s03 worker failed rc={rc} at chunk {ci} block {bi}")
+            done.add((ci, bi))
+            BLOCK_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+            BLOCK_LEDGER.write_text(json.dumps({"done": sorted(done)}))
+            log(f"chunk {ci} block {bi} done", STAGE)
+    _full_reclaim()
+
+    # Completion is the ORCHESTRATOR's job now. Workers return early, so without this nothing
+    # would ever run the audit or set saliency_ready and the pipeline would wait forever on a
+    # stage that had actually finished. _audit() only torch.loads the dumps on CPU, so the
+    # parent still never initialises CUDA.
+    audit = _audit()
+    n = len(sorted(SALIENCY.glob("*.pt")))
+    kv_set("saliency_ready", True)
+    res = {"layers": n, "chunks": n_chunks, "blocks": len(blocks),
+           "layers_per_block": LAYERS_PER_BLOCK, "expert_audit": audit,
+           "sparsity": TARGET_SPARSITY, "max_len": MAX_LEN, "path": "stream-blocked"}
+    (ARTIFACTS / "s03_saliency.json").write_text(json.dumps(res, indent=2, default=str))
+    log(f"saliency COMPLETE: {n} layer dumps over {n_chunks} chunks x {len(blocks)} blocks",
+        STAGE)
+    return res
+
+
 def run() -> dict:
     import torch
     from transformers import AutoConfig
@@ -328,6 +437,19 @@ def run() -> dict:
     global DT
     DT = torch.bfloat16
     SALIENCY.mkdir(parents=True, exist_ok=True)
+
+    # ---- orchestrator branch: plan the blocks and spawn workers, touching no CUDA ----------
+    # Importing torch does not initialise CUDA; only a device op does. Nothing below this branch
+    # runs in the parent, so the parent cannot accumulate the 5.76 GiB/layer that never returns.
+    if S03_ROLE == "orchestrator":
+        _cfg = AutoConfig.from_pretrained(SRC)
+        _t = getattr(_cfg, "text_config", _cfg)
+        _text_rows, _ = _load_calib()
+        _per_chunk = max(1, CHUNK_TOKENS // MAX_LEN)
+        _n_chunks = max(1, -(-len(_text_rows) // _per_chunk))
+        del _text_rows
+        gc.collect()
+        return _orchestrate(_t.num_hidden_layers, _n_chunks)
     strategy = kv_get("load_strategy", "stream")
     if strategy != "stream":
         log(f"load strategy is '{strategy}', but this stage implements the streaming path only",
@@ -440,9 +562,10 @@ def run() -> dict:
                         STAGE, "WARN")
         return states
 
-    def _sweep(states, tag):
+    def _sweep(states, tag, lo=0, hi=None):
         t0 = time.time()
-        for li in range(tcfg.num_hidden_layers):
+        hi = tcfg.num_hidden_layers if hi is None else hi
+        for li in range(lo, hi):
             layer = _build_layer(tcfg, li, reader, DT)
             SS.set_current_layer(f"model.language_model.layers.{li}.mlp")
             ltype = tcfg.layer_types[li]
@@ -493,9 +616,10 @@ def run() -> dict:
                             break
             except OSError:
                 pass
-            log(f"{tag} layer {li+1}/{tcfg.num_hidden_layers} ({ltype})  elapsed {el/60:.1f} min  "
-                f"eta {(el/(li+1))*(tcfg.num_hidden_layers-li-1)/60:.0f} min  "
-                f"avail {avail:.0f} GiB", STAGE)
+            n_here = li - lo + 1
+            log(f"{tag} layer {li+1}/{tcfg.num_hidden_layers} (block {lo}-{hi-1}, "
+                f"{n_here}/{hi-lo}) ({ltype})  elapsed {el/60:.1f} min  "
+                f"eta {(el/n_here)*(hi-li-1)/60:.0f} min  avail {avail:.0f} GiB", STAGE)
             SS.dump(SALIENCY)  # checkpoint per layer: a kill costs at most one layer
 
     # Chunk by token count, not sample count, so a chunk's activation footprint is predictable
@@ -525,6 +649,52 @@ def run() -> dict:
         f"{CALIB_TOKENS/1e6:.1f}M tokens total", STAGE)
 
     t0 = time.time()
+
+    # ---- worker: exactly one (chunk, block) ------------------------------------------------
+    # Hidden states are the only thing that must survive a block boundary, so they go to disk.
+    # They are OVERWRITTEN rather than deleted: nothing in this pipeline removes an artifact.
+    CI = int(os.environ["S03_CHUNK"])
+    LO = int(os.environ["S03_LO"])
+    HI = int(os.environ["S03_HI"])
+    STATES_DIR.mkdir(parents=True, exist_ok=True)
+    spath = STATES_DIR / f"chunk_{CI:03d}.pt"
+
+    if LO > 0:
+        if not spath.exists():
+            raise RuntimeError(f"block {LO}-{HI-1} needs hidden states from the previous block, "
+                               f"but {spath} is missing")
+        states = torch.load(spath, map_location="cpu", weights_only=False)
+        log(f"chunk {CI} block {LO}-{HI-1}: reloaded {len(states)} states "
+            f"({spath.stat().st_size/2**30:.1f} GiB)", STAGE)
+    else:
+        ct, cm = text_chunks[CI], mm_chunks[CI]
+        states = _prepare(ct, cm)
+        if not states:
+            raise RuntimeError(f"chunk {CI}: no batches prepared")
+    act_gib = sum(st["hs"].numel() * st["hs"].element_size() for st in states) / 2**30
+    log(f"chunk {CI+1}/{len(text_chunks)} block {LO}-{HI-1}: {len(states)} batches, "
+        f"{act_gib:.1f} GiB activations on HOST", STAGE)
+
+    if LO > 0:
+        # Only the first block of a chunk may start from zeroed accumulators; every later block
+        # must continue the cumulative totals, and the (chunk, block) ledger is what guarantees
+        # no block is ever replayed into them twice.
+        SS.load_accumulators(SALIENCY, DEV)
+
+    _sweep(states, f"chunk {CI+1}/{len(text_chunks)}", LO, HI)
+    SS.dump(SALIENCY)
+
+    if HI < tcfg.num_hidden_layers:
+        torch.save(states, spath)
+        log(f"chunk {CI} block ends at layer {HI-1}; states saved for the next worker", STAGE)
+        return {"chunk": CI, "block": [LO, HI], "more": True}
+
+    nrc = SS.dump_router_cache(ROUTER_CACHE_DIR / f"chunk_{CI:03d}.pt")
+    SS.dump_light(SNAPSHOT_DIR / f"chunk_{CI:03d}")
+    log(f"chunk {CI+1}/{len(text_chunks)} COMPLETE ({nrc} cached router rows)", STAGE)
+    return {"chunk": CI, "block": [LO, HI], "more": False, "router_rows": nrc}
+
+    # ---- unreachable: the single-process path, kept for reference --------------------------
     for ci, (ct, cm) in enumerate(zip(text_chunks, mm_chunks)):
         if ci in done:
             continue
