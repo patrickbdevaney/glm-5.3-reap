@@ -50,12 +50,15 @@ def _reclaim_page_cache() -> None:
         pass                 # the memguard service is the backstop
 SRC = ROOT / "source" / "GLM-5.3-Flash"
 CORPUS = ROOT / "corpus" / "shards"
-SALIENCY = ROOT / "artifacts" / "saliency"
+# Overridable so an equivalence test can write somewhere isolated instead of the real dumps.
+SALIENCY = Path(os.environ.get("S03_SALIENCY_DIR") or (ROOT / "artifacts" / "saliency"))
 # Router-score cache, written per chunk. Grows with TOKENS rather than with experts, so it is
 # flushed and cleared each chunk instead of accumulating across the run.
-ROUTER_CACHE_DIR = ROOT / "artifacts" / "router_cache"
+ROUTER_CACHE_DIR = Path(os.environ.get("S03_ROUTER_CACHE_DIR")
+                        or (ROOT / "artifacts" / "router_cache"))
 # Per-chunk cumulative snapshots of the ranking statistics; see SS.dump_light.
-SNAPSHOT_DIR = ROOT / "artifacts" / "saliency_snapshots"
+SNAPSHOT_DIR = Path(os.environ.get("S03_SNAPSHOT_DIR")
+                    or (ROOT / "artifacts" / "saliency_snapshots"))
 
 TARGET_SPARSITY = float(kv_get("chosen_ratio", 0.50) or 0.50)
 # Sized so that ALL activations fit in RAM at once, which lets each layer be loaded exactly
@@ -63,13 +66,19 @@ TARGET_SPARSITY = float(kv_get("chosen_ratio", 0.50) or 0.50)
 # re-reads. 512 x 2048 x hc_mult(4) x 4096 x 2B ~= 34 GB.
 # REAP's saliency is a conditional mean, so tokens-per-expert governs, not corpus size:
 # 512 x 2048 x 8/288 ~= 29k tokens per expert, far above the 2k sufficiency floor.
-MAX_LEN = int(kv_get("calib_max_len", 2048) or 2048)
+def _tunable(env_name: str, kv_name: str, default: int) -> int:
+    """Env overrides the kv store, for isolated test runs that must not mutate pipeline state."""
+    v = os.environ.get(env_name)
+    return int(v) if v else int(kv_get(kv_name, default) or default)
+
+
+MAX_LEN = _tunable("S03_MAX_LEN", "calib_max_len", 2048)
 # PASS 2. Pass 1 ran 256 samples = 0.52M tokens: 1.1% of the 48.3M-token corpus we built, which
 # left 501/12096 expert slots decided on under 2000 tokens and ~25.5 experts per layer sitting
 # within +-5% of the 50% cut. The budget is now expressed in TOKENS and swept in chunks, so it
 # is bounded by wall-clock rather than by RAM.
-CALIB_TOKENS = int(kv_get("calib_tokens", 5_500_000) or 5_500_000)
-CHUNK_TOKENS = int(kv_get("calib_chunk_tokens", 500_000) or 500_000)
+CALIB_TOKENS = _tunable("S03_CALIB_TOKENS", "calib_tokens", 5_500_000)
+CHUNK_TOKENS = _tunable("S03_CHUNK_TOKENS", "calib_chunk_tokens", 500_000)
 N_CALIB = int(kv_get("n_calib_samples", 0) or 0) or -(-CALIB_TOKENS // MAX_LEN)
 # MEASURED 2026-08-27: the KDA (linear_attention) forward costs ~13 GiB of transient memory
 # per 2048-token sequence and scales linearly with batch, so B=8 needed ~104 GiB and took the
@@ -336,8 +345,9 @@ def _build_layer(cfg, i, reader, dtype):
 S03_ROLE = os.environ.get("S03_ROLE", "orchestrator")
 LAYERS_PER_BLOCK = int(os.environ.get("S03_LAYERS_PER_BLOCK", "9"))
 LAYER_COST_GIB = 5.76          # MEASURED, per layer, not returned in-process
-STATES_DIR = ROOT / "artifacts" / "s03_states"
-BLOCK_LEDGER = ROOT / "state" / "s03_blocks.json"
+# Both overridable, so an equivalence test cannot pollute the real ledger or state files.
+STATES_DIR = Path(os.environ.get("S03_STATES_DIR") or (ROOT / "artifacts" / "s03_states"))
+BLOCK_LEDGER = Path(os.environ.get("S03_BLOCK_LEDGER") or (ROOT / "state" / "s03_blocks.json"))
 
 
 def _avail_gib() -> float:
