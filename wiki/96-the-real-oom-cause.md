@@ -102,5 +102,50 @@ Layered, each layer validated rather than assumed:
 > between them. Static prediction is necessary and not sufficient — the per-step fence is what
 > makes it safe, because the leak depends on driver-pool state no static model can see. `[EST]`
 
-`s03_saliency` needs exactly this treatment before pass 3 restarts: 45 layers in one process is
-259 GiB and cannot work. `[OPEN]`
+## s03_saliency, fixed 2026-09-27
+
+The stage is now an **orchestrator** that spawns one worker process per `(chunk, layer block)`.
+The parent imports torch but never touches a device, so it never accumulates the leak; each
+worker exits and its memory returns. Between workers the orchestrator runs `drop_caches 3` and
+**refuses to start the next block if memory did not come back**, rather than continuing into a
+wedge. Default block is 9 layers (52 GiB + 18 reserve against a 121 GiB baseline).
+
+Hidden states are the only thing that must survive a block boundary, so they go to disk and are
+**overwritten, never deleted**.
+
+### The more important half: a silent double-count
+
+Blocking a sweep risks something worse than a crash. The pre-existing resume path had exactly
+that bug:
+
+> Accumulators were dumped per **layer** (`SS.dump(SALIENCY)` after each one, "a kill costs at
+> most one layer"), but resume skipped per **chunk**. So a crash mid-chunk reloaded cumulative
+> totals that already contained that chunk's finished layers, then replayed them.
+
+The effect is not a crash, it is a **bias**: the interrupted chunk gets double weight for the
+layers it had completed and single weight for the rest. Because
+[85-corpus-sources.md](85-corpus-sources.md) establishes that chunks arrive **grouped by
+domain**, an interrupted chunk is domain-skewed — so the early layers of a resumed run carry a
+distorted domain mixture. `[EST]`
+
+**Pass 3 was not affected**: it never completed a chunk, so `done` was always empty, accumulators
+reset to zero and the dumps were overwritten each attempt. The bug needed at least one completed
+chunk plus a crash in a later one.
+
+The ledger is now keyed on `(chunk, block)`, and `gate_s03_blocks.py` (16/16) asserts that every
+layer runs exactly once at every block size and that a completed block is never rescheduled.
+
+### Completion moved to the orchestrator
+
+Workers return early, so the audit and `kv_set("saliency_ready", True)` had to move to the
+parent — otherwise the pipeline would wait forever on a stage that had actually finished.
+`_audit()` only `torch.load`s the dumps on CPU, so the parent still never initialises CUDA.
+
+### Still open
+
+End-to-end GPU validation of the blocked stage has **not** run yet — the ladder holds the GPU.
+The block plan, ledger and budget arithmetic are gated; the equivalence of blocked vs unblocked
+accumulators on real weights is not. `[OPEN]`
+
+The old single-process chunk loop is left in place, marked unreachable, rather than deleted.
+`[OPEN]`
