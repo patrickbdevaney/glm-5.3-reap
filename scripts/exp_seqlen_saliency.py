@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import gc
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -40,6 +41,10 @@ sys.path.insert(0, "scripts")
 sys.path.insert(0, "scripts/stages")
 
 from common import ROOT, log  # noqa: E402
+import memfence as MF  # noqa: E402
+
+# MEASURED per layer by scripts/probe_layer_mem.py, none of it returned in-process.
+LAYER_COST_GIB = 5.76
 
 
 def _reclaim_page_cache() -> None:
@@ -68,8 +73,24 @@ DEV = "cuda"
 DT = torch.bfloat16
 
 SEQS = [2048, 8192, 16384]
+# MEASURED 2026-09-26/27 (scripts/probe_layer_mem.py): each layer's forward consumes 5.76 GiB
+# that is NEVER returned in-process -- empty_cache() gave back 0.03 GiB against 13.54 consumed.
+# 45 layers would need 259 GiB on a 122 GiB box. The pipeline has been surviving this by
+# crashing and resuming, not by being correct.
+#
+# Only TWO things recover it, and both are required:
+#   process exit (tears down the CUDA context)  88.71 -> 93.66 GiB
+#   then `echo 3 > drop_caches`                 93.66 -> 121.23 GiB  (full baseline)
+#
+# So layers run in BLOCKS, one worker process per block, with the orchestrator dropping caches
+# between them. 97 GiB usable / 5.76 per layer = 16 max; 8 is a 2x margin.
+LAYERS_PER_BLOCK = int(os.environ.get("LAYERS_PER_BLOCK", "8"))
 TOTAL_TOKENS = 16384 * 8      # same token budget in every arm
 L_MAX = int(sys.argv[1]) if len(sys.argv) > 1 else 12
+# Optional second arg: run ONE arm and exit, so the CUDA context tears down between arms.
+# 12 layers x 5.76 GiB = 69 GiB, inside the ~97 GiB usable budget. Four arms in one process is
+# 276 GiB and is what killed the box three times.
+ONLY_ARM = sys.argv[2] if len(sys.argv) > 2 else None
 KEEP = 144                    # 288 experts -> 50%
 
 
@@ -159,6 +180,13 @@ def main() -> None:
     SS.patch_experts_for_saliency()
     results: dict[str, dict] = {}
 
+    if ONLY_ARM:
+        arms = [a for a in arms if a[0] == ONLY_ARM]
+        if not arms:
+            log(f"no arm named {ONLY_ARM!r}", STAGE, "ERROR")
+            return
+        log(f"worker mode: arm {ONLY_ARM} only, then exit so the context tears down", STAGE)
+
     for tag, S, pool in arms:
         adir = OUT / tag
         if (adir / "_done").exists():
@@ -186,6 +214,11 @@ def main() -> None:
 
         t0 = time.time()
         for li in range(min(L_MAX, tcfg.num_hidden_layers)):
+            # Last-resort in-process abort. Nothing OUTSIDE the process can stop a runaway here:
+            # drop_caches cannot touch a live allocation, SIGKILL does not land on a process
+            # blocked in the GPU driver, and cgroup MemoryMax does not bind Tegra unified
+            # allocations. An exception unwinds Python and frees tensors; a wedged box does not.
+            MF.require(LAYER_COST_GIB, f"{tag} layer {li}")
             layer = _build_layer(tcfg, li, reader, DT)
             SS.set_current_layer(f"model.language_model.layers.{li}.mlp")
             SS.set_bucket("general")
@@ -228,6 +261,10 @@ def main() -> None:
             out[rec["layer"]] = _saliency(rec)
         return out
 
+    if ONLY_ARM:
+        log(f"arm {ONLY_ARM} done; comparison runs from the orchestrator once all arms exist",
+            STAGE)
+        return
     ref = load("S2048")
     rows_out = []
     for tag, S, _ in arms:
