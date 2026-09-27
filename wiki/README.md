@@ -44,3 +44,4 @@ scrollback, not only in a chat reply.
 ## Status
 
 Phase 0 (deep research) — in progress. No implementation started. No weights downloaded.
+| [99-long-context-assurance.md](99-long-context-assurance.md) | The three ways pruning could break long context, and the one test with a deadline |
