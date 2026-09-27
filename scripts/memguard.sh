@@ -119,39 +119,47 @@ while true; do
   [ "$bad" -ge "$BREACHES" ] && trip="MemAvailable ${avail}MB < floor ${FLOOR_MB}MB x${bad}"
 
   if [ -n "$trip" ]; then
-    # match both absolute and relative launches of our stage runner
-    # The license is still narrow: this project's own compute children only, never "the biggest
-    # RSS" (RSS is precisely the number proven not to track Tegra unified allocations). It now
-    # also covers the llama.cpp workers, because the GGUF pipeline runs 93-175 GiB models
-    # OUTSIDE run_stage.py and a runaway one was previously outside the guard's remit entirely.
-    # Prefer a stage child if both exist - the orchestrator knows how to retry those.
-    pid=$(pgrep -f "run_stage\.py" | head -1)
-    if [ -z "$pid" ]; then
-      # The MiMo REAP stages. Added 2026-09-23: the kernel OOM killer scores by RSS, which on
-      # Tegra is precisely the number that does NOT track the real consumer, so it repeatedly
-      # picked the wrong victim -- and with the session itself at oom_score_adj=200 the wrong
-      # victim can be the session or the desktop. Both MiMo stages now resume exactly (bucket
-      # checkpoints for the corpus, per-chunk accumulators for the pass), so a controlled kill
-      # costs one chunk and the systemd Restart=on-failure brings it straight back. That is
-      # strictly better than letting the kernel choose.
-      # video_topup added 2026-09-24: it runs the VISION TOWER, which is the allocation site
-      # that OOM-killed this box four times (MiMoVisionAttention materialises a dense
-      # [1, heads, L, L] sink bias). It was outside the licence, so a runaway there would
-      # have found no valid victim and left the kernel to choose by RSS -- the number proven
-      # not to track Tegra unified allocations. It resumes from the finished corpus and
-      # writes nothing until it completes, so killing it costs only the partial chunk.
-      pid=$(pgrep -f "python.* scripts/(build_corpus|calib_pass|video_topup|router_kd_run)\.py" | head -1)
-    fi
-    if [ -z "$pid" ]; then
-      pid=$(pgrep -f "llama-(completion|perplexity|quantize|imatrix)" | head -1)
-    fi
-    if [ -z "$pid" ]; then
-      # The Hub uploader too. Xet's upload buffers made it the largest consumer on this box and
-      # it OOMed the machine while memguard watched, because the license covered run_stage.py and
-      # the llama workers but not this. Killing it is safe: uploads resume and dedup what already
-      # landed, so nothing is lost.
-      pid=$(pgrep -f "hf upload|huggingface_hub" | head -1)
-    fi
+    # VICTIM SELECTION. Rewritten 2026-09-26 after this guard killed the wrong process.
+    #
+    # MEASURED: at 21:20:51 it logged "killing stage s03_saliency pid 2197" while the actual
+    # runaway was exp_seqlen_saliency.py, which was not on the licence at all. The pipeline stage
+    # had been running stably for 47 minutes; the experiment had started minutes earlier. The
+    # guard killed the healthy long-running job, left the runaway alive, and the box wedged
+    # anyway -- twice.
+    #
+    # Two changes follow from that:
+    #   1. The licence must cover every heavy job this project can start, not just the ones that
+    #      existed when it was written. A job outside the licence is not merely unkillable, it is
+    #      a job whose presence makes the guard kill something else instead.
+    #   2. Among licensed candidates, prefer the one that STARTED MOST RECENTLY. The newcomer is
+    #      what changed a working situation into a failing one. Preferring run_stage.py was
+    #      exactly backwards: it is usually the oldest and the most expensive to lose.
+    #      RSS is deliberately NOT used to rank -- it is the number proven not to track Tegra
+    #      unified allocations, which is why the kernel OOM killer picks wrong on this box.
+    cands=""
+    # Match on the script BASENAME, never on " scripts/<name>". MEASURED 2026-09-26: the
+    # path-anchored form missed an absolute-path launch of the very script that caused the
+    # incident, which is the same class of miss that let the runaway go unlicensed in the first
+    # place. A basename is what stays true however the job is invoked.
+    for pat in "run_stage\.py" \
+               "(build_corpus|calib_pass|video_topup|router_kd_run)\.py" \
+               "(exp_seqlen_saliency|diag_router_kd|criterion_compare|publish_exp_results)\.py" \
+               "llama-(completion|perplexity|quantize|imatrix)" \
+               "hf upload|huggingface_hub"; do
+      for q in $(pgrep -f "$pat" 2>/dev/null); do
+        case " $cands " in *" $q "*) ;; *) cands="$cands $q" ;; esac
+      done
+    done
+    # NEVER select ourselves or our own process group (CLAUDE.md §7: a pattern that matches your
+    # own command line is a self-kill waiting to happen).
+    pid=""
+    newest=0
+    for q in $cands; do
+      [ "$q" = "$$" ] && continue
+      st=$(awk '{print $22}' "/proc/$q/stat" 2>/dev/null)
+      [ -z "$st" ] && continue
+      if [ "$st" -ge "$newest" ]; then newest=$st; pid=$q; fi
+    done
     if [ -n "$pid" ]; then
       stg=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | awk '{print $3}')
       say "!!! $trip — killing stage ${stg:-?} pid $pid (orchestrator will retry)"
@@ -160,7 +168,7 @@ while true; do
       say "killed; MemAvailable now $(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)MB"
       bad=0; srate=0; prev=""; last_drop=$(date +%s)
     elif [ "$warned" = 0 ]; then
-      say "WARN $trip — no run_stage.py or llama-* child running; doing nothing (narrow license)"
+      say "WARN $trip — no licensed heavy job running; doing nothing (narrow license)"
       warned=1
     fi
   else

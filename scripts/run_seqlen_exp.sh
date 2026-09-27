@@ -1,15 +1,28 @@
 #!/usr/bin/env bash
 # Detached runner for the sequence-length saliency test (CLAUDE.md §1: never a child of a
-# Claude Code Bash call). Holds the GPU lock so it cannot race the pass-3 chain.
+# Claude Code Bash call).
 #
-# MemoryMax is not tuning -- it is the thing that keeps a bug in THIS script from taking the box
-# down. On 2026-09-26 this experiment drove MemAvailable to 530 MB and wedged the machine with no
-# oom-kill line, and memguard could not help: its last-resort kill tier fires below 250 MB, but
-# the box is already unusable at ~1 GB. A cgroup ceiling makes the kernel kill this process
-# instead of letting it starve everything else. 96G leaves ~21 GiB for the desktop and the
-# driver on a 117 GiB box.
+# ADMISSION CONTROL. MEASURED 2026-09-26, twice: this experiment and the pipeline's s03_saliency
+# both stream the same 306 GB of shards, and running them together drove MemAvailable to ~200 MB
+# and wedged the box. memguard then killed s03 -- the healthy 47-minute-old job -- because the
+# experiment was not on its licence. The gpulock does NOT cover this: glm53-reap.service runs
+# pipeline.py, which never takes it. So the check is explicit here.
+#
+# Refusing is correct rather than queueing: the pipeline stage is ~12 h and this experiment is
+# ~40 min, so a queue would silently park it for half a day and look like a hang.
 set -u
 cd /home/patrickd/glm-5.3-reap
+
+if pgrep -f 'run_stage\.py' > /dev/null 2>&1; then
+  echo "[$(date -Is)] REFUSING: a pipeline stage (run_stage.py) is running." >&2
+  echo "  Two streaming passes over the same shards wedged this box twice on 2026-09-26." >&2
+  echo "  Stop glm53-reap.service first, or wait for the stage to finish." >&2
+  exit 3
+fi
+
+# MemoryMax is not tuning -- it keeps a bug in THIS script from taking the box down. memguard's
+# floor is deliberately 250 MB (a higher floor killed healthy runs twice, see memguard.sh), so
+# the cgroup ceiling is the thing that bounds a runaway, not the guard.
 exec systemd-run --user --scope --quiet \
-  -p MemoryMax=96G -p MemorySwapMax=0 \
+  -p MemoryMax=72G -p MemorySwapMax=0 \
   ./scripts/gpulock.sh seqlen-exp ./.venv/bin/python scripts/exp_seqlen_saliency.py 12
