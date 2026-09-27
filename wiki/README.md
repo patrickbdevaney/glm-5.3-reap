@@ -37,6 +37,7 @@ scrollback, not only in a chat reply.
 | [94-memguard-killed-the-wrong-process.md](94-memguard-killed-the-wrong-process.md) | Two wedges: a second enabled service, and a guard whose whitelist made it kill the healthy job |
 | [95-memory-lookahead.md](95-memory-lookahead.md) | Predicting peak memory before allocating; why kill and cgroups both failed |
 | [96-the-real-oom-cause.md](96-the-real-oom-cause.md) | MEASURED: 5.76 GiB/layer never returned in-process; only process exit + drop_caches 3 recovers it |
+| [97-end-to-end-audit.md](97-end-to-end-audit.md) | Every stage audited for the four failure classes s03 carried; s09_eval is at risk |
 | [98-router-kd-global.md](98-router-kd-global.md) | Global router KD: scope, cost, sequencing |
 
 ## Status
