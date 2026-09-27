@@ -378,7 +378,7 @@ def _full_reclaim() -> float:
     return _avail_gib()
 
 
-def _orchestrate(n_layers: int, n_chunks: int) -> dict:
+def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
     """Spawn one worker per (chunk, block); never import CUDA in this process."""
     import subprocess
 
@@ -431,10 +431,16 @@ def _orchestrate(n_layers: int, n_chunks: int) -> dict:
                 raise RuntimeError(f"s03 worker failed rc={rc} at chunk {ci} block {bi}")
             after = {p.name: (p.stat().st_mtime_ns, p.stat().st_size)
                      for p in SALIENCY.glob("*.pt")}
-            if after == before:
+            # Only a block that actually CONTAINS a MoE layer is expected to write a dump. The
+            # first `first_k_dense_replace` layers are dense and have no router or experts, so a
+            # block wholly inside them legitimately changes nothing -- the first version of this
+            # check called that a silent no-op and failed a correct run.
+            has_moe = hi > n_dense
+            if has_moe and after == before:
                 raise RuntimeError(
-                    f"chunk {ci} block {bi}: worker exited 0 but no layer dump changed. "
-                    f"A zero exit from a worker that never ran is not success.")
+                    f"chunk {ci} block {bi} (layers {lo}-{hi-1}) contains MoE layers but the "
+                    f"worker exited 0 without changing any layer dump. A zero exit from a worker "
+                    f"that never ran is not success.")
             done.add((ci, bi))
             BLOCK_LEDGER.parent.mkdir(parents=True, exist_ok=True)
             BLOCK_LEDGER.write_text(json.dumps({"done": sorted(done)}))
@@ -484,7 +490,7 @@ def run() -> dict:
         if _nl != _t.num_hidden_layers:
             log(f"S03_MAX_LAYERS={_nl} -- TEST MODE, sweeping only the first {_nl} layers",
                 STAGE, "WARN")
-        return _orchestrate(_nl, _n_chunks)
+        return _orchestrate(_nl, _n_chunks, getattr(_t, "first_k_dense_replace", 0))
     strategy = kv_get("load_strategy", "stream")
     if strategy != "stream":
         log(f"load strategy is '{strategy}', but this stage implements the streaming path only",
@@ -710,11 +716,19 @@ def run() -> dict:
     log(f"chunk {CI+1}/{len(text_chunks)} block {LO}-{HI-1}: {len(states)} batches, "
         f"{act_gib:.1f} GiB activations on HOST", STAGE)
 
-    if LO > 0:
-        # Only the first block of a chunk may start from zeroed accumulators; every later block
-        # must continue the cumulative totals, and the (chunk, block) ledger is what guarantees
-        # no block is ever replayed into them twice.
-        SS.load_accumulators(SALIENCY, DEV)
+    # ALWAYS continue from whatever has already been accumulated. load_accumulators() restores
+    # the per-layer dumps onto the device and is a no-op on an empty directory, so the very first
+    # worker loads nothing and every later one resumes the running totals.
+    #
+    # This was `if LO > 0` and that was WRONG, caught by gate_s03_equivalence.sh. Every chunk's
+    # block 0 starts at LO=0, so it skipped the load, began from zero, and its dump OVERWROTE
+    # every previous chunk's contribution for the layers in that block. With the production block
+    # of 9, layers 3-8 would have retained only the LAST chunk while layers 9+ accumulated all
+    # ten -- a per-layer data imbalance of 10x, silent, in the numbers the mask is chosen from.
+    #
+    # Safety of loading unconditionally rests entirely on the (chunk, block) ledger: a block is
+    # never rescheduled, so a restored total is never added to twice.
+    SS.load_accumulators(SALIENCY, DEV)
 
     _sweep(states, f"chunk {CI+1}/{len(text_chunks)}", LO, HI)
     SS.dump(SALIENCY)

@@ -7,10 +7,10 @@
 # one, produces a perfectly valid-looking saliency file with the wrong numbers in it -- and the
 # mask is chosen from those numbers.
 #
-# Both arms run through the SAME worker path and differ ONLY in block size, so nothing but the
-# boundary is varied. Accumulators are float32 sums over the same batches in the same order, and
-# states round-trip through torch.save in bf16 without loss, so the result should be BIT-EXACT.
-# Anything less than exact equality is a real difference and the gate says so.
+# Four arms, because two are not enough. A and B differ only in block size; C and D rerun them
+# unchanged to establish how much two runs disagree for reasons that have nothing to do with
+# blocking. See scripts/s03_eq_compare.py for why bit-exactness was the wrong bar and what
+# replaced it.
 set -u
 cd /home/patrickd/glm-5.3-reap
 PY=./.venv/bin/python
@@ -45,45 +45,22 @@ run_arm(){ # dir, layers_per_block, label
 }
 
 # A: one block covering all layers -- the unblocked reference
-run_arm A 6 "A (one 6-layer block = unblocked reference)" || { echo "FAIL: arm A rc!=0"; tail -20 $T/A.log; exit 1; }
+run_arm A 6 "A (one 6-layer block = unblocked reference)" || { echo "GATE FAIL: arm A rc!=0" | tee $T/VERDICT; tail -20 $T/A.log; exit 1; }
 # B: the same sweep cut into blocks of 2, so every boundary is exercised
-run_arm B 2 "B (three 2-layer blocks -- every boundary exercised)" || { echo "FAIL: arm B rc!=0"; tail -20 $T/B.log; exit 1; }
+run_arm B 2 "B (three 2-layer blocks -- every boundary exercised)" || { echo "GATE FAIL: arm B rc!=0" | tee $T/VERDICT; tail -20 $T/B.log; exit 1; }
 
-$PY - <<'PYEOF'
-import sys, torch
-from pathlib import Path
-A = Path("artifacts/_s03_eqtest/A"); B = Path("artifacts/_s03_eqtest/B")
-fa = sorted(p.name for p in A.glob("*.pt")); fb = sorted(p.name for p in B.glob("*.pt"))
-fail = 0
-if not fa:
-    print("FAIL: arm A produced no layer dumps"); sys.exit(1)
-if fa != fb:
-    print(f"FAIL: different layers dumped\n  A={fa}\n  B={fb}"); sys.exit(1)
-print(f"PASS: both arms dumped the same {len(fa)} layers")
-worst = 0.0
-for n in fa:
-    da = torch.load(A/n, weights_only=False); db = torch.load(B/n, weights_only=False)
-    for k, va in da.items():
-        if not torch.is_tensor(va):
-            continue
-        vb = db.get(k)
-        if vb is None:
-            print(f"FAIL: {n}: key {k} missing from B"); fail = 1; continue
-        if va.shape != vb.shape:
-            print(f"FAIL: {n}:{k} shape {tuple(va.shape)} vs {tuple(vb.shape)}"); fail = 1; continue
-        if torch.equal(va, vb):
-            continue
-        d = (va.float() - vb.float()).abs().max().item()
-        worst = max(worst, d)
-        print(f"FAIL: {n}:{k} differs, max|delta|={d:.6g}")
-        fail = 1
-if not fail:
-    print("PASS: every accumulator tensor is BIT-EXACT between blocked and unblocked")
-    print("      -> block boundaries neither lose nor replay a layer's contribution")
-else:
-    print(f"worst max|delta| = {worst:.6g}")
-sys.exit(fail)
-PYEOF
+# Arms C and D rerun A and B unchanged: the NOISE FLOOR. The gate is meaningless without them.
+# bf16 rounding moves borderline top-8 routing decisions, so no two runs agree bit-for-bit, and
+# "the arms differ" says nothing until you know how much a rerun differs.
+run_arm C 6 "C (unblocked RERUN -- noise floor)" || { echo "GATE FAIL: arm C rc!=0" | tee $T/VERDICT; exit 1; }
+run_arm D 2 "D (blocked RERUN -- noise floor)"   || { echo "GATE FAIL: arm D rc!=0" | tee $T/VERDICT; exit 1; }
+
+$PY scripts/s03_eq_compare.py
 rc=$?
-echo "---"; [ $rc = 0 ] && echo "GATE PASS" || echo "GATE FAIL"
+# Write the verdict to a file as well as exiting with it. An exit code alone has already been
+# shown tonight to be an unreliable signal (a worker that never ran exited 0), so the verdict is
+# recorded where it can be read back and cannot be confused with a wrapper's status.
+echo "---"
+if [ $rc = 0 ]; then echo "GATE PASS" | tee $T/VERDICT
+else echo "GATE FAIL (rc=$rc)" | tee $T/VERDICT; fi
 exit $rc
