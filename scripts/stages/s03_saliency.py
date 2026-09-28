@@ -356,6 +356,27 @@ STATES_DIR = Path(os.environ.get("S03_STATES_DIR") or (ROOT / "artifacts" / "s03
 BLOCK_LEDGER = Path(os.environ.get("S03_BLOCK_LEDGER") or (ROOT / "state" / "s03_blocks.json"))
 
 
+def _disk_free_gib() -> float:
+    import shutil
+    return shutil.disk_usage(ROOT).free / 2**30
+
+
+def _require_disk(need_gib: float, label: str) -> None:
+    """Refuse to start work that cannot land.
+
+    MEASURED 2026-09-28: a per-chunk scratch filename grew artifacts/s03_states to 132 GB and
+    filled a 936 GB disk to 100%. The run died with `OSError: [Errno 28] No space left on device`
+    and took sqlite with it ("database or disk is full"), which is a far worse failure than
+    stopping -- a half-written 17 GB tensor file and a half-written ledger are both garbage.
+    Memory has had a pre-flight since the first wedge; disk had none.
+    """
+    free = _disk_free_gib()
+    if free < need_gib:
+        raise RuntimeError(
+            f"{label}: {free:.1f} GiB free, need {need_gib:.1f} GiB. Refusing to start work that "
+            f"cannot be written. Check artifacts/s03_states and run scripts/gate_disk_budget.py.")
+
+
 def _avail_gib() -> float:
     with open("/proc/meminfo") as fh:
         for line in fh:
@@ -412,6 +433,8 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
         # 17 GiB of states for nothing. The existing 40-block ledger predates this phase.
         outstanding = [bi for bi in range(len(blocks)) if (ci, bi) not in done]
         if outstanding and (ci, "prep") not in done:
+            # 17 GiB for the states file plus headroom for the accumulators and the ledger.
+            _require_disk(25.0, f"chunk {ci} prepare")
             avail = _full_reclaim()
             log(f"chunk {ci} PREPARE starting, {avail:.1f} GiB available", STAGE)
             env = dict(os.environ, S03_ROLE="worker", S03_PHASE="prepare", S03_CHUNK=str(ci),

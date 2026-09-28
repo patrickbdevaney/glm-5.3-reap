@@ -31,6 +31,7 @@ scrollback, not only in a chat reply.
 | [70-healing.md](70-healing.md) | Recovery training: LoRA, distillation, RLVR |
 | [80-calibration.md](80-calibration.md) | Calibration corpus design and evidence |
 | [90-open-risks.md](90-open-risks.md) | Open risks, contradictions with the directive, decision log |
+| [90-data-handling.md](90-data-handling.md) | Scratch vs derived vs precious; the 132 GB scratch leak that filled the disk |
 | [91-capability-coverage.md](91-capability-coverage.md) | What calibration protects: long-context and non-English gaps |
 | [92-long-context-program.md](92-long-context-program.md) | Holding the REAP at native 1M: arithmetic, saturation, NIAH/LongPPL plan |
 | [93-seqlen-cost-and-memory.md](93-seqlen-cost-and-memory.md) | Sequence length is ~free at fixed tokens; the memory wedge and its two fixes |
