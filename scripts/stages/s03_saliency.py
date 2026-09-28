@@ -26,6 +26,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import memfence as MF  # noqa: E402
 from common import (ROOT, ARTIFACTS, MODEL_ID, log, metric, kv_get, kv_set,  # noqa: E402
                     publish, free_gib)
 
@@ -400,6 +401,32 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
         f"(~{need:.0f} GiB per worker, measured {LAYER_COST_GIB} GiB/layer)", STAGE)
 
     for ci in range(n_chunks):
+        # PREPARE is its own process. MEASURED 2026-09-27: chunk 9's block 0 was started by the
+        # orchestrator with 113.7 GiB available and reached layer 1 with 6 GiB -- ~107 GiB
+        # consumed by _prepare before a single layer ran. _prepare embeds every batch on the GPU
+        # in a loop (166 batches for that chunk) and those allocations never come back, the same
+        # leak as the layer sweep but in the one step that had neither a fence nor a process
+        # boundary. Giving it its own process means its memory is returned before the sweep
+        # starts, instead of being subtracted from the sweep's budget.
+        # Don't prepare a chunk whose blocks are all finished -- on resume that would rebuild
+        # 17 GiB of states for nothing. The existing 40-block ledger predates this phase.
+        outstanding = [bi for bi in range(len(blocks)) if (ci, bi) not in done]
+        if outstanding and (ci, "prep") not in done:
+            avail = _full_reclaim()
+            log(f"chunk {ci} PREPARE starting, {avail:.1f} GiB available", STAGE)
+            env = dict(os.environ, S03_ROLE="worker", S03_PHASE="prepare", S03_CHUNK=str(ci),
+                       S03_LO="0", S03_HI="0")
+            env.pop("PYTORCH_CUDA_ALLOC_CONF", None)
+            rc = subprocess.run([sys.executable,
+                                 str(ROOT / "scripts" / "s03_worker_main.py")],
+                                env=env, cwd=str(ROOT)).returncode
+            if rc != 0:
+                raise RuntimeError(f"s03 prepare failed rc={rc} at chunk {ci}")
+            done.add((ci, "prep"))
+            BLOCK_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+            BLOCK_LEDGER.write_text(json.dumps({"done": sorted(map(list, done), key=str)}))
+            log(f"chunk {ci} PREPARE done", STAGE)
+
         for bi, (lo, hi) in enumerate(blocks):
             if (ci, bi) in done:
                 continue
@@ -607,6 +634,9 @@ def run() -> dict:
         t0 = time.time()
         hi = tcfg.num_hidden_layers if hi is None else hi
         for li in range(lo, hi):
+            # The orchestrator checks before a BLOCK; nothing checked within one. Chunk 9 ran off
+            # that cliff. An exception unwinds Python and frees tensors; a wedged box does not.
+            MF.require(LAYER_COST_GIB, f"chunk {CI} layer {li}")
             layer = _build_layer(tcfg, li, reader, DT)
             SS.set_current_layer(f"model.language_model.layers.{li}.mlp")
             ltype = tcfg.layer_types[li]
@@ -700,18 +730,23 @@ def run() -> dict:
     STATES_DIR.mkdir(parents=True, exist_ok=True)
     spath = STATES_DIR / f"chunk_{CI:03d}.pt"
 
-    if LO > 0:
-        if not spath.exists():
-            raise RuntimeError(f"block {LO}-{HI-1} needs hidden states from the previous block, "
-                               f"but {spath} is missing")
-        states = torch.load(spath, map_location="cpu", weights_only=False)
-        log(f"chunk {CI} block {LO}-{HI-1}: reloaded {len(states)} states "
-            f"({spath.stat().st_size/2**30:.1f} GiB)", STAGE)
-    else:
+    if os.environ.get("S03_PHASE") == "prepare":
         ct, cm = text_chunks[CI], mm_chunks[CI]
         states = _prepare(ct, cm)
         if not states:
             raise RuntimeError(f"chunk {CI}: no batches prepared")
+        gib = sum(st["hs"].numel() * st["hs"].element_size() for st in states) / 2**30
+        torch.save(states, spath)
+        log(f"chunk {CI} prepared: {len(states)} batches, {gib:.1f} GiB states -> {spath.name}; "
+            f"exiting so the embedding pass's memory is returned", STAGE)
+        return {"chunk": CI, "phase": "prepare", "batches": len(states)}
+
+    if not spath.exists():
+        raise RuntimeError(f"chunk {CI} block {LO}-{HI-1} needs hidden states, but {spath} is "
+                           f"missing -- the prepare phase must run first")
+    states = torch.load(spath, map_location="cpu", weights_only=False)
+    log(f"chunk {CI} block {LO}-{HI-1}: reloaded {len(states)} states "
+        f"({spath.stat().st_size/2**30:.1f} GiB)", STAGE)
     act_gib = sum(st["hs"].numel() * st["hs"].element_size() for st in states) / 2**30
     log(f"chunk {CI+1}/{len(text_chunks)} block {LO}-{HI-1}: {len(states)} batches, "
         f"{act_gib:.1f} GiB activations on HOST", STAGE)
