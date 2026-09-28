@@ -349,8 +349,25 @@ S03_ROLE = os.environ.get("S03_ROLE", "orchestrator")
 # handful of layers makes both arms feasible so the comparison is possible at all. Unset in
 # production, where it must never truncate the sweep.
 S03_MAX_LAYERS = int(os.environ.get("S03_MAX_LAYERS", "0")) or None
-# MEASURED, per layer, not returned in-process.
-LAYER_COST_GIB = 5.76
+# MEASURED 2026-09-28 by sampling /proc/meminfo every 2 s through a real 2-layer block:
+#
+#   t=  0s  117.9 GiB available
+#   t= 24s   65.8   <- states loaded + layer 0 swept
+#   t=145s   66.3   <- plateau: the memory NEVER comes back
+#   t=157s   12.8   <- layer 1 swept, another ~53 GiB gone
+#   t=171s    1.9   <- memfence refused layer 2
+#
+# 5.76 GiB is the WEIGHT size of a layer. The true host footprint of sweeping one is ~53 GiB --
+# about 9x larger -- because on this integrated board torch.cuda.empty_cache() returns
+# essentially nothing (this file, line ~334: "gave back 0.03 GiB against 13.54 GiB consumed").
+# Device memory comes from system RAM via nvmap, is charged to no cgroup, and is reclaimed ONLY
+# by process exit.
+#
+# Sizing against 5.76 is why 9, then 5, then even 2 layers per block all died: two layers alone
+# exceed the box. One layer per process is the only configuration that fits, and the per-block
+# process boundary is what returns the memory.
+LAYER_COST_GIB = 53.0          # MEASURED host footprint, NOT the weight size
+LAYER_WEIGHT_GIB = 5.76        # weight size only -- kept for logging, never for budgeting
 # The FIXED cost a worker pays before it touches a single layer. The old budget counted only
 # `layers x LAYER_COST_GIB` and therefore under-stated a 9-layer block by ~20 GiB:
 #   reloaded states  17.5 GiB  ("reloaded 166 states (17.5 GiB)")
@@ -501,7 +518,11 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
     sys.path.insert(0, str(ROOT / "scripts"))
     from memceiling import describe, effective_gib, fit_units, require
 
-    ceiling = effective_gib()
+    # HOST, not effective_gib(): this stage's dominant cost is device memory, which comes from
+    # system RAM via nvmap and is charged to no cgroup. min(host, cgroup) would wrongly refuse --
+    # the cgroup bounds only the ~20 GiB CPU-side working set, which fits it comfortably.
+    from memceiling import host_ceiling_gib
+    ceiling = host_ceiling_gib()
     pinned = None
     if BLOCK_LEDGER.exists():
         try:
@@ -906,6 +927,11 @@ def run() -> dict:
     # States are scratch that lives only between the blocks of ONE chunk: the next chunk's
     # prepare overwrites them and nothing ever reads a previous chunk's. A single reused path is
     # both correct and bounded at ~17 GB.
+    # STATES_DIR is overridable so a measurement or gate run cannot advance the real states.
+    # 2026-09-28: a 2-layer probe redirected S03_SALIENCY_DIR but NOT this path; had it completed
+    # it would have written states advanced by two layers while the ledger recorded nothing, and
+    # the next real run would have re-swept layers 0-1 from an already-advanced tensor. It raised
+    # on the memfence before the save, so nothing was lost -- luck, not design.
     spath = STATES_DIR / "states.pt"
 
     if os.environ.get("S03_PHASE") == "prepare":

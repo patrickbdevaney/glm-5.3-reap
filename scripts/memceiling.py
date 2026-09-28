@@ -76,6 +76,27 @@ def host_available_gib() -> float:
     return 0.0
 
 
+def device_is_integrated() -> bool:
+    """True on boards where the GPU allocates from system RAM (Tegra/nvmap).
+
+    This is the fact that invalidates cgroup accounting: an nvmap allocation consumes physical
+    host RAM but is charged to NO cgroup, and nvidia-smi reports [N/A] for it. The kernel sees
+    the pages disappear from MemAvailable; memory.current never moves. A cgroup ceiling
+    therefore cannot bound this process, which is why s03 was killed by memguard at 240 MB
+    MemAvailable while its cgroup sat 19 GiB below a 72 GiB cap.
+    """
+    return Path("/sys/devices/soc0/family").exists() or Path("/etc/nv_tegra_release").exists()
+
+
+def host_ceiling_gib() -> float:
+    """The ceiling for anything that touches the GPU on an integrated board.
+
+    Device allocations are invisible to the cgroup, so HOST MemAvailable is the only number that
+    bounds them. Use this -- not effective_gib() -- to size GPU work.
+    """
+    return host_available_gib()
+
+
 def effective_gib() -> float:
     """What a new allocation can actually consume: the MINIMUM of both ceilings.
 
@@ -140,7 +161,7 @@ STAGE_PEAK_GIB = {
     "s01_source":   4.0,    # MEASURED -- streams shards, never holds the model
     "s01b_load":    8.0,    # MEASURED
     "s02_corpus":   6.0,    # MEASURED
-    "s03_saliency": 60.0,   # MEASURED 2026-09-28: fixed 19.7 + 7 layers x 5.76
+    "s03_saliency": 72.7,   # MEASURED 2026-09-28: fixed 19.7 + ONE layer x 53.0 host
     "s04_sweep":    24.0,   # [EST] reads saliency accumulators, not weights
     "s04b_surgery": 48.0,   # [EST] rewrites shards expert-by-expert; streaming, one shard resident
     "s05_heal":     64.0,   # [EST] LoRA heal; the largest unmeasured stage
@@ -180,8 +201,51 @@ def peak_gib() -> float | None:
 
 
 def preflight(stage: str) -> None:
-    """Refuse a stage that cannot fit. Called centrally for EVERY stage by run_stage.py."""
+    """Refuse a stage that cannot fit. Called centrally for EVERY stage by run_stage.py.
+
+    Gated on the HOST ceiling. On this board the cgroup cannot bound a stage that touches the
+    GPU -- nvmap allocations consume system RAM and are charged to no cgroup -- so host
+    MemAvailable is the only number that binds.
+    """
     need = STAGE_PEAK_GIB.get(stage)
     if need is None:
         return
-    require(need, f"stage {stage}", margin_gib=6.0)
+    have = host_ceiling_gib()
+    if need + 6.0 > have:
+        raise MemoryError(
+            f"stage {stage}: needs {need:.1f} GiB + 6.0 margin, host has {have:.1f} GiB. "
+            f"Refusing to start -- this would be killed, not slowed.")
+
+
+def watchdog(stage: str, floor_gib: float = 12.0, warn_gib: float = 25.0, poll_s: float = 2.0):
+    """Abort the stage CLEANLY before memguard SIGKILLs it.
+
+    memguard's kill floor is 250 MB of MemAvailable, deliberately low so it cannot false-positive
+    on a healthy plateau. That makes it a backstop, not a guard: by the time it fires the stage
+    dies by SIGKILL, leaving no traceback, no log line and a status of "background process
+    vanished" -- which is exactly how s03 burned six attempts and ~10 hours on 2026-09-28.
+
+    This fires FIRST, at a floor with room to spare, and raises KeyboardInterrupt in the main
+    thread. Python unwinds, tensors are freed, the stage records a real error. A clean abort is
+    recoverable; a SIGKILL is a crash loop.
+    """
+    import threading, _thread, time as _t
+
+    def _loop():
+        warned = False
+        while True:
+            a = host_available_gib()
+            if a < floor_gib:
+                print(f"[watchdog] {stage}: MemAvailable {a:.1f} GiB < floor {floor_gib:.1f} GiB "
+                      f"-- aborting cleanly before the hard kill", flush=True)
+                _thread.interrupt_main()
+                return
+            if a < warn_gib and not warned:
+                print(f"[watchdog] {stage}: MemAvailable {a:.1f} GiB, approaching floor "
+                      f"{floor_gib:.1f} GiB", flush=True)
+                warned = True
+            _t.sleep(poll_s)
+
+    th = threading.Thread(target=_loop, name=f"watchdog-{stage}", daemon=True)
+    th.start()
+    return th

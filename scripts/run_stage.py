@@ -50,11 +50,14 @@ if __name__ == "__main__":
     # logged "114.8 GiB available" from /proc/meminfo while the cgroup enforced MemoryMax=72G.
     # A refusal here costs seconds and says why; a kill costs the run and says nothing.
     sys.path.insert(0, str(ROOT / "scripts"))
-    from memceiling import describe, oom_kills, peak_gib, preflight
+    from memceiling import describe, oom_kills, peak_gib, preflight, watchdog
     oom_before = oom_kills()
     try:
         preflight(name)
         log(f"memory preflight OK: {describe()}", name)
+        # Arm the clean-abort watchdog for EVERY stage. It fires well above memguard's 250 MB
+        # kill floor so the stage unwinds with a traceback instead of vanishing.
+        watchdog(name)
     except MemoryError as e:
         set_status(name, "retry", error=f"MemoryError: {e}")
         log(f"REFUSED before start: {e}", name, "ERROR")
@@ -70,6 +73,13 @@ if __name__ == "__main__":
         set_status(name, "done", finished_at=now(), result=str(res)[:4000], error=None)
         log(f"DONE (background) -> {str(res)[:300]}", name)
         sys.exit(0)
+    except KeyboardInterrupt:
+        (ROOT / "logs" / f"{name}.traceback.log").write_text(traceback.format_exc())
+        log(f"ABORTED by the memory watchdog: {describe()}. The stage was stopped cleanly "
+            f"before the hard kill; its budget in memceiling.STAGE_PEAK_GIB is too low.",
+            name, "ERROR")
+        set_status(name, "retry", error="memory watchdog abort (clean)")
+        sys.exit(1)
     except Exception as e:
         (ROOT / "logs" / f"{name}.traceback.log").write_text(traceback.format_exc())
         # Attribute the failure honestly: a child killed for memory is not a code bug, and
