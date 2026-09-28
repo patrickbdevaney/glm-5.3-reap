@@ -502,9 +502,24 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
     from memceiling import describe, effective_gib, fit_units, require
 
     ceiling = effective_gib()
+    pinned = None
+    if BLOCK_LEDGER.exists():
+        try:
+            pinned = json.loads(BLOCK_LEDGER.read_text()).get("block_size")
+        except Exception:
+            pinned = None
     if LAYERS_PER_BLOCK is not None:
         per_block = LAYERS_PER_BLOCK          # explicit override (equivalence gate)
         why = f"S03_LAYERS_PER_BLOCK={per_block} (explicit override)"
+    elif pinned:
+        per_block = int(pinned)
+        why = f"pinned by an earlier run in this ledger (ceiling now {ceiling:.1f} GiB)"
+        need_pinned = FIXED_GIB + per_block * LAYER_COST_GIB
+        if need_pinned + MARGIN_GIB > ceiling:
+            raise MemoryError(
+                f"pinned block size {per_block} needs {need_pinned:.1f} GiB but only "
+                f"{describe()}. The ledger's geometry no longer fits. Free memory, or re-sweep "
+                f"the unfinished chunks after clearing their ledger entries.")
     else:
         per_block = fit_units(ceiling, FIXED_GIB, LAYER_COST_GIB, MARGIN_GIB, n_layers)
         why = (f"derived: ({ceiling:.1f} ceiling - {FIXED_GIB:.1f} fixed - {MARGIN_GIB:.1f} "
@@ -535,7 +550,7 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
         except Exception:
             done = set()
     done, swept = _migrate_ledger(done, n_layers)
-    log(f"orchestrating {n_chunks} chunks x {len(blocks)} blocks of <={LAYERS_PER_BLOCK} layers "
+    log(f"orchestrating {n_chunks} chunks x {len(blocks)} blocks of <={per_block} layers "
         f"(~{need:.0f} GiB per worker, measured {LAYER_COST_GIB} GiB/layer)", STAGE)
 
     for ci in range(n_chunks):
@@ -565,7 +580,8 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
             _check_worker_rc(rc, f"chunk {ci} prepare", _oom0)
             done.add((ci, "prep"))
             BLOCK_LEDGER.parent.mkdir(parents=True, exist_ok=True)
-            BLOCK_LEDGER.write_text(json.dumps({"done": sorted(map(list, done), key=str)}))
+            BLOCK_LEDGER.write_text(json.dumps({"block_size": per_block,
+                                               "done": sorted(map(list, done), key=str)}))
             log(f"chunk {ci} PREPARE done", STAGE)
 
         for bi, (lo, hi) in enumerate(blocks):
@@ -623,7 +639,8 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
             done.add((ci, lo, hi))
             swept.setdefault(ci, set()).update(range(lo, hi))
             BLOCK_LEDGER.parent.mkdir(parents=True, exist_ok=True)
-            BLOCK_LEDGER.write_text(json.dumps({"done": sorted(done)}))
+            BLOCK_LEDGER.write_text(json.dumps({"block_size": per_block,
+                                               "done": sorted(map(list, done), key=str)}))
             log(f"chunk {ci} block {bi} done", STAGE)
     _full_reclaim()
 
