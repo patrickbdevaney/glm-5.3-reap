@@ -516,7 +516,7 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
     import subprocess
 
     sys.path.insert(0, str(ROOT / "scripts"))
-    from memceiling import describe, effective_gib, fit_units, require
+    from memceiling import describe, effective_gib, fit_units, host_ceiling_gib, require
 
     # HOST, not effective_gib(): this stage's dominant cost is device memory, which comes from
     # system RAM via nvmap and is charged to no cgroup. min(host, cgroup) would wrongly refuse --
@@ -563,7 +563,12 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
     # resident parts -- it predicted 51.8 GiB for a block that actually needed 71.5 GiB, and the
     # 72 GiB cgroup killed it three times in a row with no error line.
     need = FIXED_GIB + max(hi - lo for lo, hi in blocks) * LAYER_COST_GIB
-    require(need, "s03 block sweep", MARGIN_GIB)
+    _have = host_ceiling_gib()
+    if need + MARGIN_GIB > _have:
+        raise MemoryError(
+            f"s03 block sweep: needs {need:.1f} GiB + {MARGIN_GIB:.1f} margin, host has "
+            f"{_have:.1f} GiB. The CPU-side share (~{FIXED_GIB:.1f} GiB) is what the cgroup "
+            f"sees; the rest is nvmap and is charged to no cgroup.")
     done = set()
     if BLOCK_LEDGER.exists():
         try:
@@ -622,7 +627,7 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
             #
             # `need` now carries the fixed 19.7 GiB, and the ceiling is min(host, cgroup), so the
             # old `+ 18.0` fudge is gone: the reserve it stood in for is a counted term.
-            avail = _effective_gib()
+            avail = host_ceiling_gib()
             if avail < need + MARGIN_GIB:
                 log(f"ABORT before chunk {ci} block {bi}: need {need:.1f} + {MARGIN_GIB:.1f} "
                     f"margin, have {describe()}. Refusing -- this would be OOM-killed.",
