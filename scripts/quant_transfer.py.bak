@@ -1,0 +1,54 @@
+#!/usr/bin/env python
+"""Does a draft head trained on one quant's hidden states transfer to another quant?
+
+The traces are being captured from IQ3_M. A draft head consumes the BASE MODEL'S hidden state,
+and that state is not the same tensor across quantisations - IQ3_M and IQ4_XS are different
+functions of the same weights. So "train on IQ3_M, serve on IQ4_XS" is a train/serve
+distribution shift, and whether it costs acceptance is an empirical question, not something
+that can be asserted from the fact that both are the same REAP checkpoint.
+
+This compares hidden states for the SAME tokens under two quants. Rows are matched by the ids
+each run emitted, so a tokenisation difference shows up as a hard mismatch rather than as
+quietly misaligned rows.
+
+High cosine (>~0.99) means one head serves every quant. Low cosine means the head is
+quant-specific and the honest options are a per-quant head or a mixed-quant capture.
+"""
+import sys, numpy as np
+
+ref_bin, ref_ids, probe_bin, probe_ids = sys.argv[1:5]
+D = 4096
+
+a_ids = np.fromfile(ref_ids,   dtype=np.int32)
+b_ids = np.fromfile(probe_ids, dtype=np.int32)
+n = min(len(a_ids), len(b_ids))
+if not np.array_equal(a_ids[:n], b_ids[:n]):
+    d = int(np.argmax(a_ids[:n] != b_ids[:n]))
+    print(f"FAIL: token streams diverge at {d} ({a_ids[d]} vs {b_ids[d]}) - not comparable")
+    sys.exit(1)
+print(f"token streams identical over {n} tokens")
+
+A = np.fromfile(ref_bin,   dtype=np.float16, count=n*D).reshape(n, D).astype(np.float32)
+B = np.fromfile(probe_bin, dtype=np.float16, count=n*D).reshape(n, D).astype(np.float32)
+
+cos = (A*B).sum(1) / (np.linalg.norm(A,axis=1)*np.linalg.norm(B,axis=1) + 1e-9)
+rel = np.linalg.norm(A-B,axis=1) / (np.linalg.norm(A,axis=1) + 1e-9)
+
+print(f"cosine   mean {cos.mean():.5f}  p50 {np.percentile(cos,50):.5f}  "
+      f"p5 {np.percentile(cos,5):.5f}  min {cos.min():.5f}")
+print(f"rel L2   mean {rel.mean():.5f}  p95 {np.percentile(rel,95):.5f}  max {rel.max():.5f}")
+print(f"rows with cosine < 0.99: {100*(cos<0.99).mean():.2f}%")
+print(f"rows with cosine < 0.95: {100*(cos<0.95).mean():.2f}%")
+
+m = cos.mean()
+print()
+if m >= 0.99:
+    print("VERDICT: states track closely across quants. One head should serve all of them;")
+    print("         confirm with a real acceptance measurement once a head exists.")
+elif m >= 0.95:
+    print("VERDICT: measurable drift. A single head is likely usable but will lose some")
+    print("         acceptance off its training quant. Prefer capturing from the quant you")
+    print("         will actually serve, or mix quants in the capture.")
+else:
+    print("VERDICT: states differ substantially. A head trained on one quant should NOT be")
+    print("         advertised as optimal for the others - capture per-quant or mix.")

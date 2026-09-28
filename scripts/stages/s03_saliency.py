@@ -349,11 +349,37 @@ S03_ROLE = os.environ.get("S03_ROLE", "orchestrator")
 # handful of layers makes both arms feasible so the comparison is possible at all. Unset in
 # production, where it must never truncate the sweep.
 S03_MAX_LAYERS = int(os.environ.get("S03_MAX_LAYERS", "0")) or None
-LAYERS_PER_BLOCK = int(os.environ.get("S03_LAYERS_PER_BLOCK", "9"))
-LAYER_COST_GIB = 5.76          # MEASURED, per layer, not returned in-process
+# MEASURED, per layer, not returned in-process.
+LAYER_COST_GIB = 5.76
+# The FIXED cost a worker pays before it touches a single layer. The old budget counted only
+# `layers x LAYER_COST_GIB` and therefore under-stated a 9-layer block by ~20 GiB:
+#   reloaded states  17.5 GiB  ("reloaded 166 states (17.5 GiB)")
+#   resident parts    2.2 GiB  (embeddings + vision tower, "resident small parts: 2.23 GiB")
+STATES_GIB = 17.5
+RESIDENT_GIB = 2.23
+FIXED_GIB = STATES_GIB + RESIDENT_GIB
+# Transients: forward activations, allocator fragmentation, the accumulator write. Empirical --
+# 9 layers projected 71.5 GiB against a 72.0 GiB cap and was SIGKILLed, so the true overshoot is
+# small but nonzero and there is no swap (MemorySwapMax=0) to absorb it.
+MARGIN_GIB = 8.0
+# Derived from the ceiling that actually binds, NOT hardcoded. An explicit override still wins so
+# the equivalence gate can force an unblocked reference arm, but it is preflighted like any other.
+LAYERS_PER_BLOCK = int(os.environ.get("S03_LAYERS_PER_BLOCK", "0")) or None
 # Both overridable, so an equivalence test cannot pollute the real ledger or state files.
 STATES_DIR = Path(os.environ.get("S03_STATES_DIR") or (ROOT / "artifacts" / "s03_states"))
 BLOCK_LEDGER = Path(os.environ.get("S03_BLOCK_LEDGER") or (ROOT / "state" / "s03_blocks.json"))
+
+
+def _effective_gib() -> float:
+    """The ceiling that actually binds: min(host MemAvailable, cgroup headroom).
+
+    MEASURED 2026-09-28: three consecutive crash-loop kills of chunk 8 block 0, each logging
+    `114.8 GiB available` from /proc/meminfo while the cgroup enforced MemoryMax=72G. The guard
+    was reading a ceiling that does not kill.
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from memceiling import effective_gib
+    return effective_gib()
 
 
 def _disk_free_gib() -> float:
@@ -400,24 +426,115 @@ def _full_reclaim() -> float:
     return _avail_gib()
 
 
+
+# The block ledger records LAYER RANGES, not block indices.
+#
+# A block index is meaningless without the block size that produced it. When the size became
+# derived from the observed memory ceiling (2026-09-28), index 4 stopped meaning "layers 36-44"
+# and started meaning "layers 28-34" -- so a resumed run would have re-swept layers 35-44 for the
+# eight finished chunks and added them to the accumulators a SECOND time. Silent double-counting
+# of saliency is worse than a crash: it survives, and it biases which experts get pruned.
+#
+# Ranges are geometry-independent. Coverage is what matters, not indices.
+LEGACY_BLOCK_SIZE = 9
+
+
+def _migrate_ledger(done: set, n_layers: int):
+    """Return (ledger, swept) where swept[chunk] is the set of layers already accumulated."""
+    out, swept = set(), {}
+    for e in done:
+        if len(e) == 2 and e[1] == "prep":
+            out.add(e)
+        elif len(e) == 2 and isinstance(e[1], int):           # legacy (chunk, block_index)
+            ci, bi = e
+            lo = bi * LEGACY_BLOCK_SIZE
+            hi = min(lo + LEGACY_BLOCK_SIZE, n_layers)
+            out.add((ci, lo, hi))
+            swept.setdefault(ci, set()).update(range(lo, hi))
+        elif len(e) == 3:                                     # already (chunk, lo, hi)
+            ci, lo, hi = e
+            out.add((ci, lo, hi))
+            swept.setdefault(ci, set()).update(range(lo, hi))
+    return out, swept
+
+
+def _block_state(swept: dict, ci: int, lo: int, hi: int) -> str:
+    """"done" | "todo" | "partial" -- partial means the geometry changed mid-chunk."""
+    have = swept.get(ci, set())
+    want = set(range(lo, hi))
+    if want <= have:
+        return "done"
+    if want & have:
+        return "partial"
+    return "todo"
+
+
+def _oom_kills() -> int:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from memceiling import oom_kills
+    return oom_kills()
+
+
+def _check_worker_rc(rc: int, what: str, oom_before: int) -> None:
+    """A worker that returns -9 was SIGKILLed -- almost always the cgroup OOM killer.
+
+    MEASURED 2026-09-28: chunk 8 block 0 died three times at ~10 min with no traceback, no error
+    line and no log entry of any kind, because SIGKILL leaves none. The orchestrator saw a
+    non-zero rc and restarted, which reproduced it exactly. Naming the signal turns a silent
+    crash loop into a one-line diagnosis.
+    """
+    if rc == 0:
+        return
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from memceiling import describe, oom_kills, peak_gib
+    if rc == -9 or oom_kills() > oom_before:
+        raise MemoryError(
+            f"{what}: worker was OOM-KILLED (rc={rc}, cgroup peak {peak_gib() or 0:.1f} GiB, "
+            f"{describe()}). Not a code fault -- the block does not fit. Reduce "
+            f"S03_LAYERS_PER_BLOCK or raise the unit's MemoryMax.")
+    raise RuntimeError(f"{what}: worker failed rc={rc}")
+
 def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
     """Spawn one worker per (chunk, block); never import CUDA in this process."""
     import subprocess
 
-    blocks = [(lo, min(lo + LAYERS_PER_BLOCK, n_layers))
-              for lo in range(0, n_layers, LAYERS_PER_BLOCK)]
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from memceiling import describe, effective_gib, fit_units, require
+
+    ceiling = effective_gib()
+    if LAYERS_PER_BLOCK is not None:
+        per_block = LAYERS_PER_BLOCK          # explicit override (equivalence gate)
+        why = f"S03_LAYERS_PER_BLOCK={per_block} (explicit override)"
+    else:
+        per_block = fit_units(ceiling, FIXED_GIB, LAYER_COST_GIB, MARGIN_GIB, n_layers)
+        why = (f"derived: ({ceiling:.1f} ceiling - {FIXED_GIB:.1f} fixed - {MARGIN_GIB:.1f} "
+               f"margin) / {LAYER_COST_GIB} per layer")
+        if per_block < 1:
+            raise MemoryError(
+                f"cannot fit even ONE layer: {describe()}, fixed cost {FIXED_GIB:.1f} GiB. "
+                f"Raise the unit's MemoryMax or reduce the chunk size.")
+    log(f"block size {per_block} layers -- {why}", STAGE)
+
+    blocks = [(lo, min(lo + per_block, n_layers))
+              for lo in range(0, n_layers, per_block)]
     # Size the budget on the LARGEST ACTUAL block, not on the configured maximum. A model with
     # 4 layers and S03_LAYERS_PER_BLOCK=64 runs one 4-layer block costing ~23 GiB, but the
     # configured size predicted 369 GiB and refused to start -- found by
     # gate_s03_equivalence.sh, whose arm A deliberately uses an oversized block to mean
     # "unblocked".
-    need = max(hi - lo for lo, hi in blocks) * LAYER_COST_GIB
+    # The PEAK a worker reaches, every term included. The old form was
+    # `max_layers * LAYER_COST_GIB`, which omitted the 17.5 GiB reloaded states and the 2.2 GiB
+    # resident parts -- it predicted 51.8 GiB for a block that actually needed 71.5 GiB, and the
+    # 72 GiB cgroup killed it three times in a row with no error line.
+    need = FIXED_GIB + max(hi - lo for lo, hi in blocks) * LAYER_COST_GIB
+    require(need, "s03 block sweep", MARGIN_GIB)
     done = set()
     if BLOCK_LEDGER.exists():
         try:
             done = {tuple(x) for x in json.loads(BLOCK_LEDGER.read_text()).get("done", [])}
         except Exception:
             done = set()
+    done, swept = _migrate_ledger(done, n_layers)
     log(f"orchestrating {n_chunks} chunks x {len(blocks)} blocks of <={LAYERS_PER_BLOCK} layers "
         f"(~{need:.0f} GiB per worker, measured {LAYER_COST_GIB} GiB/layer)", STAGE)
 
@@ -431,7 +548,8 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
         # starts, instead of being subtracted from the sweep's budget.
         # Don't prepare a chunk whose blocks are all finished -- on resume that would rebuild
         # 17 GiB of states for nothing. The existing 40-block ledger predates this phase.
-        outstanding = [bi for bi in range(len(blocks)) if (ci, bi) not in done]
+        outstanding = [bi for bi, (lo, hi) in enumerate(blocks)
+                       if _block_state(swept, ci, lo, hi) != "done"]
         if outstanding and (ci, "prep") not in done:
             # 17 GiB for the states file plus headroom for the accumulators and the ledger.
             _require_disk(25.0, f"chunk {ci} prepare")
@@ -440,29 +558,41 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
             env = dict(os.environ, S03_ROLE="worker", S03_PHASE="prepare", S03_CHUNK=str(ci),
                        S03_LO="0", S03_HI="0")
             env.pop("PYTORCH_CUDA_ALLOC_CONF", None)
+            _oom0 = _oom_kills()
             rc = subprocess.run([sys.executable,
                                  str(ROOT / "scripts" / "s03_worker_main.py")],
                                 env=env, cwd=str(ROOT)).returncode
-            if rc != 0:
-                raise RuntimeError(f"s03 prepare failed rc={rc} at chunk {ci}")
+            _check_worker_rc(rc, f"chunk {ci} prepare", _oom0)
             done.add((ci, "prep"))
             BLOCK_LEDGER.parent.mkdir(parents=True, exist_ok=True)
             BLOCK_LEDGER.write_text(json.dumps({"done": sorted(map(list, done), key=str)}))
             log(f"chunk {ci} PREPARE done", STAGE)
 
         for bi, (lo, hi) in enumerate(blocks):
-            if (ci, bi) in done:
+            state = _block_state(swept, ci, lo, hi)
+            if state == "done":
                 continue
-            avail = _full_reclaim()
+            if state == "partial":
+                # Some of these layers are already in the accumulators. Re-running the block would
+                # count them twice. Refuse loudly instead of silently corrupting the saliency.
+                raise RuntimeError(
+                    f"chunk {ci} block {bi} (layers {lo}-{hi-1}) partially swept under a previous "
+                    f"block geometry. Re-running would double-count. Delete this chunk's entries "
+                    f"from {BLOCK_LEDGER} and re-sweep the whole chunk.")
+            _full_reclaim()
             # Refuse rather than start a worker that cannot finish. A run that begins below
             # baseline is the run that wedges the box.
-            if avail < need + 18.0:
-                log(f"ABORT before chunk {ci} block {bi}: {avail:.1f} GiB available, need "
-                    f"{need:.0f} + 18 reserve. Memory did not return after the last worker.",
+            #
+            # `need` now carries the fixed 19.7 GiB, and the ceiling is min(host, cgroup), so the
+            # old `+ 18.0` fudge is gone: the reserve it stood in for is a counted term.
+            avail = _effective_gib()
+            if avail < need + MARGIN_GIB:
+                log(f"ABORT before chunk {ci} block {bi}: need {need:.1f} + {MARGIN_GIB:.1f} "
+                    f"margin, have {describe()}. Refusing -- this would be OOM-killed.",
                     STAGE, "ERROR")
-                raise RuntimeError(f"memory did not return: {avail:.1f} GiB available")
-            log(f"chunk {ci} block {bi} (layers {lo}-{hi-1}) starting, {avail:.1f} GiB available",
-                STAGE)
+                raise RuntimeError(f"insufficient memory: {describe()}")
+            log(f"chunk {ci} block {bi} (layers {lo}-{hi-1}) starting, need {need:.1f} GiB, "
+                f"{describe()}", STAGE)
             env = dict(os.environ, S03_ROLE="worker", S03_CHUNK=str(ci),
                        S03_LO=str(lo), S03_HI=str(hi))
             # expandable_segments is wrong on Tegra (unsloth-zoo#1235) and this device reports
@@ -473,12 +603,11 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
             # through run_stage.py and silently lost the stage flock.
             before = {p.name: (p.stat().st_mtime_ns, p.stat().st_size)
                       for p in SALIENCY.glob("*.pt")}
+            _oom0 = _oom_kills()
             rc = subprocess.run([sys.executable,
                                  str(ROOT / "scripts" / "s03_worker_main.py")],
                                 env=env, cwd=str(ROOT)).returncode
-            if rc != 0:
-                log(f"chunk {ci} block {bi} worker rc={rc}", STAGE, "ERROR")
-                raise RuntimeError(f"s03 worker failed rc={rc} at chunk {ci} block {bi}")
+            _check_worker_rc(rc, f"chunk {ci} block {bi} (layers {lo}-{hi-1})", _oom0)
             after = {p.name: (p.stat().st_mtime_ns, p.stat().st_size)
                      for p in SALIENCY.glob("*.pt")}
             # Only a block that actually CONTAINS a MoE layer is expected to write a dump. The
@@ -491,7 +620,8 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
                     f"chunk {ci} block {bi} (layers {lo}-{hi-1}) contains MoE layers but the "
                     f"worker exited 0 without changing any layer dump. A zero exit from a worker "
                     f"that never ran is not success.")
-            done.add((ci, bi))
+            done.add((ci, lo, hi))
+            swept.setdefault(ci, set()).update(range(lo, hi))
             BLOCK_LEDGER.parent.mkdir(parents=True, exist_ok=True)
             BLOCK_LEDGER.write_text(json.dumps({"done": sorted(done)}))
             log(f"chunk {ci} block {bi} done", STAGE)

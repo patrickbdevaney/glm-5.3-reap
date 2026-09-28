@@ -43,6 +43,57 @@ KEEP_FP8 = bool(kv_get("nvfp4_keep_fp8_passthrough", False))
 
 EXPERT_RE = re.compile(r"\.mlp\.(experts\.\d+|shared_experts)\.(gate_proj|up_proj|down_proj)\.weight$")
 
+# Attention projections, quantised only when `nvfp4_quantize_attention` is set.
+#
+# WHY THESE AND NOT ALL OF self_attn. Decode is dense-bound, not expert-bound: only 8 of 144
+# experts are read per token while the entire attention stack is read every token, so attention
+# is 76% of AR per-token traffic for 15% of the weights. Leaving it BF16 costs 11.12 GiB that
+# decode re-reads on every single token. Quantising just these projections saves 8.00 GiB and
+# takes the checkpoint from 98.2 to 90.2 GiB.
+#
+# PROTECTED, and deliberately so - together they are 0.40 GiB, so excluding them costs nothing
+# measurable and removes the only places where 4-bit error would COMPOUND rather than average:
+#   f_a/f_b/g_a/g_b   KDA forget and output gates. They feed exp()/sigmoid inside the delta rule,
+#                     so their error propagates along the sequence recurrence.
+#   b_proj            the KDA beta term - it scales the delta-rule update itself, and it is
+#                     17 MiB. Earlier notes grouped it with q/k/v/o as "safe"; it is not, it is
+#                     inside the recurrence, and it is far too small to be worth the argument.
+#   *_conv1d          short causal convolutions, also inside the recurrence.
+#   indexer.*         DSA's token selector. It decides WHICH tokens are attended, so it is
+#                     argmax-sensitive exactly as the MoE router is, and gets the same treatment.
+#   A_log, dt_bias    per-head scalars, and norms - not matmul weights at all.
+# MODE, set by kv `nvfp4_attn_mode`:
+#   "none"  attention stays BF16. The shipped default.
+#   "post"  o_proj everywhere + the MLA projections. Everything quantised here sits OUTSIDE the
+#           KDA recurrence: o_proj is applied to the attention output, and the 11 DSA layers are
+#           ordinary softmax attention with no recurrent state at all.
+#   "all"   the above plus KDA q/k/v.
+#
+# MEASURED 2026-08-29: "all" costs -0.00673 top-1 agreement (McNemar z = 14.5) for 8.00 GiB. That
+# is MORE quality than the pass-2 mask and the healing fix together recovered, so it is not the
+# lossless lever it was framed as. The suspicion "all" raises is specific: q/k/v on the 34
+# linear-attention layers feed the delta-rule state, so 4-bit error there propagates along the
+# SEQUENCE - which is exactly the argument already used to protect f_a/f_b/g_a/g_b, b_proj and
+# the conv1ds, and it was not applied to q/k/v. "post" is the arm that tests that.
+ATTN_SETS = {
+    "none": None,
+    "post": r"\.self_attn\.(o_proj|q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj)\.weight$",
+    # MEASURED: "post" cost 82% of the damage for 43% of the bytes, so o_proj + the MLA
+    # projections are the EXPENSIVE half and KDA q/k/v the cheap one - the opposite of what the
+    # recurrence argument predicted. "kda" isolates the cheap half: 4.60 GiB at an implied
+    # -0.00122 top-1, six times more byte-efficient than "post".
+    "kda":  r"\.self_attn\.(q_proj|k_proj|v_proj)\.weight$",
+    "all":  r"\.self_attn\.(q_proj|k_proj|v_proj|o_proj|q_a_proj|q_b_proj"
+            r"|kv_a_proj_with_mqa|kv_b_proj)\.weight$",
+}
+ATTN_MODE = str(kv_get("nvfp4_attn_mode", "none"))
+if bool(kv_get("nvfp4_quantize_attention", False)) and ATTN_MODE == "none":
+    ATTN_MODE = "all"          # honour the older boolean flag
+if ATTN_MODE not in ATTN_SETS:
+    raise ValueError(f"nvfp4_attn_mode must be one of {sorted(ATTN_SETS)}, got {ATTN_MODE!r}")
+ATTN_RE = re.compile(ATTN_SETS[ATTN_MODE]) if ATTN_SETS[ATTN_MODE] else None
+QUANT_ATTN = ATTN_RE is not None
+
 # Untouched: quantising any of these saves almost nothing and risks real capability.
 IGNORE = [
     "re:.*lm_head.*", "re:.*embed_tokens.*",
@@ -65,9 +116,20 @@ IGNORE = [
     #                     argmax-sensitive in exactly the way the MoE router is, and gets the
     #                     same treatment.
     #   *norm*            per-channel scales; already covered by the norm rule below
-    r"re:.*self_attn\.(f_a_proj|f_b_proj|g_a_proj|g_b_proj)\..*",
-    r"re:.*self_attn\..*_conv1d.*",
-    "re:.*indexer.*",
+    # Behind a FLAG, default OFF, because the recipe change and the healing correction must not
+    # land in the same artifact. Pass 2 already shipped a mask change and a healing change
+    # together and the resulting null hid two real effects of opposite sign; rebuilding the
+    # published v2 from corrected weights AND a new attention recipe would repeat that exactly.
+    # Set kv `nvfp4_quantize_attention` to run the split rule as its own measured arm.
+    *({"none": ["re:.*self_attn.*", "re:.*indexer.*"],
+       "post": [r"re:.*self_attn\.(q_proj|k_proj|v_proj|f_a_proj|f_b_proj|g_a_proj|g_b_proj"
+                r"|b_proj)\..*",
+                r"re:.*self_attn\..*_conv1d.*", "re:.*indexer.*"],
+       "kda":  [r"re:.*self_attn\.(o_proj|q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj"
+                r"|f_a_proj|f_b_proj|g_a_proj|g_b_proj|b_proj)\..*",
+                r"re:.*self_attn\..*_conv1d.*", "re:.*indexer.*"],
+       "all":  [r"re:.*self_attn\.(f_a_proj|f_b_proj|g_a_proj|g_b_proj|b_proj)\..*",
+                r"re:.*self_attn\..*_conv1d.*", "re:.*indexer.*"]}[ATTN_MODE]),
     "re:.*hc_.*", "re:.*mapping_proj.*",   # mHC, Sinkhorn-normalised
     "re:.*mlp\\.gate\\..*",     # routers: argmax-sensitive
     "re:.*norm.*",
@@ -117,7 +179,7 @@ def run() -> dict:
                     continue                       # consumed with its weight
                 t = f.get_tensor(name)
                 sname = name[: -len("weight")] + "weight_scale_inv" if name.endswith("weight") else None
-                if EXPERT_RE.search(name):
+                if EXPERT_RE.search(name) or (QUANT_ATTN and ATTN_RE.search(name)):
                     w = NV.dequant_fp8_block(t, f.get_tensor(sname)) if sname in keys \
                         else t.to(torch.float32)
                     q = NV.quantize_nvfp4(w)

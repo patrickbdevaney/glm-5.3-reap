@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Decode-speed verification for the draft head.
+#
+# Acceptance rate alone does not tell you the speedup. A head can accept 70% of its drafts and
+# still lose, if drafting costs more than the tokens it saves. The only number that settles it
+# is end-to-end tokens/sec on the SAME quant, with and without the draft, at the same ngl.
+#
+#   ./scripts/verify_decode.sh                      # baseline only
+#   ./scripts/verify_decode.sh <draft.gguf> [quant.gguf]
+set -uo pipefail
+cd /home/patrickd/glm-5.3-reap
+BIN=$HOME/glm5-llama.cpp/build-cuda/bin
+DRAFT=${1:-}
+M=${2:-gguf/GLM-5.3-Flash-REAP50-IQ3_M.gguf}
+NGL=${NGL:-24}          # serving config, not the extraction config: nothing else contends here
+LOG=logs/verify_decode.log
+say() { echo "[$(date -Is)] decode: $*" >> "$LOG"; }
+
+[ -f "$M" ] || { say "missing $M"; exit 1; }
+say "=== baseline: $(basename "$M") ngl=$NGL ==="
+"$BIN/llama-bench" -m "$M" -ngl $NGL -p 512 -n 128 -r 2 >> "$LOG" 2>&1
+say "baseline recorded (tg row is the decode number that matters)"
+
+if [ -z "$DRAFT" ]; then
+  say "no draft given; baseline only. Re-run with a draft gguf to get the speedup."
+  exit 0
+fi
+[ -f "$DRAFT" ] || { say "missing draft $DRAFT"; exit 1; }
+
+# Acceptance is prompt-dependent, so measure it on the same capability mix the head was
+# trained for rather than on one cherry-picked prompt.
+say "=== speculative: draft=$(basename "$DRAFT") ==="
+for DR in 2 4 6; do
+  say "--- draft depth $DR ---"
+  timeout 3600 "$BIN/llama-speculative" -m "$M" -md "$DRAFT" -ngl $NGL -ngld $NGL \
+      --draft-max $DR --draft-min 1 -c 4096 -n 256 -t 8 \
+      -f artifacts/decode_prompts.txt >> "$LOG" 2>&1
+  say "--- depth $DR done ---"
+done
+# llama-speculative prints n_drafted / n_accepted; acceptance = accepted/drafted, and the
+# tokens/sec line is what has to beat the baseline above for any of this to be worth shipping.
+say "compare: speculative tok/s vs baseline tg tok/s. If it is not clearly higher, the head is"
+say "not paying for itself at any depth and the draft depth or head size is wrong."

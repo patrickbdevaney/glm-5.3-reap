@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Draft-head teacher extraction. Unattended, STOPPABLE, RESUMABLE. Wall clock only.
+#   ./scripts/overnight_ctl.sh {stop|resume|status}
+# A step is marked done only on rc=0; interrupted or failed steps re-run on resume.
+# Never uses `pgrep -f <pattern>` - that self-matched earlier and idled two jobs for 2.5h.
+set -uo pipefail
+cd /home/patrickd/glm-5.3-reap
+LOG=logs/overnight.log
+STATE=artifacts/overnight_state
+BIN=$HOME/glm5-llama.cpp/build-cuda/bin
+M=gguf/GLM-5.3-Flash-REAP50-IQ3_M.gguf
+NGL=24                 # measured peak; 32 thrashes (117->31 t/s), 45 would OOM
+SEP='<#sep#>'          # keeps newlines inside prompts intact (matters for code/math)
+MIN_FREE_GB=40         # stop before filling the disk
+mkdir -p "$STATE" traces chunks
+echo $$ > "$STATE/pid"
+say() { echo "[$(date -Is)] overnight: $*" >> "$LOG"; }
+stop_requested() { [ -f "$STATE/STOP" ]; }
+
+run_guarded() {   # honour STOP mid-step, not just between steps
+  "$@" & local cp=$!
+  while kill -0 "$cp" 2>/dev/null; do
+    if stop_requested; then kill -TERM "$cp" 2>/dev/null; sleep 3; kill -KILL "$cp" 2>/dev/null; return 130; fi
+    sleep 5
+  done
+  wait "$cp"
+}
+step() {
+  local n=$1; shift
+  if [ -f "$STATE/$n.done" ]; then say "skip $n (already done)"; return 0; fi
+  if stop_requested; then say "STOP honoured; halting before $n"; exit 0; fi
+  say "=== $n ==="
+  "$@"; local rc=$?
+  if [ $rc -eq 130 ]; then say "$n interrupted by STOP - will re-run on resume"; exit 0; fi
+  if [ $rc -eq 0 ]; then touch "$STATE/$n.done"; say "$n complete"
+  else say "$n failed rc=$rc - will retry on resume"; fi
+  return 0
+}
+
+prep_chunks() {
+  [ -f chunks/manifest.json ] && { say "  chunks already prepared"; return 0; }
+  run_guarded ./.venv/bin/python scripts/prep_chunks.py >> "$LOG" 2>&1
+}
+
+extract_traces() {
+  local done_tok=0 t_start=$SECONDS
+  for TXT in chunks/chunk_*.txt; do
+    stop_requested && return 130
+    local base bin ids ntok want got
+    base=$(basename "$TXT" .txt); bin="traces/$base.bin"; ids="chunks/$base.ids.npy"
+    [ -f "$ids" ] || continue
+    ntok=$(( ( $(stat -c%s "$ids") - 128 ) / 4 ))     # .npy header is 128 bytes for this dtype
+    want=$(( ntok * 4096 * 2 ))
+    if [ -f "$bin" ]; then
+      got=$(stat -c%s "$bin")
+      if [ "$got" -eq "$want" ]; then done_tok=$((done_tok+ntok)); continue; fi
+      say "  $base: size $got != expected $want - redoing"
+    fi
+    local free_gb; free_gb=$(df --output=avail -BG / | tail -1 | tr -dc '0-9')
+    if [ "$free_gb" -lt "$MIN_FREE_GB" ]; then
+      say "  stopping: only ${free_gb} GB free (floor ${MIN_FREE_GB} GB). Extracted so far is intact."
+      return 0
+    fi
+    local t0=$SECONDS
+    LLAMA_EMBD_BIN="$bin" run_guarded timeout 7200 "$BIN/llama-embedding" -m "$M" -ngl $NGL \
+        -c 2048 -b 2048 -ub 512 --pooling none --embd-normalize -1 \
+        --embd-separator "$SEP" -f "$TXT" > /dev/null 2>> logs/extract.err
+    local rc=$?; [ $rc -eq 130 ] && return 130
+    local dt=$((SECONDS-t0))
+    got=$( [ -f "$bin" ] && stat -c%s "$bin" || echo 0 )
+    if [ "$rc" -ne 0 ] || [ "$got" -ne "$want" ]; then
+      say "  $base FAILED rc=$rc rows=$((got/8192)) expected=$ntok (see logs/extract.err)"
+      mkdir -p traces/bad && mv -f "$bin" "traces/bad/$base.bin" 2>/dev/null
+      continue
+    fi
+    done_tok=$((done_tok+ntok))
+    say "  $base ok: $ntok tok in ${dt}s = $((ntok/(dt>0?dt:1))) tok/s; cumulative $((done_tok/1000))k; free ${free_gb}G"
+  done
+  say "  extraction pass done: $((done_tok/1000))k tokens in $(( (SECONDS-t_start)/60 )) min"
+  return 0
+}
+
+say "=========== start (pid $$) ==========="
+step prep_chunks     prep_chunks
+step extract_traces  extract_traces
+say "=========== done ==========="
+rm -f "$STATE/pid"

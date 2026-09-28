@@ -1,0 +1,63 @@
+#!/usr/bin/env python
+"""Turn the tokenised text corpus into (prompt-file, ground-truth-ids) chunk pairs.
+
+The shards hold input_ids, but llama-embedding consumes text, so every sequence is decoded and
+then RE-tokenised. The re-tokenised ids - not the shard's originals - are the ground truth,
+because they describe exactly what the teacher will be fed. Extraction later asserts that the
+row count of the fp16 dump equals the sum of these lengths, which is what proves alignment.
+"""
+import glob, json, os, sys
+import numpy as np, torch
+from transformers import AutoTokenizer
+
+TARGET   = int(os.environ.get("TARGET_TOKENS", 30_000_000))
+CHUNK    = int(os.environ.get("CHUNK_TOKENS", 250_000))
+MAXSEQ   = int(os.environ.get("MAX_SEQ", 1900))     # must stay under -c/-b 2048
+SEP      = "<#sep#>"
+TOK      = "output/glm-5.3-flash-reap50-nvfp4-pass2"
+
+tok = AutoTokenizer.from_pretrained(TOK, trust_remote_code=True)
+os.makedirs("chunks", exist_ok=True)
+
+seqs = []
+for f in sorted(glob.glob("corpus/shards/text/*.pt")):
+    bucket = os.path.basename(f)[:-3]
+    for rec in torch.load(f, map_location="cpu", weights_only=False):
+        ids = rec.get("input_ids")
+        if ids is None:
+            continue
+        seqs.append((bucket, ids.tolist()))
+# interleave buckets so every chunk is capability-mixed rather than all-agentic then all-math
+seqs.sort(key=lambda s: (len(s[1]) % 7, s[0]))
+
+n_chunk = 0; cur_txt = []; cur_ids = []; cur_lens = []; total = 0; dropped = 0
+def flush():
+    global n_chunk, cur_txt, cur_ids, cur_lens
+    if not cur_txt:
+        return
+    base = f"chunks/chunk_{n_chunk:04d}"
+    with open(base + ".txt", "w", encoding="utf-8") as fh:
+        fh.write(SEP.join(cur_txt))
+    np.save(base + ".ids.npy",  np.array(cur_ids,  dtype=np.int32))
+    np.save(base + ".lens.npy", np.array(cur_lens, dtype=np.int32))
+    n_chunk += 1; cur_txt = []; cur_ids = []; cur_lens = []
+
+for bucket, ids in seqs:
+    if total >= TARGET:
+        break
+    text = tok.decode(ids, skip_special_tokens=True)
+    if not text.strip() or SEP in text:
+        dropped += 1; continue
+    re_ids = tok(text, add_special_tokens=True)["input_ids"]
+    if not (8 <= len(re_ids) <= MAXSEQ):
+        dropped += 1; continue
+    cur_txt.append(text); cur_ids.extend(re_ids); cur_lens.append(len(re_ids))
+    total += len(re_ids)
+    if len(cur_ids) >= CHUNK:
+        flush()
+flush()
+
+meta = {"chunks": n_chunk, "tokens": total, "dropped": dropped, "sep": SEP,
+        "bytes_fp16": total * 4096 * 2}
+json.dump(meta, open("chunks/manifest.json", "w"), indent=2)
+print(json.dumps(meta, indent=2))

@@ -22,56 +22,15 @@ TOTAL_SAMPLES = 12_288
 MAX_TOKENS = 16_384
 HELDOUT_FRACTION = 0.08          # stratified, per bucket, for the section-8 proxies
 
-# PASS 3 (2026-09-09). Two changes, both evidence-driven; pass-2 values kept in
-# corpus_spec.py.pass2 and the derivation below so the change stays auditable.
-#
-# (1) TOKEN SPACE, NOT SAMPLE SPACE. MIXTURE is consumed as a SAMPLE quota
-#     (s02_corpus: TOTAL_SAMPLES * f) but saliency accumulates per ROUTED TOKEN, and the
-#     two differ by up to 4x because bucket sequence lengths differ wildly. Measured from
-#     the pass-2 accumulators (cnt_by_bucket summed over all 42 layers):
-#
-#         bucket      sample%   token%   ratio
-#         agentic      24.0%    28.4%    1.18x
-#         code         21.0%     9.3%    0.44x     <-- specified 21%, DELIVERED 9.3%
-#         math         15.0%    26.0%    1.73x
-#         multimodal   15.0%     8.8%    0.58x
-#         science      10.0%    17.8%    1.78x     <-- specified 10%, DELIVERED 17.8%
-#         finance       8.0%     4.9%    0.62x
-#         ballast       7.0%     4.8%    0.68x
-#
-#     So the 2026-08-27 approved mixture never actually happened: code, the headline use
-#     case, got under half its intended weight and science got nearly double. TOKEN_TARGET
-#     below is the intent; MIXTURE is derived as target/ratio, renormalised. s02 reports
-#     achieved token shares so the ratios can be re-fit if the source pool shifts.
-#
-# (2) BALLAST 4.8% -> 15% of tokens. This DOES revise the 2026-08-27 decision, which set
-#     ballast to a 7% sufficiency floor. That was made before the cost was measurable.
-#     It now is: s09_eval by_domain has ballast dNLL 1.0027 / top-1 0.579 against the FP8
-#     teacher, versus code 0.057/0.916 and math 0.024/0.916 -- and the shipped mask retains
-#     only 48.7% of general saliency mass versus 71-75% everywhere else. A bucket-balanced
-#     RE-MASK of the pass-2 accumulators recovers just +0.028, so this cannot be fixed
-#     downstream of calibration: re-masking cannot create information the corpus never
-#     collected. Code-adjacent still leads at 57% of tokens.
-
-TOKEN_TARGET = {                  # bucket -> share of ROUTED CALIBRATION TOKENS
-    "agentic":    0.23,
-    "code":       0.19,
+MIXTURE = {                       # bucket -> share
+    "agentic":    0.24,
+    "code":       0.21,
     "math":       0.15,
-    "ballast":    0.15,
-    "multimodal": 0.12,
+    "multimodal": 0.15,
     "science":    0.10,
-    "finance":    0.06,
+    "finance":    0.08,
+    "ballast":    0.07,
 }
-assert abs(sum(TOKEN_TARGET.values()) - 1.0) < 1e-9
-
-# token% / sample% measured on the pass-2 run (see table above).
-_TOKENS_PER_SAMPLE = {
-    "agentic": 1.18, "code": 0.44, "math": 1.73, "multimodal": 0.58,
-    "science": 1.78, "finance": 0.62, "ballast": 0.68,
-}
-_raw = {b: TOKEN_TARGET[b] / _TOKENS_PER_SAMPLE[b] for b in TOKEN_TARGET}
-_z = sum(_raw.values())
-MIXTURE = {b: v / _z for b, v in _raw.items()}       # bucket -> SAMPLE share
 assert abs(sum(MIXTURE.values()) - 1.0) < 1e-9
 
 # Difficulty policy: medium-hard, NOT maximal. Hard-only calibration degrades general

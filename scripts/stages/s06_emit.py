@@ -85,6 +85,13 @@ def _enrich(meta: dict) -> dict:
             if n:
                 meta["heal_per_expert_layers"] = n
                 meta["heal_per_expert_tensors"] = a.get("per_expert_tensors")
+            # Per-expert healing was BUILT, SHIPPED and then REVERTED after an end-to-end
+            # ablation put it 11.8 sigma behind the scalar it replaced. A card that silently
+            # reverts to the scalar is accurate but hides a result a reader deserves - the
+            # technique looks compelling on paper and on reconstruction residual, and someone
+            # will otherwise reimplement it.
+            if a.get("reverted_per_expert"):
+                meta["heal_per_expert_rejected"] = True
         pe = ARTIFACTS / "heal_perexpert.json"
         if pe.exists():
             d = json.loads(pe.read_text())
@@ -104,14 +111,7 @@ def _enrich(meta: dict) -> dict:
     return meta
 
 
-def _card(meta: dict) -> str:
-    healed = meta.get("healed")
-    conc = meta.get("concentration_vs_random")
-    smass = meta.get("saliency_mass_retained")
-    conc = f"{conc:.2f}" if isinstance(conc, (int, float)) else "?"
-    smass = f"{smass:.3f}" if isinstance(smass, (int, float)) else "?"
-    rm = meta.get("routing_mass_retained")
-    rmass = f"{rm/0.5:.2f}" if isinstance(rm, (int, float)) else "?"
+def _heal_note(meta: dict) -> str:
     hg = meta.get("heal_gain_median")
     npe = meta.get("heal_per_expert_layers")
     if npe:
@@ -140,12 +140,38 @@ def _card(meta: dict) -> str:
             "replayed from a cached router-score trace, because the first-moment estimator that "
             "pass 1 used ignores that `norm_topk_prob` renormalises the surviving top-8 and "
             "over-corrects by ~30%. It is *not* distillation and does not recover lost knowledge.")
+        if meta.get("heal_per_expert_rejected"):
+            heal_note += (
+                "\n- A **per-expert** least-squares refinement of this correction was built, "
+                "shipped, and then **reverted**. It reduced held-out reconstruction residual in "
+                "41 of 42 layers and was still **11.8σ worse end-to-end** (top-1 agreement "
+                "0.83693 vs the scalar's 0.84249, worse on every metric and in every "
+                "sufficiently-sampled domain). Under the measured near-orthogonality the "
+                "coefficient reduces to `c_j = (gate mass before pruning) / (gate mass after)`, "
+                "so it suppresses exactly the experts the *pruned* router leans on hardest - "
+                "62% of coefficients landed below their layer scalar, the worst by 3.3×. "
+                "Lower reconstruction error, worse model. Recorded here because the technique is "
+                "more attractive on paper than in measurement; see the repository's "
+                "`research/HEALING_ABLATION.md`.")
     else:
         heal_note = (
             f"- Healing is a **first-moment output-scale correction** derived from the "
             f"calibration saliency (median gain {hg if hg else 'n/a'}, applied exactly to the F32 "
             "block scales). Known to over-correct by ~30% on this architecture; prefer a measured "
             "re-fit. It is *not* distillation and does not recover lost knowledge.")
+    return heal_note
+
+
+def _card(meta: dict) -> str:
+    healed = meta.get("healed")
+    conc = meta.get("concentration_vs_random")
+    smass = meta.get("saliency_mass_retained")
+    conc = f"{conc:.2f}" if isinstance(conc, (int, float)) else "?"
+    smass = f"{smass:.3f}" if isinstance(smass, (int, float)) else "?"
+    rm = meta.get("routing_mass_retained")
+    rmass = f"{rm/0.5:.2f}" if isinstance(rm, (int, float)) else "?"
+    hg = meta.get("heal_gain_median")
+    heal_note = _heal_note(meta)
     dh = meta.get("domain_retention") or {}
     def _r(b):
         v = dh.get(b)
