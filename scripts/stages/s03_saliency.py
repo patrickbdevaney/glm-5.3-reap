@@ -728,7 +728,15 @@ def run() -> dict:
     LO = int(os.environ["S03_LO"])
     HI = int(os.environ["S03_HI"])
     STATES_DIR.mkdir(parents=True, exist_ok=True)
-    spath = STATES_DIR / f"chunk_{CI:03d}.pt"
+    # ONE file, reused. It was `chunk_{CI:03d}.pt`, which is per-chunk, so every chunk wrote a
+    # NEW ~17 GB file and they accumulated: 8 chunks = 132 GB, which filled a 936 GB disk to 100%
+    # and killed the run with `OSError: [Errno 28] No space left on device`. The comment next to
+    # it claimed the file was "OVERWRITTEN rather than deleted" -- the filename made that false.
+    #
+    # States are scratch that lives only between the blocks of ONE chunk: the next chunk's
+    # prepare overwrites them and nothing ever reads a previous chunk's. A single reused path is
+    # both correct and bounded at ~17 GB.
+    spath = STATES_DIR / "states.pt"
 
     if os.environ.get("S03_PHASE") == "prepare":
         ct, cm = text_chunks[CI], mm_chunks[CI]
