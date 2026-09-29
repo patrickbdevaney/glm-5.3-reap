@@ -425,6 +425,20 @@ LAYERS_PER_BLOCK = int(os.environ.get("S03_LAYERS_PER_BLOCK", "0")) or None
 STATES_DIR = Path(os.environ.get("S03_STATES_DIR") or (ROOT / "artifacts" / "s03_states"))
 BLOCK_LEDGER = Path(os.environ.get("S03_BLOCK_LEDGER") or (ROOT / "state" / "s03_blocks.json"))
 
+# A probe that redirects its states or its accumulators MUST redirect its ledger too.
+#
+# 2026-09-29: a layer-4 measurement run set S03_STATES_DIR and S03_SALIENCY_DIR but not
+# S03_BLOCK_LEDGER. Its worker faithfully recorded "chunk 8 layer 4 done" in the REAL ledger
+# while writing the states that prove it into a throwaway directory. The next production run
+# refused to start, correctly, because the ledger claimed work the states did not show.
+# Isolation that covers two of three outputs is not isolation.
+if (os.environ.get("S03_STATES_DIR") or os.environ.get("S03_SALIENCY_DIR")) \
+        and not os.environ.get("S03_BLOCK_LEDGER"):
+    raise RuntimeError(
+        "S03_STATES_DIR/S03_SALIENCY_DIR redirected without S03_BLOCK_LEDGER: this run would "
+        "record progress in the production ledger that its own outputs cannot back. Set "
+        "S03_BLOCK_LEDGER to a scratch path.")
+
 
 def _effective_gib() -> float:
     """The ceiling that actually binds: min(host MemAvailable, cgroup headroom).
