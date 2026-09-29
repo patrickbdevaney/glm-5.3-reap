@@ -33,6 +33,36 @@ from common import (ROOT, ARTIFACTS, MODEL_ID, log, metric, kv_get, kv_set,  # n
 STAGE = "s03_saliency"
 
 
+def _reclaim_nvmap() -> None:
+    """Release the nvmap pool. `echo 1` does NOT do this; only `echo 3` does.
+
+    MEASURED 2026-09-28, with every worker dead and no process holding anything:
+
+        MemTotal    122.8 GiB      sum of ALL process RSS   1.4 GiB
+        MemFree      20.1 GiB      Cached                   8.1 GiB
+        -> ~92 GiB held by NO process, NO cache, NO slab
+
+        drop_caches=3  ->  MemAvailable 27.5 -> 119.0 GiB   (+91.5 GiB)
+
+    That memory is the GPU pool. On this integrated board it is NOT returned by process exit --
+    the assumption the whole per-block worker design rests on ("each worker exits and its memory
+    comes back") is only half true, which is what _full_reclaim's docstring already said.
+
+    The sweep called _reclaim_page_cache() (echo 1, page cache only) between layers, so the pool
+    grew across all 166 batches unchecked and was released only between BLOCKS, by the
+    orchestrator. At one layer per block that is far too late: a single layer drove MemAvailable
+    from 114 GiB to 7.7 GiB and the watchdog aborted it.
+    """
+    import subprocess
+    try:
+        subprocess.run(["sync"], timeout=60, check=False)
+        subprocess.run(["sudo", "-n", "sh", "-c", "echo 3 > /proc/sys/vm/drop_caches"],
+                       timeout=60, check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
 def _reclaim_page_cache() -> None:
     """Drop page cache between layers.
 
@@ -867,12 +897,16 @@ def run() -> dict:
                 bi_seen += 1
                 if bi_seen % 25 == 0:
                     torch.cuda.empty_cache()
+                    # empty_cache() returns ~nothing on this board (0.03 GiB against 13.54).
+                    # The pool is only released by drop_caches=3, and it has to happen HERE --
+                    # waiting until the layer ends means the box is already exhausted.
+                    _reclaim_nvmap()
             SS.set_current_layer(None)
             del layer
             reader.release()      # tear down shard mmaps so their pages become reclaimable
             gc.collect()
             torch.cuda.empty_cache()
-            _reclaim_page_cache()
+            _reclaim_nvmap()
             el = time.time() - t0
             avail = 0.0
             try:
@@ -953,7 +987,20 @@ def run() -> dict:
     if not spath.exists():
         raise RuntimeError(f"chunk {CI} block {LO}-{HI-1} needs hidden states, but {spath} is "
                            f"missing -- the prepare phase must run first")
-    states = torch.load(spath, map_location="cpu", weights_only=False)
+    _obj = torch.load(spath, map_location="cpu", weights_only=False)
+    if isinstance(_obj, dict) and "__next_layer__" in _obj:
+        _pos, states = _obj["__next_layer__"], _obj["states"]
+        if _pos != LO:
+            raise RuntimeError(
+                f"states are positioned at layer {_pos} but this block starts at {LO}. The ledger "
+                f"and the states file disagree -- a previous worker saved advanced states and "
+                f"died before its ledger entry was written. Re-run prepare for chunk {CI} "
+                f"(delete {spath} and this chunk's 'prep' entry) rather than sweeping from a "
+                f"state of unknown position.")
+    else:
+        # Legacy format: a bare list, written before positions were recorded. Trust the ledger.
+        states = _obj
+    del _obj
     log(f"chunk {CI} block {LO}-{HI-1}: reloaded {len(states)} states "
         f"({spath.stat().st_size/2**30:.1f} GiB)", STAGE)
     act_gib = sum(st["hs"].numel() * st["hs"].element_size() for st in states) / 2**30
@@ -979,7 +1026,7 @@ def run() -> dict:
 
     _n_layers = min(tcfg.num_hidden_layers, S03_MAX_LAYERS or tcfg.num_hidden_layers)
     if HI < _n_layers:
-        torch.save(states, spath)
+        torch.save({"__next_layer__": HI, "states": states}, spath)
         log(f"chunk {CI} block ends at layer {HI-1}; states saved for the next worker", STAGE)
         return {"chunk": CI, "block": [LO, HI], "more": True}
 
