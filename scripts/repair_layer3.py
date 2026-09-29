@@ -11,8 +11,14 @@ f_sum, out_sum, gate_*, norm_*, sq_by_bucket, hist. Restoring from it would sile
 
 THE REPAIR. With `full` the value after the run and `c8` chunk 8's true layer-3 contribution:
 
-    full      = base(chunks 0-7) + 3*c8 + c9
-    corrected = base              +   c8 + c9  =  full - 2*c8
+    full      = base + (1+k)*c8 + c9      (k extra sweeps)
+    corrected = base +     c8   + c9  =  full - k*c8
+
+k is DERIVED at repair time as (layer-3 count - peer count) / (one sweep), and the repair refuses
+unless that ratio is within 2% of a whole number. An early reading of "k=2" came from comparing
+against peers that had not yet received chunk 8 at all -- a baseline of a different number of
+chunks, which makes the ratio meaningless. With every layer carrying the same chunks it solves
+cleanly, and k was 1.
 
 c8 is recomputed here in isolation: prepare chunk 8, sweep layers 0-2 to position the states at
 layer 3, then sweep layer 3 alone against ZEROED accumulators. That yields a pure chunk-8 delta
@@ -103,14 +109,38 @@ def main() -> int:
     c8 = torch.load(sal / NAME, weights_only=False)
     print(f"\nchunk {CHUNK} layer {LAYER} contribution: count={c8['count'].float().sum().item():,.0f}")
 
+    # Derive the multiplier from the data; do NOT assume it.
+    #
+    # I first read the excess as two extra sweeps, from a comparison taken while chunk 8 had
+    # reached layer 3 but not yet its peers -- so the baseline I measured against was a different
+    # number of chunks, and the ratio was meaningless. With every layer carrying the same chunks,
+    # the excess solves exactly, and it was ONE extra sweep. Subtracting two would have removed a
+    # whole legitimate chunk.
+    excess = full["count"].float().sum().item() - median
+    unit = c8["count"].float().sum().item()
+    if unit <= 0:
+        print("recomputed chunk-8 contribution is empty; aborting"); return 1
+    k_exact = excess / unit
+    k = round(k_exact)
+    print(f"excess over peers       : {excess:,.0f}")
+    print(f"one chunk-8 sweep       : {unit:,.0f}")
+    print(f"extra sweeps            : {k_exact:.4f} -> {k}")
+    if k < 1 or abs(k_exact - k) > 0.02:
+        print(f"REFUSING: excess is not a clean multiple of one sweep ({k_exact:.4f}). "
+              f"The damage is not simple over-accumulation; investigate before repairing.")
+        return 1
+
     out = {}
-    for k, v in full.items():
-        if torch.is_tensor(v) and k in c8 and torch.is_tensor(c8[k]) and v.shape == c8[k].shape:
-            out[k] = v - 2 * c8[k]
+    for key, v in full.items():
+        if torch.is_tensor(v) and key in c8 and torch.is_tensor(c8[key]) and v.shape == c8[key].shape:
+            out[key] = v - k * c8[key]
         else:
-            out[k] = v
+            out[key] = v
     newc = out["count"].float().sum().item()
-    print(f"corrected count         : {newc:,.0f}  (target ~{median:,.0f} x chunks-swept)")
+    print(f"corrected count         : {newc:,.0f}  (peers: {median:,.0f})")
+    if abs(newc - median) / median > 0.001:
+        print(f"REFUSING: corrected count still differs from peers by "
+              f"{abs(newc-median)/median*100:.3f}%."); return 1
     if newc < 0 or newc > full["count"].float().sum().item():
         print("REFUSING: corrected count is not between zero and the original."); return 1
 
