@@ -34,11 +34,48 @@ def _size_gib(ratio: float, rest_fp8: bool) -> float:
     return (experts + rest) / 2**30
 
 
+def _gate_uniform_counts(files, torch) -> None:
+    """Every MoE layer must have seen the same number of routed slots. Refuse if one has not.
+
+    `count` is tokens x top_k summed over the chunks that were swept, and every MoE layer in a
+    pass sees exactly the same tokens. A layer whose count differs did not see different data --
+    it was accumulated a different number of times.
+
+    2026-09-29: layer 3 read 21,564,088 against a uniform 15,633,048 across the other 41 layers
+    (1.379x). It had been swept three times for chunk 8 during a retry storm, each sweep loading
+    the running total and adding to it. Nothing downstream would have noticed: the mask would
+    simply have been chosen for layer 3 from numbers weighted 3:1 toward one chunk. A prune
+    decision made from silently skewed saliency is not recoverable after the fact, so this is a
+    hard gate, not a warning.
+    """
+    counts = {}
+    for f in files:
+        d = torch.load(f, weights_only=False)
+        counts[d["layer"]] = float(d["count"].double().sum().item())
+    if not counts:
+        return
+    vals = sorted(counts.values())
+    median = vals[len(vals) // 2]
+    if median <= 0:
+        return
+    bad = {k: v for k, v in counts.items() if abs(v - median) / median > 0.02}
+    if bad:
+        detail = ", ".join(f"{k}={v:,.0f} ({v/median:.3f}x)" for k, v in sorted(bad.items()))
+        raise RuntimeError(
+            f"saliency accumulators disagree on routed-slot counts; refusing to build a mask.\n"
+            f"  median across {len(counts)} layers: {median:,.0f}\n"
+            f"  deviating: {detail}\n"
+            f"A layer counted more times than its peers biases its prune decision toward "
+            f"whichever chunks were double-swept. Run scripts/repair_layer3.py (or re-sweep the "
+            f"affected layer) before continuing.")
+
+
 def run() -> dict:
     import torch
     files = sorted(SALIENCY.glob("*.pt"))
     if not files:
         raise RuntimeError("no saliency accumulators found; stage 3 must run first")
+    _gate_uniform_counts(files, torch)
 
     per_layer = []
     for f in files:
