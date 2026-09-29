@@ -217,6 +217,14 @@ def preflight(stage: str) -> None:
             f"Refusing to start -- this would be killed, not slowed.")
 
 
+# Stages that do their heavy work in CHILD processes. Arming the watchdog in the parent is worse
+# than useless: the parent holds almost nothing, so interrupting it frees nothing, and on
+# 2026-09-28 it killed the s03 orchestrator three times in the gap between a worker finishing and
+# its ledger entry being written -- losing the record of work that had actually completed. The
+# child has its own guard (memfence.py), and memguard remains the backstop.
+SELF_MANAGED = {"s03_saliency"}
+
+
 def watchdog(stage: str, floor_gib: float = 12.0, warn_gib: float = 25.0, poll_s: float = 2.0):
     """Abort the stage CLEANLY before memguard SIGKILLs it.
 
@@ -230,6 +238,11 @@ def watchdog(stage: str, floor_gib: float = 12.0, warn_gib: float = 25.0, poll_s
     recoverable; a SIGKILL is a crash loop.
     """
     import threading, _thread, time as _t
+
+    if stage in SELF_MANAGED:
+        print(f"[watchdog] {stage}: not armed in this process -- it supervises child workers "
+              f"whose memory it cannot free; the child's memfence guards the work", flush=True)
+        return None
 
     def _loop():
         warned = False

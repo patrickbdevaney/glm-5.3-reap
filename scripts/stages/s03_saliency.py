@@ -541,6 +541,57 @@ def _check_worker_rc(rc: int, what: str, oom_before: int) -> None:
             f"S03_LAYERS_PER_BLOCK or raise the unit's MemoryMax.")
     raise RuntimeError(f"{what}: worker failed rc={rc}")
 
+
+def _record_block(ci: int, lo: int, hi: int) -> None:
+    """Append (chunk, lo, hi) to the ledger atomically. Safe from worker or orchestrator."""
+    import tempfile
+    BLOCK_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        d = json.loads(BLOCK_LEDGER.read_text()) if BLOCK_LEDGER.exists() else {}
+    except Exception:
+        d = {}
+    done = [tuple(x) for x in d.get("done", [])]
+    if (ci, lo, hi) not in done:
+        done.append((ci, lo, hi))
+    d["done"] = sorted((list(x) for x in done), key=str)
+    fd, tmp = tempfile.mkstemp(dir=str(BLOCK_LEDGER.parent), suffix=".tmp")
+    with os.fdopen(fd, "w") as fh:
+        json.dump(d, fh)
+    os.replace(tmp, BLOCK_LEDGER)      # atomic: readers see old or new, never a partial file
+
+
+def _reconcile_from_states(done: set, swept: dict, ci: int) -> None:
+    """The states file's position is proof of work the ledger may have missed.
+
+    States are saved only AFTER the accumulators are dumped, so a states file positioned at layer
+    P means layers 0..P-1 were swept AND their contribution is already in artifacts/saliency.
+    Re-sweeping any of them would add it a second time. If the ledger is behind the states -- the
+    signature of a parent killed between the worker finishing and the record being written -- the
+    states win, and we say so out loud.
+    """
+    marker = STATES_DIR / "states_pos.json"
+    if not marker.exists():
+        return
+    try:
+        m = json.loads(marker.read_text())
+    except Exception:
+        return
+    if m.get("chunk") != ci:
+        return
+    pos = m.get("next_layer")
+    if not isinstance(pos, int):
+        return
+    added = []
+    for li in range(pos):
+        if (ci, li, li + 1) not in done:
+            done.add((ci, li, li + 1))
+            swept.setdefault(ci, set()).add(li)
+            _record_block(ci, li, li + 1)
+            added.append(li)
+    if added:
+        log(f"chunk {ci}: ledger was behind the states file; layers {added} were already swept "
+            f"and dumped, recorded now (states positioned at layer {pos})", STAGE, "WARN")
+
 def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
     """Spawn one worker per (chunk, block); never import CUDA in this process."""
     import subprocess
@@ -606,6 +657,8 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
         except Exception:
             done = set()
     done, swept = _migrate_ledger(done, n_layers)
+    for _ci in range(n_chunks):
+        _reconcile_from_states(done, swept, _ci)
     log(f"orchestrating {n_chunks} chunks x {len(blocks)} blocks of <={per_block} layers "
         f"(~{need:.0f} GiB per worker, measured {LAYER_COST_GIB} GiB/layer)", STAGE)
 
@@ -694,6 +747,7 @@ def _orchestrate(n_layers: int, n_chunks: int, n_dense: int = 0) -> dict:
                     f"that never ran is not success.")
             done.add((ci, lo, hi))
             swept.setdefault(ci, set()).update(range(lo, hi))
+            _record_block(ci, lo, hi)
             BLOCK_LEDGER.parent.mkdir(parents=True, exist_ok=True)
             BLOCK_LEDGER.write_text(json.dumps({"block_size": per_block,
                                                "done": sorted(map(list, done), key=str)}))
@@ -1027,6 +1081,16 @@ def run() -> dict:
     _n_layers = min(tcfg.num_hidden_layers, S03_MAX_LAYERS or tcfg.num_hidden_layers)
     if HI < _n_layers:
         torch.save({"__next_layer__": HI, "states": states}, spath)
+        (STATES_DIR / "states_pos.json").write_text(json.dumps({"chunk": CI, "next_layer": HI}))
+        # Record progress HERE, in the process that did the work.
+        #
+        # 2026-09-28: the orchestrator wrote the ledger AFTER the worker returned, and was killed
+        # three times in that gap -- by its own watchdog, which fired on memory its CHILD was
+        # using and which it could not free. Each time a fully-swept layer was lost from the
+        # record while the states file had already advanced, so the next run re-swept a layer
+        # from states that had already passed through it. Progress must be committed by whoever
+        # made it, not by a parent that may not survive to hear about it.
+        _record_block(CI, LO, HI)
         log(f"chunk {CI} block ends at layer {HI-1}; states saved for the next worker", STAGE)
         return {"chunk": CI, "block": [LO, HI], "more": True}
 
