@@ -66,14 +66,17 @@ def cgroup_headroom_gib() -> float | None:
 
 
 def host_available_gib() -> float:
-    """MemAvailable. Real, but an UPPER bound only -- it ignores any cgroup cap."""
-    try:
-        for line in Path("/proc/meminfo").read_text().splitlines():
-            if line.startswith("MemAvailable:"):
-                return int(line.split()[1]) * 1024 / GIB
-    except Exception:
-        pass
-    return 0.0
+    """MemAvailable. Real, but an UPPER bound only -- it ignores any cgroup cap.
+
+    Raises rather than returning 0.0 when it cannot read: on 2026-09-29 a 0.0 return was treated
+    as "no memory" and the stage refused to start six times in a row, exhausting its retries,
+    while the box actually had 118 GiB free. "I don't know" and "there is none" must not be the
+    same value.
+    """
+    for line in Path("/proc/meminfo").read_text().splitlines():
+        if line.startswith("MemAvailable:"):
+            return int(line.split()[1]) * 1024 / GIB
+    raise RuntimeError("MemAvailable not present in /proc/meminfo")
 
 
 def device_is_integrated() -> bool:
@@ -211,6 +214,23 @@ def preflight(stage: str) -> None:
     if need is None:
         return
     have = host_ceiling_gib()
+    if need + 6.0 > have:
+        # Try a reclaim before refusing. The previous worker's GPU pool survives its exit and is
+        # released only by drop_caches=3; without this, the preflight measures the last run's
+        # leftovers and refuses work the box has ample room for.
+        import subprocess, time as _t
+        try:
+            subprocess.run(["sync"], timeout=60, check=False)
+            subprocess.run(["sudo", "-n", "sh", "-c", "echo 3 > /proc/sys/vm/drop_caches"],
+                           timeout=60, check=False,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+        _t.sleep(3)
+        reclaimed = host_ceiling_gib()
+        print(f"[preflight] {stage}: {have:.1f} GiB before reclaim, {reclaimed:.1f} GiB after",
+              flush=True)
+        have = reclaimed
     if need + 6.0 > have:
         raise MemoryError(
             f"stage {stage}: needs {need:.1f} GiB + 6.0 margin, host has {have:.1f} GiB. "

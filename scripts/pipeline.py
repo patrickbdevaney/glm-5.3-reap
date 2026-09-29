@@ -52,7 +52,11 @@ STAGES: list[Stage] = [
           needs_gib=20, background=True),
     Stage("s01b_load",    "stages.s01b_loadcheck",["s01_source"],              max_attempts=2,
           needs_gib=20, background=True),
-    Stage("s03_saliency", "stages.s03_saliency",  ["s01b_load", "s02_corpus"], max_attempts=6,
+    # 90 layer-runs, each its own worker process, each committing its own ledger entry. A retry
+    # resumes from the ledger and always moves forward, so retries are cheap and never redo work.
+    # At 6 it stranded for ~10 h on 2026-09-28 after a preflight bug burned every attempt on a
+    # condition that cleared by itself.
+    Stage("s03_saliency", "stages.s03_saliency",  ["s01b_load", "s02_corpus"], max_attempts=60,
           needs_gib=40, background=True),
     Stage("s04_sweep",    "stages.s04_sweep",     ["s03_saliency"],            max_attempts=3,
           needs_gib=10, background=True),
