@@ -50,8 +50,19 @@ DEV = "cuda"
 DT = torch.bfloat16
 
 ROLE = os.environ.get("S03C_ROLE", "orchestrator")
-LAYERS_PER_BLOCK = int(os.environ.get("S03C_LAYERS_PER_BLOCK", "9"))
-LAYER_COST_GIB = 5.76
+# MEASURED 2026-09-29 on s03_saliency, which sweeps layers identically. 5.76 GiB is the WEIGHT
+# size of a layer; the true HOST footprint of sweeping one is ~53 GiB, because on this integrated
+# board torch.cuda.empty_cache() returns essentially nothing and device memory (nvmap) comes from
+# system RAM and is reclaimed only by drop_caches=3. Sizing against 5.76 is why s03 died at 9, at
+# 5 and even at 2 layers per block. One layer per process is the only configuration that fits.
+LAYERS_PER_BLOCK = int(os.environ.get("S03C_LAYERS_PER_BLOCK", "1"))
+LAYER_COST_GIB = 53.0          # MEASURED host footprint
+LAYER_WEIGHT_GIB = 5.76        # weight size only -- never for budgeting
+FIXED_GIB = 19.73              # reloaded states (17.5) + resident embeddings/vision (2.23)
+# Reclaim as soon as headroom falls below this, regardless of batch count. s03 measured a 40 GiB
+# collapse inside a single 25-batch interval, which a fixed schedule cannot see coming.
+RECLAIM_FLOOR_GIB = float(os.environ.get("S03C_RECLAIM_FLOOR", "30.0"))
+HARD_FLOOR_GIB = float(os.environ.get("S03C_HARD_FLOOR", "6.0"))
 # Real documents only. The corpus caps at 16,384 (corpus_spec.MAX_TOKENS), and concatenating
 # shorter samples to reach a longer sequence would manufacture long-range structure that is not
 # there -- the routing at a fake boundary is not the routing we are asking about.
@@ -95,7 +106,9 @@ def _rows():
 def orchestrate(n_layers: int) -> int:
     blocks = [(lo, min(lo + LAYERS_PER_BLOCK, n_layers))
               for lo in range(0, n_layers, LAYERS_PER_BLOCK)]
-    need = max(hi - lo for lo, hi in blocks) * LAYER_COST_GIB
+    # FIXED_GIB is the part the old form omitted: it counted only layers x cost and under-stated
+    # a block by ~20 GiB.
+    need = FIXED_GIB + max(hi - lo for lo, hi in blocks) * LAYER_COST_GIB
     done = set()
     if LEDGER.exists():
         try:
@@ -108,8 +121,8 @@ def orchestrate(n_layers: int) -> int:
         if (bi,) in done or bi in {d[0] for d in done if len(d) == 1}:
             continue
         avail = _reclaim()
-        if avail < need + 18.0:
-            log(f"ABORT before block {bi}: {avail:.1f} GiB available, need {need:.0f} + 18 "
+        if avail < need + 8.0:
+            log(f"ABORT before block {bi}: {avail:.1f} GiB available, need {need:.0f} + 8 "
                 f"reserve. Memory did not return after the last worker.", STAGE, "ERROR")
             return 5
         log(f"block {bi} (layers {lo}-{hi-1}) starting, {avail:.1f} GiB available", STAGE)
@@ -187,6 +200,7 @@ def worker(lo: int, hi: int) -> int:
         MF.require(LAYER_COST_GIB, f"routing capture layer {li}")
         layer = _build_layer(tcfg, li, reader, DT)
         per_row = []
+        _seen = 0
         with torch.no_grad():
             for st in states:
                 hs = st["hs"].to(DEV)
@@ -204,6 +218,17 @@ def worker(lo: int, hi: int) -> int:
                     # the whole point: this is what lets affected-rate be plotted against it.
                     per_row.append(tk.reshape(-1, tk.shape[-1]).to(torch.int16).cpu())
                 del hs, out, ids, am, pos, tk
+                _seen += 1
+                # Watch the floor every batch, not a batch counter. MEASURED on s03 layer 4:
+                # a stable ~52 GiB plateau then 40 GiB gone in 26 s, ending 550 MB above
+                # memguard's kill floor -- entirely inside one fixed reclaim interval.
+                if _seen % 25 == 0 or _avail_gib() < RECLAIM_FLOOR_GIB:
+                    torch.cuda.empty_cache()
+                    _reclaim()
+                    if _avail_gib() < HARD_FLOOR_GIB:
+                        raise RuntimeError(
+                            f"routing capture layer {li} batch {_seen}: {_avail_gib():.1f} GiB "
+                            f"left after a full reclaim. Stopping rather than being SIGKILLed.")
         if per_row:
             torch.save({"layer": li, "seq": SEQ, "rows": len(per_row),
                         "topk_ids": torch.stack(per_row)}, OUT / f"layer_{li:03d}.pt")
