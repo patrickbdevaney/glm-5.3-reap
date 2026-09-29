@@ -1,0 +1,14 @@
+
+The user wants to know which year has the most divergent opinions about Brazil's economy.
+Looking at the chart, the lines represent "Good" (green) and "Bad" (orange) assessments.
+The divergence (difference) between the two lines is the gap between the percentages.
+Let's calculate the difference for each year:
+- 2010: 62 - 36 = 26
+- 2011: 54 - 45 = 9
+- 2012: 65 - 35 = 30
+- 2013: 59 - 41 = 18
+- 2014: 67 - 32 = 35
+- 2015: 87 - 13 = 74
+
+The largest difference is in 2015 (87
+

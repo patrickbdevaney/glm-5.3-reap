@@ -1,0 +1,147 @@
+{
+ "teacher_tokens": 345320,
+ "arms": {
+  "mean": {
+   "tokens": 240611,
+   "tokens_captured": 345320,
+   "dNLL_mean": 0.39040183930755246,
+   "dNLL_p50": 0.0024144018534570932,
+   "dNLL_p95": 3.088705897331238,
+   "excluded_placeholder_tokens": 104709,
+   "teacher_nll": 0.835335657303093,
+   "student_nll": 1.2257374963866547,
+   "flip_rate": 0.1889315118593913,
+   "top1_agreement": 0.8110684881406087,
+   "topk_KL": 1.174394887632342,
+   "by_domain": {
+    "agentic": {
+     "tokens": 59536,
+     "dNLL_mean": 0.33613674504467356,
+     "flip_rate": 0.18949879064767536,
+     "top1_agreement": 0.8105012093523246,
+     "sufficient": true
+    },
+    "ballast": {
+     "tokens": 32391,
+     "dNLL_mean": 1.7408835290513136,
+     "flip_rate": 0.49130931431570496,
+     "top1_agreement": 0.508690685684295,
+     "sufficient": true
+    },
+    "code": {
+     "tokens": 78953,
+     "dNLL_mean": 0.06970891587655309,
+     "flip_rate": 0.05926310589844591,
+     "top1_agreement": 0.9407368941015541,
+     "sufficient": true
+    },
+    "finance": {
+     "tokens": 20681,
+     "dNLL_mean": 0.3427535340801471,
+     "flip_rate": 0.29253904550070114,
+     "top1_agreement": 0.7074609544992989,
+     "sufficient": true
+    },
+    "math": {
+     "tokens": 30057,
+     "dNLL_mean": 0.055503030679648784,
+     "flip_rate": 0.10776191902052766,
+     "top1_agreement": 0.8922380809794723,
+     "sufficient": true
+    },
+    "science": {
+     "tokens": 18423,
+     "dNLL_mean": 0.25691678301059767,
+     "flip_rate": 0.217988384085111,
+     "top1_agreement": 0.782011615914889,
+     "sufficient": true
+    },
+    "vision": {
+     "tokens": 570,
+     "dNLL_mean": -2.561166745450413,
+     "flip_rate": 0.48947368421052634,
+     "top1_agreement": 0.5105263157894737,
+     "sufficient": false
+    }
+   },
+   "tap_drift": {
+    "5": 0.24085085093975067,
+    "14": 0.3544081449508667,
+    "24": 0.720137357711792,
+    "33": 0.750877320766449,
+    "42": 0.6452153325080872
+   }
+  },
+  "mass": {
+   "tokens": 240611,
+   "tokens_captured": 345320,
+   "dNLL_mean": 0.2950423889493366,
+   "dNLL_p50": 0.0010380109306424856,
+   "dNLL_p95": 2.4774270057678223,
+   "excluded_placeholder_tokens": 104709,
+   "teacher_nll": 0.835335657303093,
+   "student_nll": 1.130378046131142,
+   "flip_rate": 0.16165511967449533,
+   "top1_agreement": 0.8383448803255047,
+   "topk_KL": 0.894647261214029,
+   "by_domain": {
+    "agentic": {
+     "tokens": 59536,
+     "dNLL_mean": 0.2176011107426063,
+     "flip_rate": 0.1583075786079011,
+     "top1_agreement": 0.8416924213920989,
+     "sufficient": true
+    },
+    "ballast": {
+     "tokens": 32391,
+     "dNLL_mean": 1.3928484278125786,
+     "flip_rate": 0.4381463986909944,
+     "top1_agreement": 0.5618536013090056,
+     "sufficient": true
+    },
+    "code": {
+     "tokens": 78953,
+     "dNLL_mean": 0.048690012506117784,
+     "flip_rate": 0.0530062188897192,
+     "top1_agreement": 0.9469937811102808,
+     "sufficient": true
+    },
+    "finance": {
+     "tokens": 20681,
+     "dNLL_mean": 0.27339600679973,
+     "flip_rate": 0.26449397998162566,
+     "top1_agreement": 0.7355060200183743,
+     "sufficient": true
+    },
+    "math": {
+     "tokens": 30057,
+     "dNLL_mean": 0.03978630991555313,
+     "flip_rate": 0.07652127624180723,
+     "top1_agreement": 0.9234787237581927,
+     "sufficient": true
+    },
+    "science": {
+     "tokens": 18423,
+     "dNLL_mean": 0.1540889986429889,
+     "flip_rate": 0.16392552787276773,
+     "top1_agreement": 0.8360744721272323,
+     "sufficient": true
+    },
+    "vision": {
+     "tokens": 570,
+     "dNLL_mean": -1.0760930177412535,
+     "flip_rate": 0.5333333333333333,
+     "top1_agreement": 0.4666666666666667,
+     "sufficient": false
+    }
+   },
+   "tap_drift": {
+    "5": 0.21882694959640503,
+    "14": 0.3310624361038208,
+    "24": 0.7871298789978027,
+    "33": 1.2135599851608276,
+    "42": 0.9750248193740845
+   }
+  }
+ }
+}

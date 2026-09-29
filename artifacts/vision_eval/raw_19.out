@@ -1,0 +1,13 @@
+
+The user wants to know the year where the green line cut the orange line from top to down.
+Let's analyze the chart:
+- Orange line: "U.S. confidence in Putin"
+- Green line: "Russia confidence in U.S. president"
+
+Let's trace the values:
+- 2003: Orange = 41, Green = 8. (Orange is above Green)
+- 2005: Orange = 33, Green = 28. (Orange is above Green)
+- 2006 (approx): Orange = 30, Green = 21. (Orange is above Green)
+- 2007: Orange = 28, Green = 18. (Orange is above Green)
+- 2008 (approx): Orange = 28, Green = 22.
+

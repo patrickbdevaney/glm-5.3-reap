@@ -1,0 +1,18 @@
+{
+  "chunks": 80,
+  "tokens": 20001266,
+  "dropped": 0,
+  "sep": "<#sep#>",
+  "max_seq": 1900,
+  "overlap": 128,
+  "bucket_cap": 0.4,
+  "spent": {
+    "agentic": 8001780,
+    "ballast": 1819561,
+    "code": 1930732,
+    "finance": 572421,
+    "math": 7926493,
+    "science": 8001039
+  },
+  "bytes_fp16": 163850371072
+}

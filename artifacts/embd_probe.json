@@ -1,0 +1,34 @@
+[New LWP 2573448]
+[New LWP 2573443]
+[New LWP 2573442]
+[New LWP 2573437]
+
+This GDB supports auto-downloading debuginfo from the following URLs:
+  <https://debuginfod.ubuntu.com>
+Enable debuginfod for this session? (y or [n]) [answered N; input not from terminal]
+Debuginfod has been disabled.
+To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/aarch64-linux-gnu/libthread_db.so.1".
+0x0000ffff859c7b74 in __GI___wait4 (pid=2573620, stat_loc=0x0, options=0, usage=0x0) at ../sysdeps/unix/sysv/linux/wait4.c:30
+#0  0x0000ffff859c7b74 in __GI___wait4 (pid=2573620, stat_loc=0x0, options=0, usage=0x0) at ../sysdeps/unix/sysv/linux/wait4.c:30
+30	in ../sysdeps/unix/sysv/linux/wait4.c
+#1  0x0000ffff85e65aec in ggml_print_backtrace () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libggml-base.so.0
+#2  0x0000ffff85e65c90 in ggml_abort () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libggml-base.so.0
+#3  0x0000ffff85e67d50 in ggml_new_tensor () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libggml-base.so.0
+#4  0x0000ffff85e67e80 in ggml_new_tensor_3d () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libggml-base.so.0
+#5  0x0000ffff85e716e0 in ggml_ssm_conv () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libggml-base.so.0
+#6  0x0000ffff8614d644 in causal_conv1d(ggml_cgraph*, ggml_context*, ggml_tensor*, ggml_tensor*, long, ggml_tensor*, ggml_tensor*, ggml_tensor*, long, long, long, long, long, long, long) () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libllama.so.0
+#7  0x0000ffff8614eeb4 in llm_build_glm5_next::llm_build_glm5_next(llama_model const&, llm_graph_params const&) () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libllama.so.0
+#8  0x0000ffff86061d20 in llama_model::build_graph(llm_graph_params const&) const () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libllama.so.0
+#9  0x0000ffff85fdab30 in llama_context::graph_reserve(unsigned int, unsigned int, unsigned int, llama_memory_context_i const*, bool, unsigned long*) () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libllama.so.0
+#10 0x0000ffff85fdb5a4 in llama_context::sched_reserve() () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libllama.so.0
+#11 0x0000ffff85fdf93c in llama_context::llama_context(llama_model const&, llama_context_params) () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libllama.so.0
+#12 0x0000ffff85fe08e4 in llama_init_from_model () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libllama.so.0
+#13 0x0000ffff85fb5fdc in llama_get_device_memory_data(char const*, llama_model_params const*, llama_context_params const*, std::vector<ggml_backend_device*, std::allocator<ggml_backend_device*> >&, unsigned int&, unsigned int&, unsigned int&, ggml_log_level) () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libllama.so.0
+#14 0x0000ffff85fb6dd4 in llama_params_fit_impl(char const*, llama_model_params*, llama_context_params*, float*, llama_model_tensor_buft_override*, unsigned long*, unsigned int, ggml_log_level) () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libllama.so.0
+#15 0x0000ffff85fb9da8 in llama_params_fit () from /home/patrickd/glm5-llama.cpp/build-cuda/bin/libllama.so.0
+#16 0x0000aaaad203f7f8 in common_init_result::common_init_result(common_params&) ()
+#17 0x0000aaaad20405d0 in common_init_from_params(common_params&) ()
+#18 0x0000aaaad1f9dc80 in main ()
+[Inferior 1 (process 2573433) detached]

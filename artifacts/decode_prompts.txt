@@ -1,0 +1,8 @@
+Write a Python function that merges two sorted lists into one sorted list, without using sort().
+Explain why a B-tree is preferred over a binary search tree for on-disk database indexes.
+def quicksort(arr):
+Summarize the tradeoffs between speculative decoding and quantization for local LLM inference.
+A farmer has 17 sheep. All but 9 run away. How many are left? Think step by step.
+Write a bash one-liner that finds the ten largest files under the current directory.
+The mitochondrion is best known as the organelle that
+Translate to French: "The model produced a draft that the target model then verified."

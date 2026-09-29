@@ -1,0 +1,13 @@
+
+The user wants to know the rightmost value of the orange graph.
+Looking at the orange graph ("Russia favorability in China"), the values are:
+- 2007: 54
+- 2008: 54 (or is it 54? Let's trace: 54, 54, 46, 49, 47, 48, 49, 64, 51)
+Wait, let's look at the labels:
+Leftmost: 54 (orange), 60 (green)
+Then: 54 (orange), 60 (green)
+Then: 46 (orange), 58 (green)
+Then: 49 (orange), 60 (green)
+Then: 47 (orange), 63 (green)
+Then: 48 (orange),
+

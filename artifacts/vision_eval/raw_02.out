@@ -1,0 +1,16 @@
+
+The user wants to know in which year the value was 51.
+Looking at the chart:
+The green line represents "Favorable" views.
+The orange line represents "Unfavorable" views.
+The values are:
+2011: Favorable = 61, Unfavorable = 31
+2012: Favorable = 56, Unfavorable = 38
+2014: Favorable = 48, Unfavorable = 51
+2015: Favorable = 44, Unfavorable = 53
+
+Wait, the value 51 is shown in 2014 for the orange line (Unfavorable).
+Let me check the labels:
+2014 has labels 48 (green) and 51 (orange).
+So the year is 2014.</think>
+

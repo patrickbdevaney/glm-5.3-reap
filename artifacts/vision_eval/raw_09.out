@@ -1,0 +1,11 @@
+
+The user wants to know the difference between the most favorable view and the most unfavorable view.
+Looking at the chart:
+- The "Favorable" line has values: 88 (2010), 86 (2013), 77 (2014), 60 (2015).
+- The "Unfavorable" line has values: 11 (2010), 13 (2013), 19 (2014), 39 (2015).
+
+The question asks to "Deduct the most unfavorable view from the most favorable view".
+Wait, "most favorable view" could mean the highest percentage for favorable, which is 88.
+"Most unfavorable view" could mean the highest percentage for unfavorable, which is 39.
+Or it could mean the highest favorable minus the lowest unfavorable?
+

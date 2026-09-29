@@ -1,0 +1,209 @@
+{
+  "model": "GLM-5.3-Flash-REAP50-IQ3_M.gguf",
+  "dataset": "ChartQA (held-out multimodal corpus rows)",
+  "metric": "relaxed accuracy (numeric within 5%, text exact match)",
+  "n": 24,
+  "correct": 19,
+  "empty_replies": 1,
+  "accuracy": 0.792,
+  "wilson95": [
+    0.595,
+    0.908
+  ],
+  "method": "held-out rows the calibration never saw; pixel_values un-packed from 2x2 merge-block order back to PNG; each question asked at temperature 0 with -n 160 so reasoning is not truncated mid-answer; only the model's stdout is graded, with the echoed prompt cut at the last chat-turn marker, so neither llama.cpp log lines nor the question itself can satisfy a match",
+  "caveat": "n=24 is small and deliberately so -- this is a smoke-level characterisation, not a leaderboard run. The 95% Wilson interval is wide; read it, not the point estimate. Decode is CPU-only (-ngl 0) at ~1 tok/s, which bounds n.",
+  "results": [
+    {
+      "image": "img_00.png",
+      "question": "Is the value of Favorable 38 in 2015? Short answer required.",
+      "gold": "Yes.",
+      "reply": "Yes.",
+      "correct": true,
+      "secs": 72.0
+    },
+    {
+      "image": "img_00.png",
+      "question": "How many values are below 40 in Unfavorable graph? Short answer required.",
+      "gold": "6.",
+      "reply": "The user wants to know how many values are below 40 in the \"Unfavorable\" graph.\nLooking at the chart:\nThe \"Unfavorable\" graph is the orange line (bottom line initially, then top line later).\nWait, let's identify the orange line values:\nIn 2005: 35\nIn 2006: 29\nIn 2007: 39\nIn 2008: 39\nIn 2009: 38\nIn 2010: 36\nIn 2011: 36\nIn 2012: 40\nIn 2013: 52\nIn 2014: 55\nIn 2015: 54\n\nLet's check the values below 40 for the orange line (Unfavor",
+      "correct": false,
+      "secs": 129.6
+    },
+    {
+      "image": "img_01.png",
+      "question": "In which year the value was 51? Give a very brief answer.",
+      "gold": "2014.",
+      "reply": "",
+      "correct": false,
+      "secs": 129.2
+    },
+    {
+      "image": "img_01.png",
+      "question": "What is the sum favourable value in the year 2014 and 2015? Quick response, please.",
+      "gold": "95.",
+      "reply": "92.",
+      "correct": true,
+      "secs": 58.7
+    },
+    {
+      "image": "img_02.png",
+      "question": "In which year the Mexican governments campaign against drugs traffickers is making 47 percent progress? Be succinct.",
+      "gold": "2012.",
+      "reply": "2012",
+      "correct": true,
+      "secs": 98.9
+    },
+    {
+      "image": "img_02.png",
+      "question": "What is the sum of making progress ,losing ground and same in the year 2011? Give a very brief answer.",
+      "gold": "99.",
+      "reply": "99.99\n\n**Calculation:**\n* Making progress: 45\n*",
+      "correct": true,
+      "secs": 135.3
+    },
+    {
+      "image": "img_03.png",
+      "question": "How many intercepting point(s) is/are there? Quick response, please.",
+      "gold": "1.",
+      "reply": "The user wants to know how many intercepting points there are in the provided chart.\nLooking at the chart:\nThere are two lines: \"Good\" (green) and \"Bad\" (orange).\nThe \"Good\" line starts at 62 in 2010, goes to 54 in 2011, 65 in 2012, 59 in 2013, 32 in 2014, and 13 in 2015.\nThe \"Bad\" line starts at 36 in 2010, goes to 45 in 2011, 35 in 2012, 41 in 2013, 67 in 2014, and 87 in 2015.\n\nLet's trace the lines:\nIn 2013, Good is 59,",
+      "correct": false,
+      "secs": 132.9
+    },
+    {
+      "image": "img_03.png",
+      "question": "Which year has the most divergent opinions about Brazil's economy? Keep it brief.",
+      "gold": "2015.",
+      "reply": "The user wants to know which year has the most divergent opinions about Brazil's economy.\nLooking at the chart, the lines represent \"Good\" (green) and \"Bad\" (orange) assessments.\nThe divergence (difference) between the two lines is the gap between the percentages.\nLet's calculate the difference for each year:\n- 2010: 62 - 36 = 26\n- 2011: 54 - 45 = 9\n- 2012: 65 - 35 = 30\n- 2013: 59 - 41 = 18\n- 2014: 67 - 32 = 35\n- 2015: 87 - 13 = 74\n\nThe largest difference is in 2015 (87",
+      "correct": true,
+      "secs": 135.6
+    },
+    {
+      "image": "img_04.png",
+      "question": "Which line contains smaller values across all years? Quick response, please.",
+      "gold": "Unfavorable.",
+      "reply": "The user wants to know which line contains smaller values across all years.\nLooking at the chart:\n- \"Favorable\" line has values: 88 (2010), 86 (2013), 77 (2014), 60 (2015).\n- \"Unfavorable\" line has values: 11 (2010), 13 (2013), 19 (2014), 39 (2015).\n\nComparing the values for each year:\n- 2010: 11 < 88\n- 2013: 13 < 86\n- 2014: 19 < 77\n- 2015: 39 < 60\n\nThe \"Unfavorable\" line contains smaller values across all years.\nThe question asks for a quick response",
+      "correct": true,
+      "secs": 131.7
+    },
+    {
+      "image": "img_04.png",
+      "question": "Deduct the most unfavorable view from the most favorable view? Quick response, please.",
+      "gold": "49.",
+      "reply": "The user wants to know the difference between the most favorable view and the most unfavorable view.\nLooking at the chart:\n- The \"Favorable\" line has values: 88 (2010), 86 (2013), 77 (2014), 60 (2015).\n- The \"Unfavorable\" line has values: 11 (2010), 13 (2013), 19 (2014), 39 (2015).\n\nThe question asks to \"Deduct the most unfavorable view from the most favorable view\".\nWait, \"most favorable view\" could mean the highest percentage for favorable, which is 88.\n\"Most unfavorable view\" could mean the highest percentage for unfavorable, which is 39.\nOr it could mean the highest favorable minus the lowest unfavorable?",
+      "correct": false,
+      "secs": 133.6
+    },
+    {
+      "image": "img_05.png",
+      "question": "What's the rightmost value dark brown graph? Answer briefly.",
+      "gold": "47.",
+      "reply": "47",
+      "correct": true,
+      "secs": 36.5
+    },
+    {
+      "image": "img_05.png",
+      "question": "How many values of dark brown graph exceed 40? Give a very brief answer.",
+      "gold": "5.",
+      "reply": "The user wants to know how many values of the dark brown graph exceed 40.\nLet's identify the dark brown graph.\nThe legend says:\n\"Control gun ownership\" is the lighter yellow/gold line.\n\"Protect the right of Americans to own guns\" is the dark brown line.\nLet's trace the dark brown line values:\n93: 34\n95: (not explicitly labeled, but there's a line)\n97: (not explicitly labeled)\n99: 29\n01: 42\n03: (not explicitly labeled)\n05: (notexplicitly labeled)\n07: 32\n09: 45\n11: 42\n13: 46\n15: 47\n\nWait, let's look at the labels on the dark brown line:\n- 34 (",
+      "correct": true,
+      "secs": 133.9
+    },
+    {
+      "image": "img_06.png",
+      "question": "Is the largest value of green bar 30? Be succinct.",
+      "gold": "No.",
+      "reply": "No. The largest value of the green line is 57.",
+      "correct": true,
+      "secs": 97.1
+    },
+    {
+      "image": "img_06.png",
+      "question": "Is the sum of highest and lowest value of orange graph greater than 60? Answer briefly.",
+      "gold": "Yes.",
+      "reply": "Yes.",
+      "correct": true,
+      "secs": 68.6
+    },
+    {
+      "image": "img_07.png",
+      "question": "What is the color of graph whose lowest value is 35? Be succinct.",
+      "gold": "Green.",
+      "reply": "Green.",
+      "correct": true,
+      "secs": 42.5
+    },
+    {
+      "image": "img_07.png",
+      "question": "What's the median value of green graph? Short answer required.",
+      "gold": "75.",
+      "reply": "75",
+      "correct": true,
+      "secs": 63.4
+    },
+    {
+      "image": "img_08.png",
+      "question": "What's the rightmost value of orange graph? Answer briefly.",
+      "gold": "51.",
+      "reply": "The user wants to know the rightmost value of the orange graph.\nLooking at the orange graph (\"Russia favorability in China\"), the values are:\n- 2007: 54\n- 2008: 54 (or is it 54? Let's trace: 54, 54, 46, 49, 47, 48, 49, 64, 51)\nWait, let's look at the labels:\nLeftmost: 54 (orange), 60 (green)\nThen: 54 (orange), 60 (green)\nThen: 46 (orange), 58 (green)\nThen: 49 (orange), 60 (green)\nThen: 47 (orange), 63 (green)\nThen: 48 (orange),",
+      "correct": true,
+      "secs": 132.1
+    },
+    {
+      "image": "img_08.png",
+      "question": "Is the sum of leftmost value of green and smallest value of orange graph greater than 100? Short answer required.",
+      "gold": "Yes.",
+      "reply": "**Yes** (60 + 46 = 106 > 100)",
+      "correct": true,
+      "secs": 87.6
+    },
+    {
+      "image": "img_09.png",
+      "question": "What is the first data in orange line? Give a very brief answer.",
+      "gold": "41.",
+      "reply": "The user asks: \"What is the first data in orange line? Give a very brief answer.\"\nThe orange line represents \"U.S. confidence in Putin\".\nThe data points on the orange line are labeled with numbers.\nLooking at the chart from left to right (starting at 2003):\nThe first data point on the orange line is at the year 2003, and the value is 41.\nLet's double check the values on the orange line:\n- 2003: 41\n- 2005: 33\n- 2007: 30\n- 2008: 28\n- 2011: 28\n- 2013: 16\n- 2014: 21 (or is it 2015? The label says",
+      "correct": true,
+      "secs": 134.6
+    },
+    {
+      "image": "img_09.png",
+      "question": "Which year the green line cut the orange line from top to down? Answer briefly.",
+      "gold": "2014.",
+      "reply": "The user wants to know the year where the green line cut the orange line from top to down.\nLet's analyze the chart:\n- Orange line: \"U.S. confidence in Putin\"\n- Green line: \"Russia confidence in U.S. president\"\n\nLet's trace the values:\n- 2003: Orange = 41, Green = 8. (Orange is above Green)\n- 2005: Orange = 33, Green = 28. (Orange is above Green)\n- 2006 (approx): Orange = 30, Green = 21. (Orange is above Green)\n- 2007: Orange = 28, Green = 18. (Orange is above Green)\n- 2008 (approx): Orange = 28, Green = 22.",
+      "correct": false,
+      "secs": 133.3
+    },
+    {
+      "image": "img_10.png",
+      "question": "What is the data in Jul 2015 ( all two data)? Be succinct.",
+      "gold": "[63, 26].",
+      "reply": "63, 26",
+      "correct": true,
+      "secs": 83.5
+    },
+    {
+      "image": "img_10.png",
+      "question": "What is the average of Approve data? Write a very short answer.",
+      "gold": "58.",
+      "reply": "58",
+      "correct": true,
+      "secs": 64.2
+    },
+    {
+      "image": "img_11.png",
+      "question": "What's the color of the graph with the 15 as the lowest value? Keep it brief.",
+      "gold": "Blue.",
+      "reply": "Blue",
+      "correct": true,
+      "secs": 105.5
+    },
+    {
+      "image": "img_11.png",
+      "question": "What's the the average of all the values below 30? Write a very short answer.",
+      "gold": "19.",
+      "reply": "19",
+      "correct": true,
+      "secs": 45.6
+    }
+  ]
+}

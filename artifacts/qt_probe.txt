@@ -1,0 +1,2102 @@
+[BUG]description for query paramters can not show in swagger ui
+Hi, when I add a description for a schema used in query, it can not show in swagger ui but can show in Redoc
+```py
+@HELLO.route('/', methods=['GET'])
+@api.validate(query=HelloForm)
+def hello():
+    """
+    hello 注释
+    :return:
+    """
+   return 'ok'
+
+class HelloForm(BaseModel):
+    """
+    hello表单
+    """
+    user: str # 用户名称
+    msg: str = Field(description='msg test', example='aa')
+    index: int
+    data: HelloGetListForm
+    list: List[HelloListForm]
+```
+
+![截屏2020-10-12 下午7 54 52](https://user-images.githubusercontent.com/60063723/95743785-de70f480-0cc4-11eb-857b-fffd3d7e9cdd.png)
+![截屏2020-10-12 下午7 53 59](https://user-images.githubusercontent.com/60063723/95743805-e5980280-0cc4-11eb-99ae-11e6439bae02.png)
+
+
+
+
+diff --git a/setup.py b/setup.py
+index 1b3cb64..4ef21e6 100644
+--- a/setup.py
++++ b/setup.py
+@@ -14,7 +14,7 @@ with open(path.join(here, 'requirements.txt'), encoding='utf-8') as f:
+ 
+ setup(
+     name='spectree',
+-    version='0.3.7',
++    version='0.3.8',
+     author='Keming Yang',
+     author_email='kemingy94@gmail.com',
+     description=('generate OpenAPI document and validate request&response '
+diff --git a/spectree/utils.py b/spectree/utils.py
+index bb5698d..73d6c71 100644
+--- a/spectree/utils.py
++++ b/spectree/utils.py
+@@ -54,6 +54,7 @@ def parse_params(func, params, models):
+                 'in': 'query',
+                 'schema': schema,
+                 'required': name in query.get('required', []),
++                'description': schema.get('description', ''),
+             })
+ 
+     if hasattr(func, 'headers'):
+@@ -64,6 +65,7 @@ def parse_params(func, params, models):
+                 'in': 'header',
+                 'schema': schema,
+                 'required': name in headers.get('required', []),
++                'description': schema.get('description', ''),
+             })
+ 
+     if hasattr(func, 'cookies'):
+@@ -74,6 +76,7 @@ def parse_params(func, params, models):
+                 'in': 'cookie',
+                 'schema': schema,
+                 'required': name in cookies.get('required', []),
++                'description': schema.get('description', ''),
+             })
+ 
+     return params
+<#sep#>The Independent Jane
+For all the love, romance and scandal in Jane Austen’s books, what they are really about is freedom and independence. Independence of thought and the freedom to choose.
+Elizabeth’s refusal of Mr. Collins offer of marriage showed an independence seldom seen in heroines of the day. Her refusal of Mr. Darcy while triggered by anger showed a level of independence that left him shocked and stunned.
+The freedom she exhibited in finally accepting him in direct defiance of Lady Catherine and knowing her father would disapprove was unusual even for Austen. In her last book Anne Elliot is persuaded to refuse Captain Wentworth at Lady Russel’s insistence.
+Although Jane played by the rules of the day, all of her writing is infused with how she wanted life to be. She ‘screams’ her outrage at the limitations for women in Emma.
+When accosted by Mrs. Elton, Jane Fairfax says,
+“Excuse me, ma’am, but this is by no means my intention; I make no inquiry myself, and should be sorry to have any made by my friends. When I am quite determined as to the time, I am not at all afraid of being long unemployed. There are places in town, offices, where inquiry would soon produce something — offices for the sale, not quite of human flesh, but of human intellect.”
+“Oh! my dear, human flesh! You quite shock me; if you mean a fling at the slave-trade, I assure you Mr. Suckling was always rather a friend to the abolition.”
+“I did not mean, I was not thinking of the slave-trade,” replied Jane; “governess-trade, I assure you, was all that I had in view; widely different certainly, as to the guilt of those who carry it on; but as to the greater misery of the victims, I do not know where it lies.”
+That same sentiment is emphasized in Emma’s shock when Mrs. Weston tells her of Frank Churchill’s secret engagement to Jane.
+“Good God!” cried Emma, “Jane actually on the point of going as governess! What could he mean by such horrible indelicacy? To suffer her to engage herself — to suffer her even to think of such a measure!”
+I find it interesting that at the moment of Austen’s birth or there about, John Adams left his farm in Massachusetts for the Continental Congress in Philadelphia. Doesn’t sound particularly interesting, I know but consider this.
+John Adams left his home in mid-December 1775 to attend an unprecedented meeting of colonial representatives to consider severing ties with their mother country and her monarch; a decision that culminated in a document unlike any ever written. In the mother country, one day in that same cold December a baby girl was born at Steventon Rectory. Her cry was heard by only the people in the house but the years to come would see her pen create works unlike any the world had ever seen.
+Comparing Austen’s words with Thomas Jefferson’s may seem a trivialization but I believe that Austen’s impact on the world is no less important than Jefferson’s. The effect of Jane’s writing maybe more subtle than that of the Virginian but it is no less influential.
+Jefferson’s words instigated and promoted a revolution, a war of independence. Jane’s words had no such excessive consequence. Still in her own quiet, genteel yet powerful way she declared and promoted the same principles of freedom and self-regulated independence as our American forefathers. In all her novels Jane advocates independence of person and thought, the rights of all and acceptance of responsibility for those rights.
+Jane may not have incited military action as Jefferson did but even as an avowed royalist, I doubt not that Jane Austen firmly believed in his declaration of the right to life, liberty and the pursuit of happiness.<#sep#>-
+
+T = int(input())
+for _ in range(T):
+    s = input().strip()
+    stack = []
+    valid = True
+    for c in s:
+        if c == '(':
+            stack.append(c)
+        elif c == ')':
+            if not stack:
+                valid = False
+                break
+            stack.pop()
+    if valid and not stack:
+        print("YES")
+    else:
+        print("NO")<#sep#>Greenex Inc.'s option-free perpetual preferred stock is currently selling in the market for $945.63. The annual dividend rate is quoted at 5.5% and the par value of the stock is $1,000. If the stock is fairly valued, what should the required rate of return be? Answer as a percentage to two decimal places.
+
+5.8200001717<#sep#>Given a group of \( N \) balls consisting of \( C \) colors, where the number of balls in each color is represented as \( n_1, n_2, \ldots, n_C \) (with \( n_1 + n_2 + \ldots + n_C = N \)), what is the probability that when \( A \) balls are randomly picked (where \( A \leq N \)), the picked balls consist of \( a_1, a_2, \ldots, a_C \) balls of each color, where \( a_1 + a_2 + \ldots + a_C = A \)?
+
+<think>
+Okay, so I need to find the probability that when I pick A balls out of N, where there are C different colors, the number of each color I pick is exactly a1, a2, ..., aC. Hmm, let's think about how to approach this.
+
+First, probability problems often involve combinations. The general formula for probability is the number of favorable outcomes divided by the total number of possible outcomes. So, in this case, the favorable outcomes are the ways to pick exactly a1 of color 1, a2 of color 2, and so on up to aC of color C. The total possible outcomes would be all the ways to pick A balls regardless of color distribution.
+
+Let me break it down. The total number of ways to choose A balls from N is the combination of N choose A, which is C(N, A) = N! / (A! (N - A)!).
+
+Now, the favorable outcomes. For each color i, we need to choose ai balls from the ni available. Since the choices are independent across colors, the number of ways to do this for all colors would be the product of combinations for each color. So that's C(n1, a1) * C(n2, a2) * ... * C(nC, aC). But wait, is that right? Because when you pick a1 from n1, a2 from n2, etc., and the total number picked is A, which should sum up, right? As long as a1 + a2 + ... + aC = A, then this product gives the number of ways to pick exactly that many of each color.
+
+So, the probability should be [C(n1, a1) * C(n2, a2) * ... * C(nC, aC)] divided by C(N, A). That makes sense because each combination of selecting the specific numbers from each color is a favorable case, and the total cases are all possible A-sized groups.
+
+Let me check if there are any conditions. Each ai has to be ≤ ni, obviously, because you can't pick more balls of a color than are present. Also, the sum of ai's must equal A, which is given in the problem. If any ai > ni, the combination C(ni, ai) would be zero, so the probability would be zero, which is correct.
+
+Alternatively, this is a multivariate hypergeometric distribution problem. The hypergeometric distribution models the probability of k successes in a certain number of draws without replacement from a finite population. The multivariate version extends this to multiple categories, which is exactly the case here with different colors. The formula for the multivariate hypergeometric probability is indeed the product of combinations for each category divided by the combination of the total.
+
+Therefore, the probability is the product of combinations C(n_i, a_i) for each color i, divided by the combination C(N, A). So, I think that's the answer.
+</think>To find the probability that when \( A \) balls are randomly picked from a group of \( N \) balls consisting of \( C \) colors, where the number of balls in each color is represented as \( n_1, n_2, \ldots, n_C \) (with \( n_1 + n_2 + \ldots + n_C = N \)), the picked balls consist of \( a_1, a_2, \ldots, a_C \) balls of each color (where \( a_1 + a_2 + \ldots + a_C = A \)), we can use the multivariate hypergeometric distribution.
+
+### Steps to Derive the Solution:
+
+1. **Total Number of Ways to Choose \( A \) Balls from \( N \)**:
+   The total number of ways to choose \( A \) balls from \( N \) balls is given by the combination:
+   \[
+   \binom{N}{A}
+   \]
+
+2. **Number of Favorable Outcomes**:
+   The number of favorable outcomes where we pick exactly \( a_1 \) balls of color 1, \( a_2 \) balls of color 2, ..., and \( a_C \) balls of color \( C \) is the product of combinations for each color:
+   \[
+   \binom{n_1}{a_1} \times \binom{n_2}{a_2} \times \cdots \times \binom{n_C}{a_C}
+   \]
+
+3. **Probability Calculation**:
+   The probability \( P \) is the ratio of the number of favorable outcomes to the total number of outcomes:
+   \[
+   P = \frac{\binom{n_1}{a_1} \times \binom{n_2}{a_2} \times \cdots \times \binom{n_C}{a_C}}{\binom{N}{A}}
+   \]
+
+### Final Solution:
+The probability that when \( A \) balls are randomly picked from \( N \) balls, the picked balls consist of \( a_1, a_2, \ldots, a_C \) balls of each color is given by:
+\[
+\boxed{\frac{\prod_{i=1}^{C} \binom{n_i}{a_i}}{\binom{N}{A}}}
+\]
+
+This solution is derived from the multivariate hypergeometric distribution, where the combinations \( \binom{n_i}{a_i} \) account for the ways to choose \( a_i \) balls from \( n_i \) balls of color \( i \), and the denominator \( \binom{N}{A} \) accounts for the total ways to choose \( A \) balls from \( N \) balls.<#sep#>human: I am in desperate need of some ear defenders, so I can program in peace. Unfortunately, I don't have ear defenders. But I do have a pair of headphones, a microphone and a microcontroller, so I thought I'd make some noise-cancelling headphones.
+However, there is one tiny problem. I can't program in noisy environments! So you'll need to write the code for me.
+Task
+Given a constant noisy input, output the input's "complement"; a value that will completely cancel out the input value (0x00 cancels 0xff, 0x7f cancels 0x80). Because the headphones block some noise, also take a value as input that you will divide the "complement" by, using the following algorithm: if (c < 0x80) ceil ( 0x7f - ( (0x7f - c) / n ) ) else floor ( ( (c - 0x80) / n ) + 0x80 ) where c is the "complement" and n is the value to divide by. (If the value exceeds the byte range, it should be clipped to 0 or 255.)
+The input will always be a sequence of bytes, via stdin or function parameter (see bonuses) but the modifier can be given via any input method. The output sequence should be output via stdout or as a return value (see bonuses). The output should be a series of bytes (e.g. $.d<±3Ç/ó¢), or a set of numbers representing those bytes (e.g. 217 135 21 43 126 219).
+Oh, and your code will have to be short, because there isn't much flash memory on the microcontroller (4096 bytes; and I need to fit on drivers too!).
+Examples
+In these examples, I have used hexadecimal codes to represent bytes, because DEL and NULL are somewhat hard to read. The actual input and output should be done as a string of bytes or as a byte-stream.
+Modifier: 2
+Input: 0x00 0x10 0xe0 ...
+Output: 0xbf 0xb7 0x4f ...
+Modifier: 128
+Input: 0x00 0x10 0xe0 ...
+Output: 0x80 0x80 0x7f ...
+Modifier: 0.5
+Input: 0x00 0x10 0xe0 ...
+Output: 0xff 0xff 0x00 ...
+Your code should cope with much longer inputs than this; these are just examples.
+Bonuses
+To add a bonus to a score, use the following formula: s * (100% - b) where s is the current score and b is the bonus as a percentage.
+
+1% If you output as raw bytes.
+5% If there's no stdin pipe (or byte input), get the bytes straight from the microphone, such as with parec.
+5% If you output to the speakers as well as returning / outputting to stdout.
+
+
+
+gpt: <think> Okay, I need to solve this problem where I have to create noise-cancelling headphones using a microcontroller. The challenge is to write code that takes a sequence of bytes (the noisy input) and a modifier number. The goal is to output the "complement" of each input byte, adjusted by dividing it according to a specific algorithm, and then clip it if it goes beyond the byte range. Hmm, let me think through this step by step.
+
+First, understanding the complement. The complement of a byte is such that their sum is 0xFF. Wait, the examples mention that 0xCF would be 0x30's complement? Or wait, looking at the problem description: "0x00 cancels 0xff, 0x7f cancels 0x80". So each complement of a value x is (0xFF - x). Because 0x00's complement is 0xff, and 0x7f plus 0x80 gives 0xFF. Wait, 0x7f +0x80 is 0xFF? 127+128=255, yes right. So yes, the complement is 255 - x.
+
+But then comes the division step based on the modifier n. The algorithm says:
+
+For each complement c (which is 255 - x for x in the input):
+
+if c < 0x80 (128), do ceil(0x7f - ((0x7f - c)/n))
+
+Else (c >=128), do floor((c -0x80)/n + 0x80). 
+
+Wait, I need to parse the formula correctly. Let me rephrase it.
+
+The division process is a bit tricky. Let me write it out for each case.
+
+Case 1: c is less than 128 (so original value was 255-c which is over 127, since the complement c is 255 - original input's value x. Wait, perhaps it's better to work with variables properly here.
+
+Wait c is the complement (255 - input), so when the original input is 0, c is 0xff? No, wait, let's see: the input value is x, then the complement is 255 - x. So c is 255 - x. So when x is 0, c is 255. Wait but then when c is compared to 128 (0x80), so if x was 0 (input is 0x00), then c = 255, which is greater than 128, so it would fall into the second case.
+
+Wait the examples:
+
+Let's take the first example with modifier 2. The first input is 0x00, so its complement is 0xff (255). Then applying the modifier 2. 
+
+Let me compute the algorithm for c=255 (first input):
+
+Since c >= 0x80, so we do floor((255-0x80)/2 + 0x80). 
+
+255-128 = 127. 127/2 is 63.5. Adding 128 gives 191.5. Then taking the floor (which would be 191). But the first result in the example is 0xbf, which is 191. So yes. That matches.
+
+In the first example: the output for 0x00 with modifier 2 is 0xbf (191). So yes, that's correct.
+
+Second input, 0x10 in the first example. Then complement is 245 (255-16). Let's see.
+
+Wait 255-16 is 239? Wait wait 255 - 16 is 239? 255 - 16 = 239, yes. Wait wait 255-10 is 245, but the input is 0x10 (16). So the c is 239, which is 239, which is larger than 128.
+
+Thus, the formula would be (239 -128)/2 +128. 
+
+239 -128 = 111. 111/2 is 55.5, plus 128 gives 183.5. Take the floor, so 183. Hex is 0xb7. Which matches the example's second output byte.
+
+Wait the first example's output for 0x10 is 0xB7 (183). So yes, that's correct. So the formula works here.
+
+So when c >= 128, the formula is essentially (c - 128) divided by n, added to 128, then floor it? So (c-128)/n +128, floored.
+
+Wait in code terms, the first step is to compute for c >=128: 
+
+value = (c - 0x80)/n + 0x80 
+
+and then take the floor of that value.
+
+But the problem says "floor ( ( (c - 0x80)/n ) + 0x80 )" 
+
+Ah, right. So the division is only on (c-0x80), and when divided by n, then added to 0x80, then floor. So division comes first.
+
+Wait the parentheses matter. For example:
+
+(c -0x80)/n is the value, then add 0x80 to it, then the entire thing is floored.
+
+Wait no, the parentheses as given in the formula are:
+
+floor( ((c - 0x80)/n ) + 0x80 ). So first subtract, divide, then add 128, then take floor.
+
+Right. For c < 128, do:
+
+ceil( 0x7f - ( (0x7f - c)/n ) )
+
+Breaking down that formula:
+
+Compute (0x7f - c) divided by n, then subtract that value from 0x7f, then take the ceiling of the result.
+
+Hmm. Let's see an example where that applies. Let me see the second example with modifier 128, input 0xe0.
+
+Wait input 0xe0 (224) would have complement c =255-224=31,<#sep#>display a loading statebar when a layer is loading in the map 
+## issue 
+I experienced some issues with the FCDM module as the map is super slow to load (it uses a adaptative buffer, the more you zoom the slower it gets it's a nightmare). The consequence is that the user clicks frantically on the `zoom` `unzoom` btn and the layer never fully loads and they eventually break the app.
+
+I've looked into the loading widgets that exists in ipyleaflet and that's not very elegant (from my perspective).
+
+## current implementation
+
+I came up with the idea of overwriting the `add_layer` method to add a `StateBar` at the top left corner for every layer and dynamically show them when the tile are reloading. overwritting the `add_layer` method is super versatile as it's the basic function called by all the others (`add_ee_layer`, `addLayer`, `add_raster_layer` ... etc). 
+
+- user doesn't change anything in the way object are added to the map
+- each time you add a layer, it adds a statebar writting "loading \<whatever\>"
+- the statebare is shown whenever the layer is loading (thank you traitlets)
+
+## questions
+
+- should we remove them when the layer is removed (overwritting remove_layer as well) ?
+- should the statebar always be displayed (and instead of changing viz, we could change loading trait) ?
+- do you think it could be useful in general ? 
+
+## demo 
+
+Here is a gif demo and the the code I used. 
+
+
+![feature_demo](https://user-images.githubusercontent.com/12596392/142245503-4b78f635-9700-468c-9202-fa04a13de4b8.gif)
+
+```python
+from sepal_ui.mapping import SepalMap
+from sepal_ui import sepalwidgets as sw 
+from ipyleaflet import WidgetControl
+import ee
+
+ee.Initialize()
+
+# create a custom statebar
+class StateBar(sw.StateBar):
+    
+    def __init__(self, **kwargs):
+        
+        name = kwargs.pop("layer", "layer")
+        kwargs["_metadata"] = {"layer": name} 
+        
+        super().__init__(**kwargs)
+        
+        self.msg = f"Loading {name}"
+        self.loading = True
+        
+    def activate(self, change):
+        
+        if change['new']:
+            self.show()
+        else:
+            self.hide()
+            
+        return
+
+# define a custom Map class
+class Map(SepalMap):
+    
+    layer_state_list = []
+    
+    def add_layer(self, l):
+        
+        # call the original function
+        super().add_layer(l)
+        
+        # add a layer state object 
+        state = StateBar(layer=l.name)
+        self.layer_state_list += [state]
+        self.add_control(WidgetControl(widget=state, position='topleft'))
+        
+        # link it to the layer state
+        #layer = next(l for l in self.layers if l.name == name)
+        l.observe(state.activate, "loading")
+        
+        return
+
+# create the map and zoom on congo
+test_map = Map()
+test_map.zoom = 10
+test_map.center = [5.703447982149503, 28.32275390625] 
+
+# load hansen & al ddataset
+dataset = ee.Image('UMD/hansen/global_forest_change_2020_v1_8')
+treeCoverVisParam = {
+  "bands": ['treecover2000'],
+  "min": 0,
+  "max": 100,
+  "palette": ['black', 'green']
+}
+test_map.addLayer(dataset, treeCoverVisParam, 'tree cover')
+
+# load the S2 RGB product (SR)
+def maskS2clouds(image):
+
+    qa = image.select('QA60');
+    
+    # Bits 10 and 11 are clouds and cirrus, respectively.
+    cloudBitMask = 1 << 10;
+    cirrusBitMask = 1 << 11;
+
+    # Both flags should be set to zero, indicating clear conditions.
+    mask = (
+        qa
+        .bitwiseAnd(cloudBitMask).eq(0)
+        .And(qa.bitwiseAnd(cirrusBitMask).eq(0))
+    )
+
+    return image.updateMask(mask).divide(10000)
+
+dataset = (
+    ee.ImageCollection('COPERNICUS/S2_SR')
+    .filterDate('2020-01-01', '2020-01-30')
+    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',20))
+    .map(maskS2clouds)
+)
+
+visualization = {
+  "min": 0.0,
+  "max": 0.3,
+  "bands": ['B4', 'B3', 'B2'],
+}
+
+test_map.addLayer(dataset.mean(), visualization, 'RGB')
+
+# display the map
+test_map
+```
+
+
+diff --git a/sepal_ui/mapping/__init__.py b/sepal_ui/mapping/__init__.py
+index 7f72a0eb..aa84ddee 100644
+--- a/sepal_ui/mapping/__init__.py
++++ b/sepal_ui/mapping/__init__.py
+@@ -2,6 +2,7 @@ from .aoi_control import *
+ from .draw_control import *
+ from .fullscreen_control import *
+ from .layer import *
++from .layer_state_control import *
+ from .map_btn import *
+ from .sepal_map import *
+ from .value_inspector import *
+diff --git a/sepal_ui/mapping/layer_state_control.py b/sepal_ui/mapping/layer_state_control.py
+new file mode 100644
+index 00000000..eff80080
+--- /dev/null
++++ b/sepal_ui/mapping/layer_state_control.py
+@@ -0,0 +1,99 @@
++from traitlets import Int, observe
++from ipyleaflet import WidgetControl
++
++from sepal_ui import sepalwidgets as sw
++from sepal_ui.message import ms
++
++
++class LayerStateControl(WidgetControl):
++    """
++    A specific statebar dedicated to the the counting of loading tiles in the map
++
++    every time a map is added to the map the counter will be raised by one. same behaviour with removed.
++    """
++
++    m = None
++    "SepalMap: the map connected to the control"
++
++    w_state = None
++    "sw.StateBar: the stateBar displaying the number of layer loading on the map"
++
++    nb_layer = Int(0).tag(sync=True)
++    "Int: the number of layers in the map"
++
++    nb_loading_layer = Int(0).tag(sync=True)
++    "Int: the number of loading layer in the map"
++
++    def __init__(self, m, **kwargs):
++
++        # save the map as a member of the widget
++        self.m = m
++
++        # create a statebar
++        msg = ms.layer_state.complete.format(self.nb_layer)
++        self.w_state = sw.StateBar(loading=False, msg=msg)
++
++        # overwrite the widget set in the kwargs (if any)
++        kwargs["widget"] = self.w_state
++        kwargs["position"] = kwargs.pop("position", "topleft")
++        kwargs["transparent_bg"] = True
++
++        # create the widget
++        super().__init__(**kwargs)
++
++        # add js behaviour
++        self.m.observe(self.update_nb_layer, "layers")
++
++    def update_nb_layer(self, change):
++        """
++        Update the number of layer monitored by the statebar
++        """
++
++        # exit if nothing changed
++        # for example we change a layer parameters and it trigger this one
++        if len(change["new"]) == len(change["old"]):
++            return
++
++        self.nb_layer = len([lyr for lyr in change["new"] if not lyr.base])
++
++        # identify the modified layer
++        modified_layer = list(set(change["new"]) ^ set(change["old"]))[0]
++        if modified_layer.base is True:
++            return
++
++        # add a layer
++        if len(change["new"]) > len(change["old"]):
++            modified_layer.observe(self.update_loading, "loading")
++
++        # remove a layer
++        elif len(change["new"]) < len(change["old"]):
++            # the test is splitted as not all the layers have a loading trait
++            if hasattr(modified_layer, "loading") is True:
++                if modified_layer.loading is True:
++                    self.nb_loading_layer += -1
++
++        return
++
++    def update_loading(self, change):
++        """update the nb_loading_layer value according to the number of<#sep#>Taking Play Seriously
+By ROBIN MARANTZ HENIG
+Published: February 17, 2008
+On a drizzly Tuesday night in late January, 200 people came out to hear a psychiatrist talk rhapsodically about play -- not just the intense, joyous play of children, but play for all people, at all ages, at all times. (All species too; the lecture featured touching photos of a polar bear and a husky engaging playfully at a snowy outpost in northern Canada.) Stuart Brown, president of the National Institute for Play, was speaking at the New York Public Library's main branch on 42nd Street. He created the institute in 1996, after more than 20 years of psychiatric practice and research persuaded him of the dangerous long-term consequences of play deprivation. In a sold-out talk at the library, he and Krista Tippett, host of the public-radio program ''Speaking of Faith,'' discussed the biological and spiritual underpinnings of play. Brown called play part of the ''developmental sequencing of becoming a human primate. If you look at what produces learning and memory and well-being, play is as fundamental as any other aspect of life, including sleep and dreams.''
+The message seemed to resonate with audience members, who asked anxious questions about what seemed to be the loss of play in their children's lives. Their concern came, no doubt, from the recent deluge of eulogies to play . Educators fret that school officials are hacking away at recess to make room for an increasingly crammed curriculum. Psychologists complain that overscheduled kids have no time left for the real business of childhood: idle, creative, unstructured free play. Public health officials link insufficient playtime to a rise in childhood obesity. Parents bemoan the fact that kids don't play the way they themselves did -- or think they did. And everyone seems to worry that without the chance to play stickball or hopscotch out on the street, to play with dolls on the kitchen floor or climb trees in the woods, today's children are missing out on something essential.
+The success of ''The Dangerous Book for Boys'' -- which has been on the best-seller list for the last nine months -- and its step-by-step instructions for activities like folding paper airplanes is testament to the generalized longing for play's good old days. So were the questions after Stuart Brown's library talk; one woman asked how her children will learn trust, empathy and social skills when their most frequent playing is done online. Brown told her that while video games do have some play value, a true sense of ''interpersonal nuance'' can be achieved only by a child who is engaging all five senses by playing in the three-dimensional world.
+This is part of a larger conversation Americans are having about play. Parents bobble between a nostalgia-infused yearning for their children to play and fear that time spent playing is time lost to more practical pursuits. Alarming headlines about U.S. students falling behind other countries in science and math, combined with the ever-more-intense competition to get kids into college, make parents rush to sign up their children for piano lessons and test-prep courses instead of just leaving them to improvise on their own; playtime versus r?m?uilding.
+Discussions about play force us to reckon with our underlying ideas about childhood, sex differences, creativity and success. Do boys play differently than girls? Are children being damaged by staring at computer screens and video games? Are they missing something when fantasy play is populated with characters from Hollywood's imagination and not their own? Most of these issues are too vast to be addressed by a single field of study (let alone a magazine article). But the growing science of play does have much to add to the conversation. Armed with research grounded in evolutionary biology and experimental neuroscience, some scientists have shown themselves eager -- at times perhaps a little too eager -- to promote a scientific argument for play. They have spent the past few decades learning how and why play evolved in animals, generating insights that can inform our understanding of its evolution in humans too. They are studying, from an evolutionary perspective, to what extent play is a luxury that can be dispensed with when there are too many other competing claims on the growing brain, and to what extent it is central to how that brain grows in the first place.
+Scientists who study play, in animals and humans alike, are developing a consensus view that play is something more than a way for restless kids to work off steam; more than a way for chubby kids to burn off calories; more than a frivolous luxury. Play, in their view, is a central part of neurological growth and development -- one important way that children build complex, skilled, responsive, socially adept and cognitively flexible brains.
+Their work still leaves some questions unanswered, including questions about play's darker, more ambiguous side: is there really an evolutionary or developmental need for dangerous games, say, or for the meanness and hurt feelings that seem to attend so much child's play? Answering these and other questions could help us understand what might be lost if children play less.<#sep#>-
+
+import sys
+
+def main():
+    T = int(sys.stdin.readline())
+    for _ in range(T):
+        R = int(sys.stdin.readline())
+        R_sq = R * R
+        points = []
+        for _ in range(3):
+            x, y = map(int, sys.stdin.readline().split())
+            points.append((x, y))
+        # Compute pairwise squared distances
+        a, b, c = points
+        d_ab = (a[0] - b[0])**2 + (a[1] - b[1])**2
+        d_ac = (a[0] - c[0])**2 + (a[1] - c[1])**2
+        d_bc = (b[0] - c[0])**2 + (b[1] - c[1])**2
+        count = 0
+        if d_ab <= R_sq:
+            count += 1
+        if d_ac <= R_sq:
+            count += 1
+        if d_bc <= R_sq:
+            count += 1
+        print("yes" if count >= 2 else "no")
+
+if __name__ == "__main__":
+    main()<#sep#>A company exchanged land with an appraised value of $50,000 and an original cost of $20,000 for machinery with a fair value of $55,000. Assuming that the transaction has commercial substance, what is the gain on the exchange? Answer to the nearest dollar.
+
+30000<#sep#>How many lines can be drawn that are equidistant from \( n \) given points in the plane?
+
+<think>
+Okay, so the problem is asking how many lines can be drawn that are equidistant from n given points in the plane. Hmm, let me try to wrap my head around this. 
+
+First, I need to recall what it means for a line to be equidistant from points. I think when we say a line is equidistant from two points, it's the perpendicular bisector of the segment connecting those two points. Right? Because the perpendicular bisector is the set of all points equidistant from the two endpoints. So, if a line is equidistant from two points, it's that bisector. So, maybe for each pair of points, there's a unique line that's equidistant from them. So, for n points, the number of such lines would be the number of pairs of points, which is C(n, 2) or n(n-1)/2. But wait, is that the case?
+
+Wait, but the question is not about lines equidistant from pairs of points, but lines equidistant from all n points. Hmm, that's different. Wait, maybe I misread. Let me check again. The problem says "lines that are equidistant from n given points". So, does that mean a line such that all n points are equidistant from the line? Or maybe equidistant in the sense that each point has the same distance to the line? That might not even be possible unless all points lie on one side of the line and are arranged in a specific way.
+
+Alternatively, maybe equidistant here means that the line is equidistant from each pair of points, but I'm not sure. Wait, the wording is a bit ambiguous. Let me think. If the line has to be equidistant from all n points, then each of the n points must be at the same distance from the line. But in that case, the points must lie on two lines parallel to the given line, each at the same distance. Because the set of points at a fixed distance from a line lie on two lines (one on each side). So, unless all n points lie on two such lines, there can't be such a line. So, the number of lines would depend on how the points are arranged. But the problem says "n given points" in general. So maybe it's a general position problem?
+
+Wait, the problem is asking for the maximum number of such lines possible given n points, or the number of lines that are equidistant from all n points regardless of their arrangement? Hmm, the problem states "n given points", so maybe the answer depends on the configuration of the points. But if the points are in general position (no three collinear, etc.), how many such lines can exist?
+
+Alternatively, maybe the problem is referring to lines that are equidistant from each pair of points. But that seems different. Wait, maybe each line must be equidistant to every pair of points? But that seems too strict. For example, the perpendicular bisector of two points is equidistant to those two points, but not necessarily to any other points. So, if we have n points, how many lines can we have that are equidistant from at least two points but not necessarily all. But the question says "equidistant from n given points", which would mean all n points. That's confusing.
+
+Wait, maybe the question is asking how many lines can be equidistant from each of the n points. So, for a line to be equidistant from all n points, each point must be the same distance from the line. So, in that case, all points must lie on two lines parallel to the given line, each at the same distance from it. Therefore, if the n points are in such a configuration, the number of such lines would depend on how the points are arranged. However, if the points are in general position, meaning no three colinear and not lying on two parallel lines, then there might not be any such line. 
+
+But the problem doesn't specify any particular arrangement of the points, so it's a general question. So, perhaps the answer is that there can be infinitely many lines, or maybe up to three lines? Wait, no. Wait, let's think again. If the points are arranged such that they are symmetric with respect to multiple lines, then each axis of symmetry would be a line equidistant from all points. For example, if the points form a regular polygon, then there are several axes of symmetry, each of which might be equidistant to all points. But in that case, each axis of symmetry would pass through some points, so maybe the distance from the line to each point is zero for some points? Wait, no. If a line passes through a point, the distance from the point to the line is zero, so unless all points are on the line, then you can't have a line equidistant to all points unless all points are on the line. If all points are on a line, then that line itself would have all points at distance zero, which is equidistant, but any line parallel to it would have the points at varying distances. Wait, so in that case, there's only one line (the line itself) where all points are equidistant (distance zero). But if the points are colinear, then any line perpendicular to that line would have points at different distances. Hmm.
+
+Alternatively, if all points lie on two parallel lines, then the line midway between them would be equidistant from all points. So, for example, if n points are equally divided on two parallel lines, then the midline is equidistant from all points. But if the points are not equally divided, then the midline might still work. For instance, suppose you have three points on one line and one on the other. The midline would still be equidistant to all four points. So, in this case, there would be one such line.
+
+But if the points are not arranged in two parallel lines, then maybe there's no such line. So, the answer could vary depending on the configuration. However, the problem states "n given points", without specifying their arrangement, so perhaps we need to consider the maximum possible number of such lines, given n points arranged in a way that allows for the maximum number. Or maybe the problem is expecting a general formula in terms of n, assuming certain configurations.
+
+Wait, perhaps the problem is misinterpreted by me. Let me check again. The problem is: "How many lines can be drawn that are equidistant from n given points in the plane?" So, maybe it's not that the line is equidistant from all n points, but that each line is equidistant from the set of n points. But how do you define a line being equidistant from multiple points? The standard definition is that a line is equidistant from two points if it's the perpendicular bisector. For more than two points, it's not a standard term. So, maybe the problem is referring to lines that are equidistant from each pair of points. But that would be the intersection of all the perpendicular bisectors, but that would only be possible if all the perpendicular bisectors coincide, which would require all points to be co-circular or something.
+
+Alternatively, maybe the problem is asking for the number of lines such that each line is equidistant from at least two of the points, and not necessarily all. But then, for each pair of points, there's one line (the perpendicular bisector), so the total number would be C(n,2) = n(n-1)/2. But the question says "equidistant from n given points", which is plural. So, perhaps equidistant from each of the n points. 
+
+But then, as I thought earlier, such a line must have all n points at the same distance from it. Which would mean that all points lie on two lines parallel to the given line. So, if the n points are arranged such that they lie on two parallel lines, then the midline between them would be equidistant to all points. Additionally, if there are other lines for which all points lie on two lines parallel to those, then more such lines exist. But unless the points are arranged in a grid or something, which is unlikely. So, perhaps for a general case, the maximum number of such lines is 1, if the points are arranged on two parallel lines. But the problem doesn't specify that the points are arranged in any particular way, so the answer might be that there can be 0, 1, or more lines depending on the configuration. But since the problem asks "How many lines can be drawn...", maybe it's expecting the maximum possible number given n points, regardless of their arrangement. 
+
+Wait, maybe there's another interpretation. If we consider that a line is equidistant from three non-collinear points, it has to be the circumcircle's center or something, but no, that's a point. Wait, the set of<#sep#> divide, then add 128, then take floor.
+
+Right. For c < 128, do:
+
+ceil( 0x7f - ( (0x7f - c)/n ) )
+
+Breaking down that formula:
+
+Compute (0x7f - c) divided by n, then subtract that value from 0x7f, then take the ceiling of the result.
+
+Hmm. Let's see an example where that applies. Let me see the second example with modifier 128, input 0xe0.
+
+Wait input 0xe0 (224) would have complement c =255-224=31, which is less than 128. 
+
+Then using the formula for c < 128. Let's plug in modifier 128 (n):
+
+ceil( 127 - ( (127 -31)/128 ) )
+
+So 127-31 is 96. Divide by 128 → 0.75. Subtract from 127 to get 127 - 0.75 = 126.25. Take the ceiling of that, which is 127.
+
+Wait then setting that as c adjusted? Hmm the example output for that input was 0x00? Wait no, in the example with modifier 128 for 0xe0, the output was 0x7f? Let me check.
+
+Third example first test:
+
+Modifier 128 on input 0xe0:
+
+Original input is 0xe0 (224). complement c is 255 -224 = 31 (since x is 224). Since c (31) is less than 128, so using first formula:
+
+ceil( 0x7f - ( (0x7f -c)/n ) ) = ceil( 127 - (96/128) ) → 127 - 0.75 →126.25. The ceiling of that is 127, which is 0x7f. So the final value is 127 →0x7f, which aligns with the output example given for 0xe0 and modifier 128 →output 0x7f? Looking back at the examples for modifier 128's output, the third input (0xe0) gives 0x7f. So that checks out. 
+
+Another example from the first case, with modifier 2 and input 0xe0 (which would be 0xe0).
+
+Wait original input is 0xe0, so c is 31 (255 -224=31, but 0xe0 is 224 in hex? 0xe0 is 224? Wait 0xe0 in hex is 224 (E is 14, so 14 *16 + 0 =224?), yes. So c is 255-224=31.
+
+Wait applying modifier 2 to the first case:
+
+So for c=31 and n=2:
+
+ceil(127 - ( (127 -31)/2 ) )
+
+(127-31)=96 → divide by 2 gives 48 → 127 -48 =79 → the ceiling of 79 is 79. So the adjusted value for that is 79, which in hex is 0x4f, and in the first example output, the third entry is 0x4F. That matches. 
+
+Okay so the formulas work.
+
+Now the next thing is clipping. The problem says "If the value exceeds the byte range, it should be clipped to 0 or 255."
+
+Wait the resulting value after applying the formula (either ceiling or floor) could be outside of the 0-255 range, but since n is a divisor (could be a fraction?), perhaps it's possible but after adjustment?
+
+Wait the problem says the "complement" (c) is between 0 and 255, since it's based on 255 - x. When you apply the formula, the initial calculation may go out of bounds. For example, if n is negative? Wait but what is n? The problem says "take a value as input," so I need to ensure that n is a positive number. Because dividing by a negative could lead to funny results, but the parameters may have constraints?
+
+Hmm the input is talking about a modifier that can be given via any method. So maybe n can be any real number except zero? Well, the problem might assume that n is given as a positive number. Let's assume that.
+
+Wait let's think of cases where the formula would exceed the bytes. Suppose n=0.5. Then take the example input 0x00.
+
+c =255. First, c >=128 → (c-128)/n is (127)/0.5 = 254. Then adding 128? Wait no:
+
+Wait for the divisor n=0.5. Wait when n=0.5, the formula for c=255 (n=0.5) is (255-128)/0.5 → which is (127)/0.5 →254 → 254 + 128 is 382? Wait no. Wait wait, sorry equation again: formula for c ≥128:
+
+(c-0x80)/n +0x80. Then floor that.
+
+Wait c=255, c-128=127 divided by 0.5 is 254 → adding 128 → 382. Taking the floor of that (still 382) which is way above 255. So we have to clip it to 255.
+
+So this would apply to the third example with modifier 0.5 and input 0x00. The output here would be 255, but then since n=0.5 and formula gives 382 → clip to 255. But the third example says that for modifier 0.5, 0x00 produces 0xff (255). Which that would be correct. 
+
+Wait looking at the example for modifier 0.5 and input 0xe0 (which has c=31; since 224 → 255-224 is 31). 
+
+Then for c=31 <128:
+
+Compute using the first formula. Then:
+
+The formula is ceil(0x7f - ( (127-31)/0.5 ) )
+
+Because n is 0.5. Let's compute (0x7f -c is 127-31 =96). divided by 0.5 → 96/0.5 is 192 → 127 - 192 →-65. The ceiling of (127 - ( (0x7f -c)/n )) → so the whole term inside is 127 - (96/0.5) → 127-192= -65 → taking the ceiling of that is -65 (since ceiling of a number that is integer is itself). But that gives a value of -65, which is less than 0, so it should be clipped to 0. So for the 0xe0 input with n=0.5, the formula would return -65 → clipped to 0. Which aligns with the third example's output: 0x00 (which is 0). Thus that works out.
+
+Another example: with the same input 0xe0 (c=31) and n=0.5, first formula gives 0. 
+
+Thus the algorithm works, except that the final computed value may exceed 255 or be below 0, so those need to be clamped to 255 or 0 respectively before returning.
+
+So putting this all together:
+
+The steps for each byte in the input are:
+
+1. Compute complement c = 255 - x, where x is the input byte.
+
+2. Decide which formula to apply based on c < 128 or >= 128.
+
+3. Use formula for each case, compute the value, then clip it between 0 and 255.
+
+Now, the problem says the modifier can be given via any input method; so the input is bytes, and the modifier is another parameter. Need to code this.
+
+In programming languages, assuming we are using a golfing language or concise language. Let's think in terms of Python. Since the code needs to be as short as possible.
+
+First, the first thought is to:
+
+Read the input bytes: either as a list, or stream. Also read n from some other input (since the modifier can be via any method). But in standard scenario, perhaps the modifier is given as a command-line argument, and the input is via stdin. So for the code's purposes, input is a sequence of bytes, modifier is a floating-point or integer number. 
+
+But the problem says code can take the modifier in any way, like from stdin as well, but probably easiest to read from command line arguments. So that part can be handled through standard input.
+
+Now the code structure in Python could be something like this:
+
+Read the modifier n from, say, command-line argument, the input bytes from stdin.
+
+Then, for each byte in the input, process it as per steps above, and output the resulting bytes. 
+
+So, let's code each step in Python.
+
+Let's break it down step by step for a single byte:
+
+def compute(b, n):
+
+    c = 255 - b
+
+    if c<#sep#>        if len(change["new"]) > len(change["old"]):
++            modified_layer.observe(self.update_loading, "loading")
++
++        # remove a layer
++        elif len(change["new"]) < len(change["old"]):
++            # the test is splitted as not all the layers have a loading trait
++            if hasattr(modified_layer, "loading") is True:
++                if modified_layer.loading is True:
++                    self.nb_loading_layer += -1
++
++        return
++
++    def update_loading(self, change):
++        """update the nb_loading_layer value according to the number of tile loading on the map"""
++
++        increment = [-1, 1]
++        self.nb_loading_layer += increment[change["new"]]
++
++        return
++
++    @observe("nb_loading_layer", "nb_layer")
++    def _update_state(self, change):
++
++        # check if anything is loading
++        self.loading = bool(self.nb_loading_layer)
++
++        # update the message
++        if self.loading is True:
++            msg = ms.layer_state.loading.format(self.nb_loading_layer, self.nb_layer)
++        else:
++            msg = ms.layer_state.complete.format(self.nb_layer)
++
++        self.w_state.msg = msg
++
++        return
+diff --git a/sepal_ui/mapping/sepal_map.py b/sepal_ui/mapping/sepal_map.py
+index e2860daf..4ef41d1a 100644
+--- a/sepal_ui/mapping/sepal_map.py
++++ b/sepal_ui/mapping/sepal_map.py
+@@ -31,6 +31,7 @@ import sepal_ui.frontend.styles as styles
+ from sepal_ui.mapping.basemaps import basemap_tiles
+ from sepal_ui.mapping.draw_control import DrawControl
+ from sepal_ui.mapping.layer import EELayer
++from sepal_ui.mapping.layer_state_control import LayerStateControl
+ from sepal_ui.mapping.value_inspector import ValueInspector
+ from sepal_ui.message import ms
+ from sepal_ui.scripts import utils as su
+@@ -55,6 +56,7 @@ class SepalMap(ipl.Map):
+         dc (bool, optional): wether or not the drawing control should be displayed. default to false
+         vinspector (bool, optional): Add value inspector to map, useful to inspect pixel values. default to false
+         gee (bool, optional): wether or not to use the ee binding. If False none of the earthengine display fonctionalities can be used. default to True
++        statebar (bool): wether or not to display the Statebar in the map
+         kwargs (optional): any parameter from a ipyleaflet.Map. if set, 'ee_initialize' will be overwritten.
+     """
+ 
+@@ -74,7 +76,18 @@ class SepalMap(ipl.Map):
+     _id = None
+     "str: a unique 6 letters str to identify the map in the DOM"
+ 
+-    def __init__(self, basemaps=[], dc=False, vinspector=False, gee=True, **kwargs):
++    state = None
++    "sw.StateBar: the statebar to inform the user about tile loading"
++
++    def __init__(
++        self,
++        basemaps=[],
++        dc=False,
++        vinspector=False,
++        gee=True,
++        statebar=False,
++        **kwargs,
++    ):
+ 
+         # set the default parameters
+         kwargs["center"] = kwargs.pop("center", [0, 0])
+@@ -114,6 +127,10 @@ class SepalMap(ipl.Map):
+         self.v_inspector = ValueInspector(self)
+         not vinspector or self.add_control(self.v_inspector)
+ 
++        # specific statebar
++        self.state = LayerStateControl(self)
++        not statebar or self.add_control(self.state)
++
+         # create a proxy ID to the element
+         # this id should be unique and will be used by mutators to identify this map
+         self._id = "".join(random.choice(string.ascii_lowercase) for i in range(6))
+diff --git a/sepal_ui/message/en/layer_control.json b/sepal_ui/message/en/layer_control.json
+new file mode 100644
+index 00000000..2f90d41c
+--- /dev/null
++++ b/sepal_ui/message/en/layer_control.json
+@@ -0,0 +1,6 @@
++{
++    "layer_state": {
++        "loading": "loading {} layer(s) out of {}",
++        "complete": "{} layer(s) loaded"
++    }
++}
+\ No newline at end of file
+diff --git a/sepal_ui/sepalwidgets/alert.py b/sepal_ui/sepalwidgets/alert.py
+index e143170e..6ad4d5d0 100644
+--- a/sepal_ui/sepalwidgets/alert.py
++++ b/sepal_ui/sepalwidgets/alert.py
+@@ -250,7 +250,7 @@ class Alert(v.Alert, SepalWidget):
+         return su.check_input(input_, msg)
+ 
+ 
+-class StateBar(v.SystemBar):
++class StateBar(v.SystemBar, SepalWidget):
+ 
+     """Widget to display quick messages on simple inline status bar
+ 
+<#sep#>How do you get HIV?
+HIV can be passed on when infected bodily fluid, such as blood or semen, is passed into an uninfected person. Semen is the liquid which is released from a man's penis during sex which carries sperm. It can be infected with HIV or AIDS when someone is HIV positive or is carrying the AIDS virus. This can happen during unprotected sex. For example when two people have sex without using a condom when one partner is already infected, or between drug users who inject and share needles.
+It can't be transmitted by things like coughing, sneezing, kissing, sharing a toilet seat, swimming pools, sweat and tears.<#sep#>-
+
+import math
+
+n = int(input())
+for _ in range(n):
+    a_str, b_str = input().split()
+    a = int(a_str)
+    if a == 0:
+        if all(c == '0' for c in b_str):
+            print(0)
+        else:
+            print(int(b_str))
+    else:
+        mod = 0
+        for c in b_str:
+            mod = (mod * 10 + int(c)) % a
+        print(math.gcd(a, mod))<#sep#>Carlos Long, a financial analyst, is having a meeting with Tony John, one of his private wealth clients. During the meeting John stated that he wanted to achieve an expected return of 15% from his portfolio. Long estimated that the market portfolio has an expected return of 25% and a standard deviation of 37%. The risk-free rate is 5.0%. If Long uses the capital allocation line as a benchmark, what standard deviation will John's portfolio have? Answer as a percentage to a single decimal place.
+
+18.5<#sep#> are arranged on two parallel lines. But the problem doesn't specify that the points are arranged in any particular way, so the answer might be that there can be 0, 1, or more lines depending on the configuration. But since the problem asks "How many lines can be drawn...", maybe it's expecting the maximum possible number given n points, regardless of their arrangement. 
+
+Wait, maybe there's another interpretation. If we consider that a line is equidistant from three non-collinear points, it has to be the circumcircle's center or something, but no, that's a point. Wait, the set of points equidistant from three non-collinear points is the circumcenter, which is a point, not a line. So, maybe lines equidistant from three or more points don't exist unless the points are arranged in a specific way.
+
+Alternatively, perhaps equidistant here means that the line is at equal distance from each point, but not necessarily that each point is the same distance. Wait, that doesn't make sense. The distance from a point to a line is a non-negative number, so if the line is equidistant from all n points, then each point has the same distance to the line. Which would require all points to lie on two lines parallel to the given line, each at the same distance. So, for example, if you have points on two horizontal lines, then the horizontal line midway between them is equidistant to all points. Alternatively, if the points are arranged on more than two lines, maybe you can have multiple such midlines. For instance, if points are on two pairs of parallel lines, then there might be two different midlines. But this is getting complicated.
+
+Wait, perhaps I need to approach this step by step. Let's start with small n.
+
+Case n=1: There's one point. How many lines are equidistant from one point? Well, any line that's at a fixed distance from the point. But since the distance can be any non-negative number, there are infinitely many lines (all lines at distance d from the point, for any d ≥ 0). But the problem says "n given points". So, with one point, infinitely many lines. But the problem is asking for n given points, so maybe for n ≥ 2.
+
+But let's check n=2. Two points. Then, the set of lines equidistant from both points is the perpendicular bisector of the segment connecting them. So, that's one line. So, the answer for n=2 is 1. So, the number is 1.
+
+Wait, but perhaps there's another line? If the two points are the same, then any line is equidistant, but since they are distinct points, only the perpendicular bisector. So, yes, one line. So, for n=2, it's 1.
+
+For n=3. Let's suppose three non-collinear points. Is there a line equidistant from all three? If they form a triangle, then the three perpendicular bisectors meet at the circumcenter. But the circumcenter is a point, not a line. So, the lines equidistant from all three points would have to have all three points at the same distance from the line. For that to happen, all three points must lie on two parallel lines. For example, two points on one line and the third on the parallel line. Then, the midline between them would be equidistant to all three. But if the three points form a non-degenerate triangle, then they can't all lie on two parallel lines. Therefore, in that case, there's no such line. So, if three points are arranged such that two are on one line and the third is on a parallel line, then there is one such line. Otherwise, if they form a triangle, there are zero. So, depending on the configuration, it's 0 or 1.
+
+But the problem states "n given points". So, unless the points are in a specific arrangement, the number varies. However, the problem is phrased as a general question, not specifying the configuration. Maybe we need to find the maximum possible number of lines over all possible configurations of n points. For example, if the points are arranged in a way that allows multiple such lines.
+
+Wait, let's think. Suppose all n points are on a straight line. Then, the line itself has all points at distance zero. Any line perpendicular to this line will have the points at varying distances. So, only one line (the line containing the points) is equidistant (distance zero) to all points. But if the line is rotated or something, no. Wait, but any line that's not the original line would have points at different distances. So, only one line.
+
+Alternatively, if the points are arranged in two parallel lines. Suppose we have m points on one line and k points on another parallel line, with m + k = n. Then, the midline between them is equidistant to all points. Also, if we have another pair of parallel lines in a different orientation that contain all points, then there could be another midline. For example, if the points form a grid. Suppose n points are arranged as a rectangle (four points). Then, the two midlines (horizontal and vertical) between the sides are equidistant to all four points. Additionally, the two diagonals if it's a square. Wait, but the diagonals of a square are not equidistant to all four points. Let's check. The diagonal of a square: the distance from each vertex to the diagonal is either zero (if the vertex is on the diagonal) or some positive distance. So, no, the diagonals are not equidistant. So, in a square, the midlines (the horizontal and vertical through the center) are equidistant to all four points. So, for a square, two lines. Similarly, if points are arranged in a regular hexagon, maybe more lines. Wait, but in regular polygons with even sides, there are multiple axes of symmetry. For example, a regular hexagon has six axes of symmetry. But each axis of symmetry passes through two opposite vertices and the midpoint of two opposite edges. The lines that are axes of symmetry through the midpoints of edges would be equidistant from the vertices. Let's see: suppose we take a regular hexagon, the line passing through the midpoints of two opposite edges. The distance from each vertex to this line would be the same? Let's calculate. In a regular hexagon with side length s, the distance from a vertex to the midpoint line would vary. Wait, maybe not. Let me think. If the hexagon is centered at the origin and has vertices at (1,0), (0.5, √3/2), (-0.5, √3/2), (-1,0), (-0.5, -√3/2), (0.5, -√3/2). Suppose we take the horizontal line y=0: all vertices are at distance √3/2 or 0. No, the ones on the line y=0 are at distance zero, the others at √3/2. So that's not equidistant. If we take a vertical line x=0, similar issue. If we take a line at 60 degrees, maybe. Wait, maybe this approach isn't working. Perhaps regular polygons are not the way to go.
+
+Alternatively, if we arrange the points in a rectangle (not a square), then we have two midlines: horizontal and vertical. Each midline is equidistant to all four points. So, two lines. If the rectangle becomes a square, still two lines. So, maybe for four points arranged in a rectangle, two lines. If arranged in a square, same thing. So, in general, arranging points in two sets of parallel lines (horizontal and vertical) might give two lines. So, maybe the maximum number of such lines is the number of pairs of perpendicular directions in which the points can be arranged. But this seems vague.
+
+Alternatively, think of points arranged in a grid. For example, 3x3 grid points. Then, the horizontal midline, vertical midline, and the two diagonals. Wait, but the diagonals would not be equidistant to all points. For instance, in a 3x3 grid, the main diagonal passes through four points (assuming the grid is 3x3 with points at integer coordinates). The distance from the other points to the diagonal line would vary. So, that line is not equidistant to all points. So, in that case, only horizontal and vertical midlines.
+
+Hmm, maybe the maximum number of equidistant lines depends on how many pairs of parallel lines the points lie on. Each pair of parallel lines contributes one midline. So, if points lie on k pairs of parallel lines, then you have k midlines. To maximize k, you need to arrange the points such that they lie on as many pairs of parallel lines as possible. For example, if points form a regular polygon<#sep#> code can take the modifier in any way, like from stdin as well, but probably easiest to read from command line arguments. So that part can be handled through standard input.
+
+Now the code structure in Python could be something like this:
+
+Read the modifier n from, say, command-line argument, the input bytes from stdin.
+
+Then, for each byte in the input, process it as per steps above, and output the resulting bytes. 
+
+So, let's code each step in Python.
+
+Let's break it down step by step for a single byte:
+
+def compute(b, n):
+
+    c = 255 - b
+
+    if c < 128:
+
+        temp = (0x7f - c) / n 
+
+        # Wait, wait the formula is ceil(0x7f - ( (0x7f - c)/n )) 
+
+        # Wait no, (0x7f - c) divided by n, then subtract that from 0x7f?
+
+        Wait the correct formula is:
+
+        value = 0x7f - ((0x7f - c) /n)
+
+        then ceil(value).
+
+        So:
+
+        part1 = (0x7f - c) / n 
+
+        value = 0x7f - part1 
+
+        then take ceil( value )
+
+    else:
+
+        part2 = (c - 0x80)/n
+
+        value = part2 + 0x80
+
+        floored = math.floor(value)
+
+    then, clip to 0-255
+
+Wait let me recap:
+
+If c < 128, compute the first formula:
+
+time in code:
+
+val = 0x7f - ( ( (0x7f - c) ) /n )
+
+then:
+
+result = math.ceil(val)
+
+else:
+
+val = (c - 0x80)/n + 0x80 
+
+result = math.floor(val)
+
+Then result is clamped between 0 and 255.
+
+Yes.
+
+Now, the problem allows clipping: if the result exceeds the byte range (0-255), set to 0 or 255 (min( max( result, 0 ), 255 )).
+
+So now codifying this:
+
+In Python, here's an example processing one byte:
+
+import math
+
+n = ... 
+
+for b in bytes_input:
+
+    c = 255 - b
+
+    if c < 128:
+
+        temp = (127 - c) / n  # (0x7f - c) is 127 - c
+
+        val = 127 - temp  # since 0x7f is 127
+
+        res = math.ceil(val)
+
+    else:
+
+        temp = (c - 128)/n  
+
+        val = temp + 128 
+
+        res = math.floor(val)
+
+    # now clamp
+
+    res = max(0, min(255, res))
+
+    # then output res as a byte.
+
+Wait but in code, for some cases like when n is a fractional value, there might be floating points.
+
+Now, the function needs to compute all the bits accurately.
+
+Potential issues:
+
+- Division with floating points in Python can sometimes have precision errors. Need to be aware of that. But perhaps the formula will work.
+
+Now, let's think about code golfing this in Python as much as possible.
+
+The current problem requires the shortest possible code.
+
+Hmm, the code needs to read the modifier value (could be a float?), then read the input byte stream, process each, and output the result as a series of bytes.
+
+First steps:
+
+Read the modifier (n). For code golf, perhaps using a command line argument.
+
+In Python, the arguments are in sys.argv. So n is read from command line, like, say, first parameter, with shift or similar. Or via a function (if the problem allows function parameters? The problem says that input can be via function parameters, but bonuses require certain methods for the bytes not via stdin...)
+
+Since the problem allows using functions, perhaps for code submission, but for code golfing, the code can assume that the modifier is given as a function parameter and the input as another.
+
+But for code golf, perhaps best to read from standard input. The problem says for input sequence of bytes via stdin or function parameter (and for bonuses output as raw bytes etc.)
+
+In a code golf, perhaps the most compact is to read modifier from stdin, but let's see:
+
+Alternatively, in the code, the code can be a lambda function, but maybe we can write the entire code concisely using Python's minimalist constructs.
+
+Let me try to structure it.
+
+So, first, import math.
+
+then:
+
+import math, sys
+
+n = float(sys.argv[1])  # assuming n is given as a command line argument (args[1])
+
+but maybe in code golf terms, the code could accept n via stdin?
+
+Wait, if code can read both n and bytes from stdin:
+
+Well, the problem allows modifier via any input method. Suppose the code reads [n] via first taking a line (e.g., input()), then the rest as binary input. But for golfing, perhaps it's better.
+
+Alternatively, perhaps the program reads all the input as bytes and the first byte is the n? But probably not, because n can be fractional.
+
+Wait n could be a float. For example, in examples, n is 0.5.
+
+So, in code terms, perhaps first read the n via a command line parameter, which is easier for golfing.
+
+Alternatively read n via input(), and then read the rest as bytes.
+
+But in the code, the input can be taken in parts.
+
+Another approach: using standard input. First line for n as string, then the rest as the bytes. Or first number, then bytes.
+
+Hmm, in code golfing, better to use command-line parameters?
+
+Alternatively, assuming that the input comes from stdin as the bytes, and n is read from another input, but maybe in a code golf submission, that's acceptable.
+
+But the problem says: "input will always be a sequence of bytes", so the rest is the modifier. So codes.
+
+Wait the problem says: "the modifier can be given via any input method", so for code golf, perhaps read n as a float from command-line argument, and bytes from stdin. 
+
+Thus, the code will:
+
+Read n from a command-line argument, and the input bytes via stdin.
+
+Thus, here's a draft.
+
+Now, code steps:
+
+Read all the input bytes:
+
+import sys
+
+bytes_in = sys.stdin.buffer.read() 
+
+This is a bytes-like object.
+
+val n from command line:
+
+import sys; import math
+
+n = float(sys.argv[1])
+
+Then loop through each byte:
+
+for b in bytes_in:
+
+    c = 255 - b
+
+    if c < 128:
+
+        temp = (127 -c)/n 
+
+        val = 127 - temp
+
+        res = math.ceil(val)
+
+    else:
+
+        temp = (c -128)/n 
+
+        val = temp + 128 
+
+        res = math.floor(val)
+
+    res = max(0, min(255, int(res)))
+
+    print(bytes([res]), end='')
+
+Wait, but in Python, the bytes may need to be printed as individual bytes. So for each, add to a list and then write the whole buffer, or print each as a byte. 
+
+Wait the print will add a newline each time, which is bad. So using sys.stdout.buffer.write might be better.
+
+Alternatively collect into a list of integers and then convert to bytes.
+
+Wait for each b in input:
+
+Once res is clamped, then, for each, append res to an output list (as an integer between 0..255).
+
+Then, finally, after processing all bytes, convert the list to a bytes object and print that.
+
+Alternatively, for golfing:
+
+Probably branch into a one-liner.
+
+But coding it step by step:
+
+So the code skeleton:
+
+import math,sys
+
+n=float(sys.argv[1])
+
+for b in sys.stdin.buffer.read():
+
+    c=255-b
+
+    if c<128:
+
+        v=127-((127-c)/n)
+
+        res=math.ceil(v)
+
+    else:
+
+        res=math.floor( (c-128)/n +128 )
+
+    res=round(min(255,max(0, res)))
+
+Wait no, the math.floor would have already been applied. Wait, in the else-clause:
+
+Compute the value (c-128)/n +128 then floor. 
+
+Wait in code, it would be:
+
+temp = (c-128)/n 
+
+res = math.floor( temp + 128 ) 
+
+Wait no, (temp) + 128. But it's written as:
+
+value = (c-128)/n +128 → then floor(value).
+
+Thus, res = math.floor( ( (c-128)/n ) + 128 )
+
+Thus in code, it's written as:
+
+Else: res = math.floor( (c-128)/n + 128 )
+
+Similarly, the first case:
+
+res= math.ceil( 127 - ( (127 -c)/n ) )
+
+So perhaps the code can be written as:
+
+import math,sys
+
+n=float(sys.argv[1])
+
+for b in sys.stdin.buffer.read():
+
+<#sep#>add a disabled trait on the datepicker
+I'm currently coding it in a module and the process of disabling a datepicker is uterly boring. I think we could add an extra trait to the layout and pilot the enabling and disabling directly from the built-in widget
+
+
+```python
+self.w_start = sw.DatePicker(label="start", v_model=None)
+
+# disable both the slots (hidden to everyone) and the menu 
+self.w_start.menu.v_slots[0]["children"].disabled = True
+self.w_start.menu.disabled = True
+```
+
+
+diff --git a/docs/source/modules/sepal_ui.sepalwidgets.DatePicker.rst b/docs/source/modules/sepal_ui.sepalwidgets.DatePicker.rst
+index 1a982afb..867227cb 100644
+--- a/docs/source/modules/sepal_ui.sepalwidgets.DatePicker.rst
++++ b/docs/source/modules/sepal_ui.sepalwidgets.DatePicker.rst
+@@ -8,6 +8,7 @@ sepal\_ui.sepalwidgets.DatePicker
+     .. autosummary::
+     
+         ~DatePicker.menu
++        ~DatePicker.disabled
+         
+     .. rubric:: Methods
+     
+@@ -15,5 +16,8 @@ sepal\_ui.sepalwidgets.DatePicker
+         :nosignatures:
+         
+         ~Datepicker.close_menu
++        ~DatePicker.disable
+         
+-.. automethod:: sepal_ui.sepalwidgets.DatePicker.close_menu
+\ No newline at end of file
++.. automethod:: sepal_ui.sepalwidgets.DatePicker.close_menu
++
++.. automethod:: sepal_ui.sepalwidgets.DatePicker.disable
+\ No newline at end of file
+diff --git a/sepal_ui/sepalwidgets/inputs.py b/sepal_ui/sepalwidgets/inputs.py
+index 3ad7f1a9..68b81746 100644
+--- a/sepal_ui/sepalwidgets/inputs.py
++++ b/sepal_ui/sepalwidgets/inputs.py
+@@ -1,7 +1,7 @@
+ from pathlib import Path
+ 
+ import ipyvuetify as v
+-from traitlets import link, Int, Any, List, observe, Dict, Unicode
++from traitlets import link, Int, Any, List, observe, Dict, Unicode, Bool
+ from ipywidgets import jslink
+ import pandas as pd
+ import ee
+@@ -40,6 +40,9 @@ class DatePicker(v.Layout, SepalWidget):
+     menu = None
+     "v.Menu: the menu widget to display the datepicker"
+ 
++    disabled = Bool(False).tag(sync=True)
++    "traitlets.Bool: the disabled status of the Datepicker object"
++
+     def __init__(self, label="Date", **kwargs):
+ 
+         # create the widgets
+@@ -93,6 +96,14 @@ class DatePicker(v.Layout, SepalWidget):
+ 
+         return
+ 
++    @observe("disabled")
++    def disable(self, change):
++        """A method to disabled the appropriate components in the datipkcer object"""
++
++        self.menu.v_slots[0]["children"].disabled = self.disabled
++
++        return
++
+ 
+ class FileInput(v.Flex, SepalWidget):
+     """
+<#sep#>CTComms sends on average 2 million emails monthly on behalf of over 125 different charities and not for profits.
+Take the complexity of technology and stir in the complexity of the legal system and what do you get? Software licenses! If you've ever attempted to read one you know how true this is, but you have to know a little about software licensing even if you can't parse all of the fine print.
+By: Chris Peters
+March 10, 2009
+A software license is an agreement between you and the owner of a program which lets you perform certain activities which would otherwise constitute an infringement under copyright law. The software license usually answers questions such as:
+The price of the software and the licensing fees, if any, are sometimes discussed in the licensing agreement, but usually it's described elsewhere.
+If you read the definitions below and you're still scratching your head, check out Categories of Free and Non-Free Software which includes a helpful diagram.
+Free vs Proprietary:
+When you hear the phrase "free software" or "free software license," "free" is referring to your rights and permissions ("free as in freedom" or "free as in free speech"). In other words, a free software license gives you more rights than a proprietary license. You can usually copy, modify, and redistribute free software without paying a fee or obtaining permission from the developers and distributors. In most cases "free software" won't cost you anything, but that's not always the case – in this instance the word free is making no assertion whatsoever about the price of the software. Proprietary software puts more restrictions and limits on your legal permission to copy, modify, and distribute the program.
+Free, Open-Source or FOSS?
+In everyday conversation, there's not much difference between "free software," "open source software," and "FOSS (Free and Open-Source Software)." In other words, you'll hear these terms used interchangeably, and the proponents of free software and the supporters of open-source software agree with one another on most issues. However, the official definition of free software differs somewhat from the official definition of open-source software, and the philosophies underlying those definitions differ as well. For a short description of the difference, read Live and Let License. For a longer discussion from the "free software" side, read Why Open Source Misses the Point of Free Software. For the "open-source" perspective, read Why Free Software is Too Ambiguous.
+Public domain and copyleft.
+These terms refer to different categories of free, unrestricted licensing. A copyleft license allows you all the freedoms of a free software license, but adds one restriction. Under a copyleft license, you have to release any modifications under the same terms as the original software. In effect, this blocks companies and developers who want to alter free software and then make their altered version proprietary. In practice, almost all free and open-source software is also copylefted. However, technically you can release "free software" that isn't copylefted. For example, if you developed software and released it under a "public domain" license, it would qualify as free software, but it isn't copyleft. In effect, when you release something into the public domain, you give up all copyrights and rights of ownership.
+Shareware and freeware.
+These terms don't really refer to licensing, and they're confusing in light of the discussion of free software above. Freeware refers to software (usually small utilities at sites such as Tucows.com) that you can download and install without paying. However, you don't have the right to view the source code, and you may not have the right to copy and redistribute the software. In other words, freeware is proprietary software. Shareware is even more restrictive. In effect, shareware is trial software. You can use it for a limited amount of time (usually 30 or 60 days) and then you're expected to pay to continue using it.
+End User Licensing Agreement (EULA).
+When you acquire software yourself, directly from a vendor or retailer, or directly from the vendor's Web site, you usually have to indicate by clicking a box that you accept the licensing terms. This "click-through" agreement that no one ever reads is commonly known as a EULA. If you negotiate a large purchase of software with a company, and you sign a contract to seal the agreement, that contract usually replaces or supersedes the EULA.
+Most major vendors of proprietary software offer some type of bulk purchasing and volume licensing mechanism. The terms vary widely, but if you order enough software to qualify, the benefits in terms of cost and convenience are significant. Also, not-for-profits sometimes qualify for it with very small initial purchases.
+Some of the benefits of volume licensing include:
+Lower cost. As with most products, software costs less when you buy more of it.
+Ease of installation. Without volume licenses, you usually have to enter a separate activation code (also known as a product key or license key) for each installed copy of the program. On the other hand, volume licenses provide you with a single, organisation-wide activation code, which makes it much easier to find when you need to reinstall the software.
+Easier tracking of licenses. Keeping track of how many licenses you own, and how many copies you've actually installed, is a tedious, difficult task. Many volume licensing programs provide an online account which is automatically updated when you obtain or activate a copy of that company's software. These accounts can also coordinate licensing across multiple offices within your organisation.
+To learn more about volume licensing from a particular vendor, check out some of the resources below:
+Qualified not-for-profits and libraries can receive donated volume licenses for Microsoft products through TechSoup. For more information, check out our introduction to the Microsoft Software Donation Program, and the Microsoft Software Donation Program FAQ. For general information about the volume licensing of Microsoft software, see Volume Licensing Overview.
+If you get Microsoft software from TechSoup or other software distributors who work with not-for-profits, you may need to go to the eOpen Web site to locate your Volume license keys. For more information, check out the TechSoup Donation Recipient's Guide to the Microsoft eOpen Web Site.
+Always check TechSoup Stock first to see if there's a volume licensing donation program for the software you're interested in. If TechSoup doesn't offer that product or if you need more copies than you can find at TechSoup, search for "volume licensing not-for-profits software" or just "not-for-profits software." For example, when we have an inventory of Adobe products, qualifying and eligible not-for-profits can obtain four individual products or one copy of Creative Suite 4 through TechSoup. If we're out of stock, or you've used up your annual Adobe donation, you can also check TechSoup's special Adobe donation program and also Adobe Solutions for Nonprofits for other discounts available to not-for-profits. For more software-hunting tips, see A Quick Guide to Discounted Software Programs.
+Pay close attention to the options and licensing requirements when you acquire server-based software. You might need two different types of license – one for the server software itself, and a set of licenses for all the "clients" accessing the software. Depending on the vendor and the licensing scenario, "client" can refer either to the end users themselves (for example, employees, contractors, clients, and anyone else who uses the software in question) or their computing devices (for example, laptops, desktop computers, smartphones, PDAs, etc.). We'll focus on Microsoft server products, but similar issues can arise with other server applications.
+Over the years, Microsoft has released hundreds of server-based applications, and the licensing terms are slightly different for each one. Fortunately, there are common license types and licensing structures across different products. In other words, while a User CAL (Client Access License) for Windows Server is distinct from a User CAL for SharePoint Server, the underlying terms and rights are very similar. The TechSoup product pages for Microsoft software do a good job of describing the differences between products, so we'll focus on the common threads in this article.
+Moreover, Microsoft often lets you license a single server application in more than one way, depending on the needs of your organisation. This allows you the flexibility to choose the licenses that best reflect your organisation's usage patterns and thereby cost you the least amount of money. For example, for Windows Server and other products you can acquire licenses on a per-user basis (for example, User CALs) or per-device basis (for example, Device CALs).
+The license required to install and run most server applications usually comes bundled with the software itself. So you can install and run most applications "out of the box," as long as you have the right number of client licenses (see the section below for more on that). However, when you're running certain server products on a computer with multiple processors, you may need to get additional licenses. For example, if you run Windows Server 2008 DataCenter edition on a server with two processors, you need a separate license for each processor. SQL Server 2008 works the same way. This type of license is referred to as a processor license. Generally you don't need client licenses for any application that's licensed this way.
+Client Licenses for<#sep#>-
+
+import bisect
+
+def count_balanced_substrings(s):
+    n = len(s)
+    count_4 = [0] * (n + 1)
+    for i in range(1, n+1):
+        count_4[i] = count_4[i-1] + (1 if s[i-1] == '4' else 0)
+    ans = 0
+    for L in range(1, n+1):
+        a = count_4[L-1]
+        # Binary search for the smallest R >= L where count_4[R] > a
+        # The count_4 array is non-decreasing, so we can use bisect
+        # We need to search in the subarray count_4[L..n]
+        # Using bisect_right to find the first element > a
+        R = bisect.bisect_right(count_4, a, lo=L, hi=n+1)
+        if R <= n:
+            ans += (n - R + 1)
+    return ans
+
+T = int(input())
+for _ in range(T):
+    s = input().strip()
+    print(count_balanced_substrings(s))<#sep#>Suppose that the market price of Company X is $45 per share and that of Company Y is $30. If X offers three-fourths a share of common stock for each share of Y, the ratio of exchange of market prices would be: Answer to three decimal places.
+
+1.125<#sep#> integer coordinates). The distance from the other points to the diagonal line would vary. So, that line is not equidistant to all points. So, in that case, only horizontal and vertical midlines.
+
+Hmm, maybe the maximum number of equidistant lines depends on how many pairs of parallel lines the points lie on. Each pair of parallel lines contributes one midline. So, if points lie on k pairs of parallel lines, then you have k midlines. To maximize k, you need to arrange the points such that they lie on as many pairs of parallel lines as possible. For example, if points form a regular polygon, perhaps they lie on multiple pairs of parallel lines, but I'm not sure. Alternatively, if all points lie on a circle, then each diameter is a line equidistant to two points (the ones it's perpendicular bisector of), but not all points.
+
+Alternatively, maybe the problem has a different approach. For a line to be equidistant from all n points, all points must be at the same distance from the line. The set of points at distance d from a line L forms two lines parallel to L, each at distance d on either side. Therefore, for a line L to be equidistant from n points, all n points must lie on the union of two lines parallel to L. So, the number of such lines L is equal to the number of directions such that the n points lie on two parallel lines in that direction.
+
+Therefore, the problem reduces to finding the number of directions for which the n points lie on two parallel lines. For each such direction, there is exactly one line L (the midline between the two parallel lines) that is equidistant from all n points.
+
+Therefore, the number of such lines is equal to the number of directions in which the n points can be split into two parallel lines.
+
+So, to maximize the number of lines, you need to arrange the points such that they can be split into two parallel lines in as many different directions as possible.
+
+For example, if the points are arranged in a grid, like a rectangle, you can split them into horizontal lines (so midline horizontal), vertical lines (midline vertical), and maybe diagonal lines. But whether that's possible depends on the grid.
+
+Wait, let's take n=4 points arranged in a square. The directions where the points can be split into two parallel lines are horizontal, vertical, and the two diagonals. For horizontal: split into top and bottom rows. Midline horizontal. For vertical: left and right columns. Midline vertical. For the diagonals: split into two lines along the diagonals. Wait, but each diagonal line in a square contains two points. So, if we take a diagonal direction, then the two lines parallel to that diagonal would each contain two points. Then, the midline between them would be equidistant to all four points. But in a square, the diagonals are not parallel; they intersect. Wait, if we take a direction of, say, 45 degrees, then two lines parallel to that direction would have to be spaced apart. But in a square, the points (0,0), (1,0), (0,1), (1,1). A line at 45 degrees would have equations y = x + c. To have two parallel lines each containing two points: maybe y = x and y = x -1? But those lines don't contain the square's points. Alternatively, maybe y = x + 0.5 and y = x - 0.5? Then, the points (0,0) and (1,1) are on y = x, which is not one of those lines. Hmm, perhaps not. So maybe a square doesn't allow for diagonal midlines.
+
+Alternatively, if we arrange four points as a rectangle (not a square). Let's say points at (0,0), (2,0), (0,1), (2,1). Then, horizontal midline is y = 0.5. Vertical midline is x = 1. Now, if we rotate the coordinate system by some angle, can we find another direction where the points lie on two parallel lines? For example, at 45 degrees. Let me see. If we have lines at 45 degrees, can two parallel lines in that direction contain all four points? The distance between the lines would have to be such that all four points are on them. It's possible? Let's compute.
+
+Let me take a line L: y = x + c. The distance between two parallel lines y = x + c1 and y = x + c2 is |c1 - c2| / sqrt(2). The points (0,0): plug into y - x = c. So for (0,0), c = 0. For (2,0), c = -2. For (0,1), c = 1. For (2,1), c = -1. So the points lie on the lines c = 0, -2, 1, -1. So, they don't lie on two parallel lines in the direction of 45 degrees. Therefore, no such midline exists for 45 degrees. Therefore, only horizontal and vertical midlines. So, two lines.
+
+Therefore, for four points arranged in a rectangle, we have two lines. For four points in general position (no two on a line), we have zero lines. If arranged on two horizontal lines, we have one line. So, the maximum number possible is two.
+
+Similarly, for higher n. So, the problem is to find the maximum number of lines equidistant from n points, which is equivalent to the maximum number of directions in which the n points can be partitioned into two parallel lines.
+
+So, in order to maximize this number, we need to arrange the points such that they can be split into two parallel lines in as many different directions as possible.
+
+How many directions can we have? For example, if the points are arranged as the vertices of a regular polygon, perhaps we can get multiple directions, but it's unclear. Let's think of points arranged in a three-dimensional way on the plane, but in the plane. Hmm.
+
+Alternatively, consider that for each pair of points, the line connecting them defines a direction. If we can pair up the points such that multiple pairs have the same direction, then those directions can be used to split the points into two parallel lines. Wait, but this might not be straightforward.
+
+Wait, suppose we have six points arranged as three pairs, each pair forming a line in the same direction. For example, three horizontal lines, each with two points. Then, the midline between each pair would be horizontal, but they are the same line. Hmm, not helpful.
+
+Alternatively, suppose we arrange the points in a configuration where they form several pairs of parallel lines in different directions. For example, a grid. If we have points arranged in a grid with multiple rows and columns, then each row direction and column direction gives a midline. For example, a 3x3 grid has three horizontal lines and three vertical lines. The midline for the horizontal lines would be the middle horizontal line, but the grid points are on three horizontal lines. Wait, but the midline equidistant from all points would require all points to be on two lines, but if they are on three lines, then no midline exists. Therefore, if points are arranged on multiple parallel lines, you cannot have a midline equidistant to all points unless they're on exactly two lines.
+
+Therefore, to maximize the number of midlines, you need to arrange the points in such a way that they can be partitioned into two parallel lines in as many different directions as possible. For each direction, this requires that the points are divided into two lines parallel to that direction.
+
+So, for example, arranging points as the vertices of a regular polygon might not work, but perhaps arranging them in a set of concentric regular polygons, but that complicates things.
+
+Alternatively, arrange the points in such a way that for multiple directions, the projections of the points onto those directions can be split into two groups. Wait, this is getting too vague.
+
+Alternatively, recall that in order for a set of points to lie on two parallel lines, the direction of those lines must be such that when you project the points onto a line perpendicular to that direction, the projections form two clusters with all points in each cluster having the same coordinate. Therefore, for each direction, the number of distinct projection coordinates must be exactly two.
+
+So, to find the number of such directions, we need to find the number of angles θ such that when the points are projected onto a line making angle θ with the x-axis, there are exactly two distinct projection values.
+
+This is similar to problems in computational geometry about finding directions with certain projection properties.
+
+The maximum number of such directions would depend on the configuration of points. For example, if the points are in general position, the number might be limited, but if arranged in a way that maximizes this, it might be higher.
+
+For n points, what's the maximum number of directions where projections result in exactly two distinct values<#sep#>Wait no, (temp) + 128. But it's written as:
+
+value = (c-128)/n +128 → then floor(value).
+
+Thus, res = math.floor( ( (c-128)/n ) + 128 )
+
+Thus in code, it's written as:
+
+Else: res = math.floor( (c-128)/n + 128 )
+
+Similarly, the first case:
+
+res= math.ceil( 127 - ( (127 -c)/n ) )
+
+So perhaps the code can be written as:
+
+import math,sys
+
+n=float(sys.argv[1])
+
+for b in sys.stdin.buffer.read():
+
+    c=255-b
+
+    if c<128:
+
+        res=math.ceil(127 - (127 -c)/n)
+
+    else:
+
+        res=math.floor(128 + (c-128)/n )
+
+    res=max(0,min(255, int(res))) #as math.ceil/floor returns int?
+
+    # but in code ceil(127 - ... ) could be a float, but if the value is already integer?
+
+    # Wait in Python, math.ceil returns a float if the input is a float. Like if the value is integer, it returns the integer as a float. Hmm so res could be a float. Thus converting to integer (int) is necessary before clamping.
+
+Wait, so math.ceil(127 - ... ) will be an integer? Because 127 is an integer, so (127 - something?) but when subtracting fractions, ceil could give an integer float.
+
+Yes. So, when casting to integer, just cast res to int? Or use as integer?
+
+Wait 12.0 becomes 12 as integer, but any fractions? math.ceil can sometimes be float. For example, math.ceil(2.3) is 3.0, which is a float.
+
+So in code:
+
+res=math.ceil( ... ) → is a float.
+
+Thus, converting to int is necessary to treat it as an integer before clamping.
+
+So, then, in code:
+
+After all, the res variable must be an integer between 0 and 255, so after rounding.
+
+Wait in code terms:
+
+Let me rewrite the code steps:
+
+import math,sys
+
+n = float(sys.argv[1])
+
+input_bytes = sys.stdin.buffer.read()
+
+output = []
+
+for b in input_bytes:
+
+    c = 255 - b
+
+    if c < 128:
+
+        res = math.ceil( 127 - ( (127 - c)/n ) )
+
+    else:
+
+        res = math.floor( (c - 128)/n + 128 )
+
+    res = max( 0, min( 255, int(res) ) )
+
+    output.append( res )
+
+sys.stdout.buffer.write( bytes(output) )
+
+That's a possible python code.
+
+Now let's look for opportunities to shorten.
+
+Some possible optimizations:
+
+- Use // operator where possible.
+
+Wait let's think about how to compute the two cases concisely.
+
+Wait the two formulas for the two cases could be condensed into a single expression using a conditional operator (ternary), which might save code.
+
+Like:
+
+res=math.ceil(127 - ( ... )) if c<128 else math.floor(...)
+
+Yes, that would help avoid some lines.
+
+Also, variables can be eliminated by substituting into res's calculation.
+
+Let me try to shorten the code.
+
+The variables c is essential (must compute 255-b first). 
+
+Another note: 0X7F is 127, and 0x80 is 128. Maybe replacing those numbers with hex might save some characters, but probably not much, since 127 and 128 in decimal are shorter than hexadecimal.
+
+For code golf in Python, can replace "math.ceil" and "math.floor" with m.ceil and m.floor if using as m = math.
+
+But if code says:
+
+from math import*:
+
+That shortens the imports.
+
+Trying a first golfed version:
+
+import math
+
+Putting it in one line with function and command line parameters.
+
+Wait let's code step by step for code golf.
+
+In Python, one-liner:
+
+import sys,math
+
+n=float(sys.argv[1]);print(bytes([i for b in sys.stdin.buffer.read() for i in (lambda c=255-b: max(0,min(255,math.ceil(127 - (127 -c)/n) if c<128 else math.floor( (c-128)/n +128 ))))[()]]))
+
+Wait no, perhaps that's way too convoluted. 
+
+An alternative approach: using a list comprehension.
+
+Let me try to rework:
+
+Here's the code condensed.
+
+from sys import*;import math as m
+
+n= float(argv[1])
+
+output=[lambda x: ... for b in stdin.buffer.read()]
+
+Not sure.
+
+Hmm, here's a possible way to compress:
+
+import math,sys
+
+n=float(sys.argv[1])
+
+print( bytes( [ m.ceil(127 - ( (127 - (255 - b )) /n )) if (255-b)<128 else m.floor( ( (255 -b )-128)/n +128 ) for b in sys.stdin.buffer.read() ] ))
+
+Wait, no, because we also have to clamp between 0-255.
+
+Wait perhaps this would be better:
+
+result = ( ... )
+
+result = min(255, max(0, result))
+
+But adding that complicates.
+
+Hmm so need to compute for each b:
+
+c = 255 - b
+
+if c < 128:
+
+    res = m.ceil( 127 - ( (127 - c)/n ) )
+
+else:
+
+    res = m.floor( (c - 128)/n + 128 )
+
+res must then be clamped to [0,255].
+
+Thus, the nested expressions can be written in a list comprehension with min/max.
+
+Wait let's write this as:
+
+from math import*
+
+n = float(sys.argv[1])
+
+print( bytes( [max(0, min(255, (ceil(127 - ( (127 - c)/n )) if c <128 else floor(128 + (c -128)/n )) )) for b in sys.stdin.buffer for c in (255 -b) ]) )
+
+Wait, perhaps. Let's try:
+
+Let me think:
+
+def process(b, n):
+
+    c = 255-b
+
+    if c <128:
+
+        res = ceil( ...)
+
+    else:
+
+        res = floor(...)
+
+    return max(0, min(255, res))
+
+We can do this in a list comprehension.
+
+But in Python, inside a list comprehension, can we have an if-else.
+
+Yes:
+
+Inside a list comprehension:
+
+[ ( c < 128 and ceil(...) or floor(...)) for ... ]
+
+No, the 'and/or' trick may not work because ceil/floor could return Booleans as a side effect.
+
+Wait alternatively:
+
+[ int( ( ... ) ) for ... ] where ... includes a ternary:
+
+cc=255 -b
+
+[ max(0,min(255, LL ... RR if cc <128 else LLALT ... )) ]
+
+Thus the code can be written as follows.
+
+Wait here is the code written in a one-liner with list comprehensions:
+
+import sys,math as m
+
+n = float(sys.argv[1])
+
+y= bytearray( [max(0, min(255, (m.ceil(127 - ((127 - (255 - b))/n)) ) if (255 -b)<128 else m.floor( m.floor( ( (255 -b) - 128 ) /n +128 )) )) for b in sys.stdin.buffer.read() ] )
+
+sys.stdout.buffer.write(y)
+
+Wait but may have some bugs here. Let's see:
+
+Testing the ternary part:
+
+The computation for each b is:
+
+cc = 255 -b
+
+then, for the res:
+
+if cc < 128:
+
+    res = m.ceil( 127 - ( (127-cc)/n ) )
+
+else:
+
+    res = m.floor( ( ( cc -128 )/n ) + 128 )
+
+Wait in the code line above, the second case's expression was written as ( cc -128)/n +128, which is exactly what's needed, so in code:
+
+m.floor( (cc - 128)/n + 128 )
+
+Thus, if replace:
+
+max(0, min(255, 
+
+m.ceil(127 - ((127 - cc)/n )) if cc <128 else m.floor( (cc -128)/n + 128 )
+
+)))
+
+and set cc =255 - b.
+
+Thus in the list comprehension:
+
+for b in ...:
+
+compute:
+
+mmc = 255 -b
+
+....
+
+So:
+
+The code can be written as:
+
+import sys, math as m
+
+n = float(sys.argv[1])
+
+output = [max(0, min(255, 
+
+    (m.ceil(127 - ( (127 -c)/n )) if c <128 else m.floor( ( (c-128)/n ) +128 ))) 
+
+         ) for c in (255 - b for b in sys.stdin.buffer.read()) ]
+
+Wait the internal generator expression.
+
+Wait, but the nested loops. Maybe better as:
+
+It's possible to refactor the code by generating the c values first:
+
+input_bytes = sys.stdin.buffer.read()
+
+So:
+
+output =<#sep#>Interact with navigation drawers
+Sometimes is useful to pass some data from the module model to the app environment and so far we do not have this implementation.
+
+We can add two simple methods to the drawers so they can update their state with icons, badges, and so.
+
+
+diff --git a/docs/source/modules/sepal_ui.sepalwidgets.DrawerItem.rst b/docs/source/modules/sepal_ui.sepalwidgets.DrawerItem.rst
+index a3280cd3..22b87b44 100644
+--- a/docs/source/modules/sepal_ui.sepalwidgets.DrawerItem.rst
++++ b/docs/source/modules/sepal_ui.sepalwidgets.DrawerItem.rst
+@@ -7,7 +7,9 @@ sepal\_ui.sepalwidgets.DrawerItem
+     
+     .. autosummary::
+     
+-        ~DrawerItem.rt        
++        ~DrawerItem.rt 
++        ~DrawerItem.alert
++        ~DrawerItem.alert_badge
+     
+     .. rubric:: Methods
+     
+@@ -15,5 +17,11 @@ sepal\_ui.sepalwidgets.DrawerItem
+         :nosignatures:
+         
+         ~DrawerItem.display_tile
++        ~DrawerItem.add_notif
++        ~DrawerItem.remove_notif
+         
+-.. automethod:: sepal_ui.sepalwidgets.DrawerItem.display_tile
+\ No newline at end of file
++.. automethod:: sepal_ui.sepalwidgets.DrawerItem.display_tile
++
++.. automethod:: sepal_ui.sepalwidgets.DrawerItem.add_notif
++
++.. automethod:: sepal_ui.sepalwidgets.DrawerItem.remove_notif
+\ No newline at end of file
+diff --git a/sepal_ui/sepalwidgets/app.py b/sepal_ui/sepalwidgets/app.py
+index a1aff843..2a87de83 100644
+--- a/sepal_ui/sepalwidgets/app.py
++++ b/sepal_ui/sepalwidgets/app.py
+@@ -1,3 +1,4 @@
++from traitlets import link, Bool, observe
+ from functools import partial
+ from datetime import datetime
+ 
+@@ -73,12 +74,29 @@ class DrawerItem(v.ListItem, SepalWidget):
+         card (str, optional): the mount_id of tiles in the app
+         href (str, optional): the absolute link to an external web page
+         kwargs (optional): any parameter from a v.ListItem. If set, '_metadata', 'target', 'link' and 'children' will be overwritten.
++        model (optional): sepalwidget model where is defined the bin_var trait
++        bind_var (optional): required when model is selected. Trait to link with 'alert' self trait parameter
+     """
+ 
+     rt = None
+     "sw.ResizeTrigger: the trigger to resize maps and other javascript object when jumping from a tile to another"
+ 
+-    def __init__(self, title, icon=None, card=None, href=None, **kwargs):
++    alert = Bool(False).tag(sync=True)
++    "Bool: trait to control visibility of an alert in the drawer item"
++
++    alert_badge = None
++    "v.ListItemAction: red circle to display in the drawer"
++
++    def __init__(
++        self,
++        title,
++        icon=None,
++        card=None,
++        href=None,
++        model=None,
++        bind_var=None,
++        **kwargs
++    ):
+ 
+         # set the resizetrigger
+         self.rt = js.rt
+@@ -108,6 +126,45 @@ class DrawerItem(v.ListItem, SepalWidget):
+         # call the constructor
+         super().__init__(**kwargs)
+ 
++        # cannot be set as a class member because it will be shared with all
++        # the other draweritems.
++        self.alert_badge = v.ListItemAction(
++            children=[v.Icon(children=["fas fa-circle"], x_small=True, color="red")]
++        )
++
++        if model:
++            if not bind_var:
++                raise Exception(
++                    "You have selected a model, you need a trait to bind with drawer."
++                )
++
++            link((model, bind_var), (self, "alert"))
++
++    @observe("alert")
++    def add_notif(self, change):
++        """Add a notification alert to drawer"""
++
++        if change["new"]:
++            if self.alert_badge not in self.children:
++                new_children = self.children[:]
++                new_children.append(self.alert_badge)
++                self.children = new_children
++        else:
++            self.remove_notif()
++
++        return
++
++    def remove_notif(self):
++        """Remove notification alert"""
++
++        if self.alert_badge in self.children:
++            new_children = self.children[:]
++            new_children.remove(self.alert_badge)
++
++            self.children = new_children
++
++        return
++
+     def display_tile(self, tiles):
+         """
+         Display the apropriate tiles when the item is clicked.
+@@ -138,6 +195,9 @@ class DrawerItem(v.ListItem, SepalWidget):
+         # change the current item status
+         self.input_value = True
+ 
++        # Remove notification
++        self.remove_notif()
++
+         return self
+ 
+ 
+<#sep#> install and run most applications "out of the box," as long as you have the right number of client licenses (see the section below for more on that). However, when you're running certain server products on a computer with multiple processors, you may need to get additional licenses. For example, if you run Windows Server 2008 DataCenter edition on a server with two processors, you need a separate license for each processor. SQL Server 2008 works the same way. This type of license is referred to as a processor license. Generally you don't need client licenses for any application that's licensed this way.
+Client Licenses for Internal Users
+Many Microsoft products, including Windows Server 2003 and Windows Server 2008, require client access licenses for all authenticated internal users (for example, employees, contractors, volunteers, etc.). On the other hand, SQL Server 2008 and other products don't require any client licenses. Read the product description at CTXchange if you're looking for the details about licensing a particular application.
+User CALs: User CALs allow each user access to all the instances of a particular server product in an organisation, no matter which device they use to gain access. In other words, if you run five copies of Windows Server 2008 on five separate servers, you only need one User CAL for each person in your organisation who access those servers (or any software installed on those servers), whether they access a single server, all five servers, or some number in between. Each user with a single CAL assigned to them can access the server software from as many devices as they want (for example, desktop computers, laptops, smartphones, etc.). User CALs are a popular licensing option.
+Device CALs: Device CALs allow access to all instances of a particular server application from a single device (for example, a desktop computer, a laptop, etc.) in your organisation. Device CALs only make sense when multiple employees use the same computer. For example, in 24-hour call centres different employees on different shifts often use the same machine, so Device CALs make sense in this situation.
+Choosing a licensing mode for your Windows Server CALs: With Windows Server 2003 and Windows Server 2008, you use a CAL (either a User CAL or a Device CAL) in one of two licensing modes: per seat or per server. You make this decision when you're installing your Windows Server products, not when you acquire the CALs. The CALs themselves don't have any mode designation, so you can use either a User CAL or a Device CAL in either mode. Per seat mode is the default mode, and the one used most frequently. The description of User CALs and Device CALs above describes the typical per seat mode. In "per server" mode, Windows treats each license as a "simultaneous connection." In other words, if you have 40 CALs, Windows will let 40 authenticated users have access. The 41st user will be denied access. However, in per server mode, each CAL is tied to a particular instance of Windows Server, and you have to acquire a new set of licenses for each new server you build that runs Windows. Therefore, per server mode works for some small organisations with one or two servers and limited access requirements.
+You don't "install" client licenses the way you install software. There are ways to automate the tracking of software licenses indirectly, but the server software can't refuse access to a user or device on licensing grounds. The licenses don't leave any "digital footprint" that the server software can read. An exception to this occurs when you license Windows Server in per server mode. In this case, if you have 50 licenses, the 51st authenticated user will be denied access (though anonymous users can still access services).
+Some key points to remember about client licensing:
+The licensing scenarios described in this section arise less frequently, and are too complex to cover completely in this article, so they're described briefly below along with more comprehensive resources.
+You don't need client licenses for anonymous, unauthenticated external users. In other words, if someone accesses your Web site, and that site runs on Internet Information Server (IIS), Microsoft's Web serving software, you don't need a client license for any of those anonymous users.
+If you have any authenticated external users who access services on your Windows-based servers, you can obtain CALs to cover their licensing requirements. However, the External Connector License (ECL) is a second option in this scenario. The ECL covers all use by authenticated external users, but it's a lot more expensive than a CAL, so only get one if you'll have a lot of external users. For example, even if you get your licenses through the CTXchange donation program, an ECL for Windows Server 2008 has an £76 administrative fee, while a User CAL for Windows Server 2008 carries a £1 admin fee. If only a handful of external users access your Windows servers, you're better off acquiring User CALs. Also, an ECL only applies to external users and devices. In other words, if you have an ECL, you still have to get a CAL for all employees and contractors.
+Even though Terminal Services (TS) is built into Windows Server 2003 and 2008, you need to get a separate TS CAL for each client (i.e. each user or each device) that will access Terminal Services in your organisation. This TS license is in addition to your Windows Server CALs.
+Microsoft's System Centre products (a line of enterprise-level administrative software packages) use a special type of license known as a management license (ML). Applications that use this type of licensing include System Center Configuration Manager 2007 and System Center Operations Manager 2007. Any desktop or workstation managed by one of these applications needs a client management license. Any server managed by one of these applications requires a server management license, and there are two types of server management licenses – standard and enterprise. You need one or the other but not both. There are also special licensing requirements if you're managing virtual instances of Windows operating systems. For more information, see TechSoup's Guide to System Center Products and Licensing and Microsoft's white paper on Systems Center licensing.
+Some Microsoft server products have two client licensing modes, standard and enterprise. As you might imagine, an Enterprise CAL grants access to more advanced features of a product. Furthermore, with some products, such as Microsoft Exchange, the licenses are additive. In other words, a user needs both a Standard CAL AND an Enterprise CAL in order to access the advanced features. See Exchange Server 2007 Editions and Client Access Licenses for more information.
+With virtualisation technologies, multiple operating systems can run simultaneously on a single physical server. Every time you install a Microsoft application, whether on a physical hardware system or a virtual hardware system, you create an "instance" of that application. The number of "instances" of particular application that you can run using a single license varies from product to product. For more information see the Volume Licensing Briefs, Microsoft Licensing for Virtualization and the Windows Server Virtualization Calculator. For TechSoup Stock products, see the product description for more information.
+There are a lot of nuances to Microsoft licensing, and also a lot of excellent resources to help you understand different scenarios.
+About the Author:
+Chris is a former technology writer and technology analyst for TechSoup for Libraries, which aims to provide IT management guidance to libraries. His previous experience includes working at Washington State Library as a technology consultant and technology trainer, and at the Bill and Melinda Gates Foundation as a technology trainer and tech support analyst. He received his M.L.S. from the University of Michigan in 1997.
+Originally posted here.
+Copyright © 2009 CompuMentor. This work is published under a Creative Commons Attribution-NonCommercial-NoDerivs 3.0 License.
+The latest version of Microsoft Office Professional Plus is an integrated collection of programs, servers, and services designed to work together to enable optimised information work.<#sep#>-
+
+def is_palindrome(s):
+    return s == s[::-1]
+
+T = int(input())
+for _ in range(T):
+    s = input().strip()
+    if is_palindrome(s):
+        print("YES")
+        continue
+    left = 0
+    right = len(s) - 1
+    found = False
+    while left < right:
+        if s[left] == s[right]:
+            left += 1
+            right -= 1
+        else:
+            # Check two possibilities: delete left or delete right
+            s1 = s[left+1 : right+1]  # Delete left character
+            s2 = s[left : right]      # Delete right character
+            if is_palindrome(s1) or is_palindrome(s2):
+                print("YES")
+            else:
+                print("NO")
+            found = True
+            break
+    if not found:
+        print("YES")<#sep#>Under state law Boca Co. may reimburse the state directly for actual unemployment claims or it may pay 3% of eligible gross wages. Boca believes that actual unemployment claims will be 2% of eligible gross wages and has chosen to reimburse the state. Eligible gross wages are defined as the first $15000 of gross wages paid to each employee. Boca had four employees each of whom earned $20000 during the year. What amount should Boca report as accrued liability for unemployment claims in its year-end balance sheet? Answer to the nearest dollar.
+
+1200<#sep#>.
+
+So, to find the number of such directions, we need to find the number of angles θ such that when the points are projected onto a line making angle θ with the x-axis, there are exactly two distinct projection values.
+
+This is similar to problems in computational geometry about finding directions with certain projection properties.
+
+The maximum number of such directions would depend on the configuration of points. For example, if the points are in general position, the number might be limited, but if arranged in a way that maximizes this, it might be higher.
+
+For n points, what's the maximum number of directions where projections result in exactly two distinct values? That is equivalent to the number of ways to split the n points into two subsets, each lying on a line parallel to a certain direction.
+
+This is a known problem. According to some research, the maximum number of such directions (called "two-classes") is O(n^3), but I'm not sure. Wait, no. Wait, in the plane, the number of distinct directions determined by n points is O(n^2). For each pair of points, there's a direction. But here, the problem is different. Here, we need directions where all points lie on two lines in that direction.
+
+For example, for each pair of points, the line through them defines a direction. If we can have all other points lie on a line parallel to that direction, then that direction counts.
+
+But how many such directions can there be? For each direction, we need that all points lie on two lines in that direction. So, for a direction d, there must exist two lines parallel to d such that all points lie on those two lines.
+
+This is similar to finding a direction such that the point set is a union of two lines in that direction.
+
+The number of such directions is the number of ways to split the point set into two lines in some direction.
+
+For example, for n=4, if arranged as two lines of two points each, then there's one direction. But if arranged as a rectangle, there are two directions.
+
+For n=6, arranged as three pairs of parallel lines in three different directions, then three directions.
+
+So, if we have points arranged as k pairs of parallel lines in different directions, then the number of directions would be k.
+
+Therefore, the maximum number of directions (and hence the number of equidistant lines) is floor(n/2), but that doesn't seem right. Wait, no.
+
+Wait, each direction requires that the points are split into two lines. So, for each direction, the number of points in each line can vary. For example, for n=4, two directions if arranged as a rectangle. For n=6, if arranged as three pairs in three directions, then three directions. For n=5, you can have two directions: one split as 3 and 2 points.
+
+But the maximum number of directions is related to how many different ways you can split the points into two lines in different directions. This is likely related to the number of different slopes between pairs of points. For each direction, there's a slope, and if all points lie on two lines with that slope, then that direction is valid.
+
+But how many such directions can exist?
+
+For example, if all points lie on two lines with slope m1, and two lines with slope m2, etc.
+
+But each pair of lines in different slopes would require that the points are partitioned differently.
+
+It's known in combinatorial geometry that the maximum number of directions determined by n points is O(n^2), but here we have a more restrictive condition.
+
+But maybe for our problem, the maximum number of equidistant lines is C(n,2), but that's for pairs of points. However, in our case, each line is determined by a direction where the entire point set lies on two lines of that direction.
+
+This is similar to the concept of "arrangements" of points.
+
+Alternatively, consider that each equidistant line corresponds to a direction in which the points are separated into two parallel lines. For each such direction, there's one equidistant line (the midline).
+
+To maximize the number of such directions, we can arrange the points such that for many directions, the projections onto a line perpendicular to that direction result in two values. Each such direction corresponds to a pair of parallel lines in that direction covering all points.
+
+This problem resembles the problem of finding the number of distinct ways to bisect a point set with a line. However, in our case, it's not a bisecting line but a line such that all points lie on two lines parallel to it.
+
+This seems related to the concept of "k-sets" or "arrangements", but I'm not sure.
+
+Alternatively, consider a set of points arranged such that for many different angles θ, the points can be partitioned into two lines with slope tan(theta). For example, if we arrange the points as the vertices of a regular 2m-gon, then there are m axes of symmetry, each of which could be a direction for splitting the points into two lines. But in a regular 2m-gon, each axis of symmetry passes through two opposite vertices and the midpoints of two opposite edges. The lines equidistant from all points would be the ones that are midlines between pairs of parallel sides. For a regular hexagon (6 points), there are three pairs of parallel sides, so three midlines. Thus, for a regular 2m-gon, the number of midlines would be m. Therefore, for n=2m points arranged as a regular 2m-gon, the number of equidistant lines is m. So, n/2.
+
+But is this the maximum? For example, for n=4 (a square), this would be 2 lines, which matches our earlier example. For n=6 (regular hexagon), 3 lines. So, this suggests that for even n, the maximum number is n/2. But what if n is odd? For example, n=5. Then, a regular pentagon has five axes of symmetry, but they are not midlines between parallel sides (since there are no parallel sides in a regular pentagon). So, in that case, you can't split the points into two lines in multiple directions. Therefore, maybe for odd n, the maximum number is floor(n/2), but not sure.
+
+Alternatively, perhaps it's possible to arrange an odd number of points in such a way that they can be split into two lines in multiple directions. For example, n=5. If we arrange three points on one line and two on another parallel line, then we have one midline. But if we can arrange the five points such that they lie on two lines in another direction, but this seems challenging.
+
+Alternatively, arrange n points in a grid-like structure. For example, a 3x3 grid has nine points. If we consider directions along the rows, columns, and diagonals. But as discussed earlier, the diagonals don't work. So, only rows and columns. For 3x3 grid, rows are three horizontal lines, columns are three vertical lines. Thus, the midline equidistant from all points would require all points to be on two lines. But since there are three lines in each direction, this configuration doesn't allow a midline. So, perhaps not useful.
+
+Hmm, this is getting quite involved. Let's look for references or standard results. Wait, I recall a problem called the "equidistant line problem" or something similar. After a bit of thinking, I remember that for three non-collinear points, there are three lines equidistant from the points. Wait, but earlier I thought there were none. Wait, no. For three non-collinear points, if you take the three perpendicular bisectors of each pair, each of these bisectors is equidistant to two of the points but not the third. So, unless the third point is also equidistant, which would make it the circumcircle's center. But that's a point, not a line.
+
+Wait, perhaps I'm confusing terms. The problem is asking for lines equidistant from the points. If we take the three perpendicular bisectors, each is equidistant from two points but not necessarily the third. So, those lines are not equidistant from all three points. Therefore, for three non-collinear points, there are no lines equidistant from all three. So, the answer is zero. Unless the three points are arranged in such a way that they lie on two parallel lines. For example, two points on one line and the third on a parallel line. Then, the midline is equidistant from all three.
+
+Therefore, the maximum number of lines depends on the arrangement. Since the problem didn't specify, but asked for "n given points", it's unclear. However, in math competition problems, when such a question is asked, it's often assumed that the points are in general position unless stated otherwise.
+
+But in the original problem statement, it's just "n given points". So, maybe the answer depends on the configuration, and the problem is expecting the maximum possible<#sep#> can be written as:
+
+import sys, math as m
+
+n = float(sys.argv[1])
+
+output = [max(0, min(255, 
+
+    (m.ceil(127 - ( (127 -c)/n )) if c <128 else m.floor( ( (c-128)/n ) +128 ))) 
+
+         ) for c in (255 - b for b in sys.stdin.buffer.read()) ]
+
+Wait the internal generator expression.
+
+Wait, but the nested loops. Maybe better as:
+
+It's possible to refactor the code by generating the c values first:
+
+input_bytes = sys.stdin.buffer.read()
+
+So:
+
+output = [ ... for b in input_bytes]
+
+with c =255 -b.
+
+Alternatively, the list comprehension can be written:
+
+[ F(255-b) for b in input_bytes ]
+
+With F(c) being the formula.
+
+Thus:
+
+import sys, math as m
+
+n = float(sys.argv[1])
+
+c = [255 - b for b in sys.stdin.buffer.read()]
+
+Then compute the values...
+
+Hmm perhaps:
+
+Putting all together:
+
+import sys,math as m
+
+n= float(sys.argv[1]);print( bytes( [max(0, min(255, ( m.ceil(127 - ( (127 -c)/n )) if c <128 else m.floor( (c-128)/n +128 )) )) for c in (255 - b for b in sys.stdin.buffer.read() ) ]) ), end='' )
+
+Wait that is:
+
+for each b in input bytes (sys.stdin.buffer.read() returns a bytes array. Thus looping via:
+
+c=255 -b for b in bytes.
+
+Then in each c, compute as follows.
+
+Thus the expression inside the list comprehension is max(0,min(255, the formula result))
+
+This uses the max and min functions.
+
+Now checking for the parentheses.
+
+Wait the formula inside is:
+
+(m.ceil( something ) if ... else m.floor( something else ))) 
+
+Inside max(0, min(255, (  ... )) )
+
+This should be okay.
+
+Thus this code would generate a list of the correct integers, each clipped between 0-255.
+
+Then, the entire thing is converted to bytes and printed. For that, bytes(...) expects a list of integers between 0-255.
+
+Thus, the print( bytes( [...] ) ) plus sys.stdout.write bytes?
+
+Wait, but in Python, printing a bytes object would work, and since we have it in a print, but print adds a newline. So perhaps better to use sys.stdout.buffer.write to prevent the adding of a newline.
+
+Which requires:
+
+So in code:
+
+import sys,math as m
+
+n= float(sys.argv[1]);sys.stdout.buffer.write( bytes( [max(
+
+    0, min(255,
+
+    (m.ceil( (127 - ( (127 -c)/n) ) )
+
+    if c<128 else
+
+    m.floor( (c-128)/n +128 )
+
+    )) )) 
+
+        for c in (255 -b for b in sys.stdin.buffer.read())
+
+    ]
+
+) )
+
+Wait perhaps this code would be golfed as that.
+
+But let me count characters and see.
+
+First, the imports.
+
+import sys,math as m
+
+is 19 + ... Well regardless, in code golf, it's important to min the chars.
+
+Let me write the code in golfed manner:
+
+import sys,math as m
+
+n=float(sys.argv[1]);print(bytes([max(0,min(255,(m.ceil(127-(d:=127-c)/n)if(c:=255-b)<128else m.floor((c-128)/n+128)))%0xff)for b in sys.stdin.buffer.read()]))
+
+Wait, using assignment expression (:= operator requires Python 3.8+), but that might help.
+
+Alternatively:
+
+c=255 -b 
+
+d= 127 -c = (127 - (255 -b)) → which is (b-128). Not sure if that helps.
+
+Alternatively, but for codegolf purposes.
+
+Another way: let me try to see if using walrus can save:
+
+Wait in the first case:
+
+127 -c is (c is 255 -b → c=255-b → 127 - (255 -b) → 127-255 +b = (b -128).
+
+Wait no:
+
+127 - (255 - b) → 127-255 is -128 + b → b -128.
+
+Hmm not sure.
+
+Perhaps:
+
+For each value, the code can be simplified as:
+
+Wait for the first condition (c <128):
+
+res= ceil(127 - ( (127 -c)/n ) → which is ceiling( ( (127 -c) + other terms? Not sure.
+
+Wait 127 - ( (127 -c)/n ) → as in m.ceil( 127 - ( (127 -c)/n ) )
+
+But we can't simplify further.
+
+Alternatively, in the first case formula, perhaps it can be rewritten as:
+
+ceil( ( (128* n + C ) ) but not sure.
+
+Hmm.
+
+Alternatively, see if using subtraction's associativity:
+
+Wait let me see for the formula:
+
+( 127 - ( ( (127 - c)/n ) )
+
+ but it's better as written. 
+
+In code, any way, perhaps the code needs to be written in the current form.
+
+Another optimization idea: replace (c -128) with (c^128^255) or something bitwise, but probably longer.
+
+Hmm, perhaps the formula:
+
+m.ceil( ( 127 *n - (127 -c) ) /n ) ?
+
+Wait let me see:
+
+The original expression is (127 - ( (127 - c)/n )) 
+
+= (127 n - (127 -c )) /n → 
+
+Which can be rewritten as ( (127-n)(n) + c )? Wait no, wait.
+
+Wait 127 - ( (127-c)/n ) → 
+
+Let me see:
+
+Let’s have k be (127 -c). Then the formula is 127 - k/n. So multiplying by n, the numerator is 127 n -k → that doesn't help directly.
+
+Hmm. Not sure.
+
+Alternatively, for cases when c <128 → (c can be up to 127). So maybe:
+
+Another idea: note that n could be any number. 
+
+But perhaps not.
+
+Back to code golf: current code I can think of is:
+
+import sys,math as m; n=float(sys.argv[1]);print(bytes([max(0,min(255,(lambda c: m.ceil(127-( (127-c)/n )) if c<128 else m.floor((c-128)/n+128 ))(255 - b )) for b in sys.stdin.buffer.read() )]))
+
+But let's check:
+
+The lambda is used to compute the function inside the list comprehension.  Because for each b, we compute c =255-b.
+
+The lambda c receives 255 -b. Thus, for each term in the list it is the function applied on c.
+
+Thus the list comp is [ (lambda(c)...)(c=255-b) ... for each b ]
+
+That should work. Let's count the characters.
+
+But the code uses lambda, which can probably help.
+
+Let me see how that code looks:
+
+import sys,math as m;n=float(sys.argv[1]);print(bytes([ (lambda c:max(0,min(255, ( m.ceil(127 - ( (127-c)/n )) if c <128 else m.floor( (c-128)/n +128 ) ) )))) (255 -b) for b in sys.stdin.buffer.read()]))
+
+Wait this is getting too long. Let me see if I can wrap it.
+
+Alternatively:
+
+Without min max inside:
+
+Wait no, the max and min are necessary for clipping.
+
+Hmm, maybe can use a min of 255 and a max of 0 around the result. The order doesn't matter.
+
+Like max(0, min( r,255)) is the same as min(255, max(0,r)).
+
+So whichever is shorter.
+
+Wait in code, can write things with precedence, like min(255, ( max(0,... ) ) )
+
+But perhaps it can be written as min(max( ... ,0),255) → saves a character?
+
+No probably same.
+
+Another idea, maybe using bitwise ops? Not sure.
+
+Wait, but in any case, this is the core.
+
+Another possibility for the case when c <128, the calculation is m.ceil( 127 - ( (127 -c)/n ) )
+
+The value (127 -c) is  (d), so 127 - (d/n )
+
+The denominator n may be fractional.
+
+Hmm, but there is no way to golf this further.
+
+Let's try putting the code into a single line as possible.
+
+Possible code:
+
+The shortest possible code is probably going to be the following, but I need to find a way to write it concisely in Python.
+
+Code, putting everything together as best as possible.
+
+Start with import statements.
+
+import sys,math as m
+
+n=float(sys.argv[1]);print(bytes([max(0,min(255, (m.ceil(127-((127-c)/n)) if(c:=255-b)<128 else m.floor( (c-128)/n +128

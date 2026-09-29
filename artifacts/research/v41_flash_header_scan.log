@@ -1,0 +1,63 @@
+1/48 model-00001-of-00048.safetensors
+2/48 model-00002-of-00048.safetensors
+3/48 model-00003-of-00048.safetensors
+4/48 model-00004-of-00048.safetensors
+5/48 model-00005-of-00048.safetensors
+6/48 model-00006-of-00048.safetensors
+7/48 model-00007-of-00048.safetensors
+8/48 model-00008-of-00048.safetensors
+9/48 model-00009-of-00048.safetensors
+10/48 model-00010-of-00048.safetensors
+11/48 model-00011-of-00048.safetensors
+12/48 model-00012-of-00048.safetensors
+13/48 model-00013-of-00048.safetensors
+14/48 model-00014-of-00048.safetensors
+15/48 model-00015-of-00048.safetensors
+16/48 model-00016-of-00048.safetensors
+17/48 model-00017-of-00048.safetensors
+18/48 model-00018-of-00048.safetensors
+19/48 model-00019-of-00048.safetensors
+20/48 model-00020-of-00048.safetensors
+21/48 model-00021-of-00048.safetensors
+22/48 model-00022-of-00048.safetensors
+23/48 model-00023-of-00048.safetensors
+24/48 model-00024-of-00048.safetensors
+25/48 model-00025-of-00048.safetensors
+26/48 model-00026-of-00048.safetensors
+27/48 model-00027-of-00048.safetensors
+28/48 model-00028-of-00048.safetensors
+29/48 model-00029-of-00048.safetensors
+30/48 model-00030-of-00048.safetensors
+31/48 model-00031-of-00048.safetensors
+32/48 model-00032-of-00048.safetensors
+33/48 model-00033-of-00048.safetensors
+34/48 model-00034-of-00048.safetensors
+35/48 model-00035-of-00048.safetensors
+36/48 model-00036-of-00048.safetensors
+37/48 model-00037-of-00048.safetensors
+38/48 model-00038-of-00048.safetensors
+39/48 model-00039-of-00048.safetensors
+40/48 model-00040-of-00048.safetensors
+41/48 model-00041-of-00048.safetensors
+42/48 model-00042-of-00048.safetensors
+43/48 model-00043-of-00048.safetensors
+44/48 model-00044-of-00048.safetensors
+45/48 model-00045-of-00048.safetensors
+46/48 model-00046-of-00048.safetensors
+47/48 model-00047-of-00048.safetensors
+48/48 model-00048-of-00048.safetensors
+=== BREAKDOWN
+routed_experts      288.8 GB   56.6%  (92160 tensors)
+engram              203.1 GB   39.8%  (12 tensors)
+mtp                   7.9 GB    1.6%  (2401 tensors)
+attn/other            5.6 GB    1.1%  (1011 tensors)
+embed/head            2.6 GB    0.5%  (2 tensors)
+shared_expert         1.4 GB    0.3%  (240 tensors)
+vision                0.8 GB    0.2%  (259 tensors)
+TOTAL 510.3 GB
+=== DTYPE
+I8            278.6 GB
+F8_E4M3       204.0 GB
+F8_E8M0        23.6 GB
+BF16            4.0 GB
+F32             0.2 GB

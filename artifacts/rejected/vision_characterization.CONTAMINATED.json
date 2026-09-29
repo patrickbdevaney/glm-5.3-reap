@@ -1,0 +1,208 @@
+{
+  "model": "GLM-5.3-Flash-REAP50-IQ4_XS.gguf",
+  "dataset": "ChartQA (held-out multimodal corpus rows)",
+  "metric": "relaxed accuracy (numeric within 5%, text exact match)",
+  "n": 24,
+  "correct": 17,
+  "accuracy": 0.708,
+  "wilson95": [
+    0.508,
+    0.851
+  ],
+  "method": "held-out rows the calibration never saw; pixel_values un-packed from 2x2 merge-block order back to PNG; each question asked at temperature 0 with -n 160 so reasoning is not truncated mid-answer",
+  "caveat": "n=24 is small and deliberately so -- this is a smoke-level characterisation, not a leaderboard run. The 95% Wilson interval is wide; read it, not the point estimate. Decode is CPU-only (-ngl 0) at ~1 tok/s, which bounds n.",
+  "results": [
+    {
+      "image": "img_00.png",
+      "question": "Is the value of Favorable 38 in 2015? Short answer required.",
+      "gold": "Yes.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 198 ms\nimage decoded (batch 1/1) in 12036 ms",
+      "correct": true,
+      "secs": 162.0
+    },
+    {
+      "image": "img_00.png",
+      "question": "How many values are below 40 in Unfavorable graph? Short answer required.",
+      "gold": "6.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 186 ms\nimage decoded (batch 1/1) in 11359 ms",
+      "correct": false,
+      "secs": 166.9
+    },
+    {
+      "image": "img_01.png",
+      "question": "In which year the value was 51? Give a very brief answer.",
+      "gold": "2014.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 156 ms\nimage decoded (batch 1/1) in 10192 ms",
+      "correct": true,
+      "secs": 162.6
+    },
+    {
+      "image": "img_01.png",
+      "question": "What is the sum favourable value in the year 2014 and 2015? Quick response, please.",
+      "gold": "95.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 171 ms\nimage decoded (batch 1/1) in 10648 ms",
+      "correct": false,
+      "secs": 171.6
+    },
+    {
+      "image": "img_02.png",
+      "question": "In which year the Mexican governments campaign against drugs traffickers is making 47 percent progress? Be succinct.",
+      "gold": "2012.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 188 ms\nimage decoded (batch 1/1) in 12282 ms",
+      "correct": true,
+      "secs": 177.1
+    },
+    {
+      "image": "img_02.png",
+      "question": "What is the sum of making progress ,losing ground and same in the year 2011? Give a very brief answer.",
+      "gold": "99.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 176 ms\nimage decoded (batch 1/1) in 11706 ms",
+      "correct": true,
+      "secs": 156.8
+    },
+    {
+      "image": "img_03.png",
+      "question": "How many intercepting point(s) is/are there? Quick response, please.",
+      "gold": "1.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 172 ms\nimage decoded (batch 1/1) in 12016 ms",
+      "correct": true,
+      "secs": 157.4
+    },
+    {
+      "image": "img_03.png",
+      "question": "Which year has the most divergent opinions about Brazil's economy? Keep it brief.",
+      "gold": "2015.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 172 ms\nimage decoded (batch 1/1) in 11816 ms",
+      "correct": false,
+      "secs": 157.7
+    },
+    {
+      "image": "img_04.png",
+      "question": "Which line contains smaller values across all years? Quick response, please.",
+      "gold": "Unfavorable.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 177 ms\nimage decoded (batch 1/1) in 11073 ms",
+      "correct": true,
+      "secs": 163.3
+    },
+    {
+      "image": "img_04.png",
+      "question": "Deduct the most unfavorable view from the most favorable view? Quick response, please.",
+      "gold": "49.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 179 ms\nimage decoded (batch 1/1) in 12187 ms",
+      "correct": false,
+      "secs": 169.8
+    },
+    {
+      "image": "img_05.png",
+      "question": "What's the rightmost value dark brown graph? Answer briefly.",
+      "gold": "47.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 171 ms\nimage decoded (batch 1/1) in 11690 ms",
+      "correct": true,
+      "secs": 167.0
+    },
+    {
+      "image": "img_05.png",
+      "question": "How many values of dark brown graph exceed 40? Give a very brief answer.",
+      "gold": "5.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 168 ms\nimage decoded (batch 1/1) in 10518 ms",
+      "correct": false,
+      "secs": 162.6
+    },
+    {
+      "image": "img_06.png",
+      "question": "Is the largest value of green bar 30? Be succinct.",
+      "gold": "No.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 158 ms\nimage decoded (batch 1/1) in 10272 ms",
+      "correct": false,
+      "secs": 161.7
+    },
+    {
+      "image": "img_06.png",
+      "question": "Is the sum of highest and lowest value of orange graph greater than 60? Answer briefly.",
+      "gold": "Yes.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 168 ms\nimage decoded (batch 1/1) in 10244 ms",
+      "correct": true,
+      "secs": 161.6
+    },
+    {
+      "image": "img_07.png",
+      "question": "What is the color of graph whose lowest value is 35? Be succinct.",
+      "gold": "Green.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 165 ms\nimage decoded (batch 1/1) in 10576 ms",
+      "correct": true,
+      "secs": 158.3
+    },
+    {
+      "image": "img_07.png",
+      "question": "What's the median value of green graph? Short answer required.",
+      "gold": "75.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 160 ms\nimage decoded (batch 1/1) in 10791 ms",
+      "correct": true,
+      "secs": 164.8
+    },
+    {
+      "image": "img_08.png",
+      "question": "What's the rightmost value of orange graph? Answer briefly.",
+      "gold": "51.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 161 ms\nimage decoded (batch 1/1) in 10097 ms",
+      "correct": true,
+      "secs": 153.8
+    },
+    {
+      "image": "img_08.png",
+      "question": "Is the sum of leftmost value of green and smallest value of orange graph greater than 100? Short answer required.",
+      "gold": "Yes.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 164 ms\nimage decoded (batch 1/1) in 10752 ms",
+      "correct": true,
+      "secs": 164.6
+    },
+    {
+      "image": "img_09.png",
+      "question": "What is the first data in orange line? Give a very brief answer.",
+      "gold": "41.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 190 ms\nimage decoded (batch 1/1) in 11821 ms",
+      "correct": true,
+      "secs": 150.7
+    },
+    {
+      "image": "img_09.png",
+      "question": "Which year the green line cut the orange line from top to down? Answer briefly.",
+      "gold": "2014.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 187 ms\nimage decoded (batch 1/1) in 12167 ms",
+      "correct": false,
+      "secs": 149.0
+    },
+    {
+      "image": "img_10.png",
+      "question": "What is the data in Jul 2015 ( all two data)? Be succinct.",
+      "gold": "[63, 26].",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 170 ms\nimage decoded (batch 1/1) in 12357 ms",
+      "correct": true,
+      "secs": 157.1
+    },
+    {
+      "image": "img_10.png",
+      "question": "What is the average of Approve data? Write a very short answer.",
+      "gold": "58.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 178 ms\nimage decoded (batch 1/1) in 11727 ms",
+      "correct": true,
+      "secs": 155.9
+    },
+    {
+      "image": "img_11.png",
+      "question": "What's the color of the graph with the 15 as the lowest value? Keep it brief.",
+      "gold": "Blue.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 168 ms\nimage decoded (batch 1/1) in 11402 ms",
+      "correct": true,
+      "secs": 159.2
+    },
+    {
+      "image": "img_11.png",
+      "question": "What's the the average of all the values below 30? Write a very short answer.",
+      "gold": "19.",
+      "reply": "ou?<|assistant|>\n--- vision hparams ---\nwarmup: warmup with image size = 1288 x 1288\nalloc_compute_meta:      CUDA0 compute buffer size =   349.74 MiB\nalloc_compute_meta:        CPU compute buffer size =    19.11 MiB\nalloc_compute_meta: graph splits = 1, nodes = 912\nwarmup: flash attention is enabled\nWARN: This is an experimental CLI for testing multimodal capability.\n      For normal use cases, please use the standard llama-cli\nimage slice encoded in 166 ms\nimage decoded (batch 1/1) in 11284 ms",
+      "correct": true,
+      "secs": 148.0
+    }
+  ]
+}

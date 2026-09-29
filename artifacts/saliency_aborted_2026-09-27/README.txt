@@ -1,0 +1,1 @@
+artifacts/saliency_aborted_2026-09-27 holds per-layer accumulators from the pre-fix crash-and-resume runs (5 failed attempts). They were produced by a stage that could not complete a chunk and by the 'if LO > 0' accumulator bug, so they must never be loaded into a new run. Kept, not deleted.

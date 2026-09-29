@@ -90,12 +90,23 @@ against the unpruned model on identical inputs. Figures below are the **pass-1**
 | general / ballast | 0.487 | **0.572** | +1.021 |
 | vision | 0.682 | *532 tokens — unmeasured* | |
 
-Pass 2 (new mask + per-expert healing) measures **0.8369** — identical to within noise (σ =
-0.00075), with ΔNLL 2% better and a redistribution across domains (agentic +0.008 real, science
-−0.007 real, the rest noise). The reconstruction-residual gains that motivated it (2.5% from the
-mask, 8.6% from healing) did **not** translate into top-1 agreement. Pass 2 ships because it
-preserves the MTP block that the drafter work needs, not because it is more accurate. See
-`wiki/30-reap.md`.
+**Pass 2 measures 0.8425 — `+0.0055` over pass 1, 9.3σ paired** — and that number took two corrections
+to arrive at. Pass 2 changed the mask *and* the healing method (per-layer scalar → per-expert
+least-squares vector) together, and first measured 0.8369: a wash. An ablation isolating the two
+`[MEAS 2026-08-29]` found they were two real effects of opposite sign that had cancelled:
+
+| | mask | healing | top-1 |
+|---|---|---|---|
+| pass 1 (published) | pass 1 | scalar | 0.8370 |
+| **pass 2 (ships)** | **pass 2** | **scalar** | **0.8425** |
+| pass 2, as first built | pass 2 | per-expert | 0.8369 |
+
+Per-expert healing was **11.8σ worse end-to-end** (McNemar, paired on identical tokens) despite reducing held-out reconstruction residual
+in 41 of 42 layers — it is `c_j = (gate before pruning)/(gate after)`, so it suppresses exactly the
+experts the post-prune router leans on hardest. It has been reverted off the checkpoint; the
+shipped correction is the per-layer scalar. Full analysis in `research/HEALING_ABLATION.md`, and
+it is the fourth time on this project that an end-to-end arm caught something five layers of
+internal validation did not.
 
 **Per-domain retention was computed from routing statistics before any of these tokens were
 scored, and predicts the measured agreement at Pearson r = 0.942.** That is the strongest
@@ -137,7 +148,8 @@ See `wiki/97-evaluation.md`, including the bug that made every one of these numb
 scripts/            pipeline.py (orchestrator), stages/, memguard.sh, status.py, guard.py
 scripts/stages/     one module per stage, each with run() -> dict
 wiki/               append-only knowledge base; 00-log.md is the running record
-research/           FINDINGS.md (Phase 0) + full tensor inventory of the source
+research/           FINDINGS.md (Phase 0), tensor inventory, and the negative results:
+                    HEALING_ABLATION.md is the one worth reading
 PLAN.md             implementation plan and its revisions
 systemd/            the two user services
 ```

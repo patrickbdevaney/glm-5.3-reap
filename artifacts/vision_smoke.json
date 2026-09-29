@@ -1,0 +1,19 @@
+{
+  "image": "artifacts/test_image.png",
+  "ground_truth": {
+    "number": "42",
+    "shapes": [
+      "red square top-left",
+      "blue circle bottom-right"
+    ]
+  },
+  "model": "GLM-5.3-Flash-REAP50-Q4_K_M + mmproj-F16",
+  "answers": [
+    "1. There is a red square in the top-left area.",
+    "2. There is a blue circle in the bottom-right area.",
+    "3. There is a black number \"42\" in the center, overlapping both the square and the circle."
+  ],
+  "verdict": "correct: shapes, colours and positions all identified",
+  "caveat": "claims the '42' overlaps both shapes; it overlaps only the red square",
+  "note": "First vision forward pass on any build of this project. REAP pruned only the language-model FFN experts, but the language model is what consumes the visual tokens, so this is the first evidence the pruned model can still see."
+}

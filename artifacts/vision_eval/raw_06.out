@@ -1,0 +1,10 @@
+
+The user wants to know how many intercepting points there are in the provided chart.
+Looking at the chart:
+There are two lines: "Good" (green) and "Bad" (orange).
+The "Good" line starts at 62 in 2010, goes to 54 in 2011, 65 in 2012, 59 in 2013, 32 in 2014, and 13 in 2015.
+The "Bad" line starts at 36 in 2010, goes to 45 in 2011, 35 in 2012, 41 in 2013, 67 in 2014, and 87 in 2015.
+
+Let's trace the lines:
+In 2013, Good is 59,
+

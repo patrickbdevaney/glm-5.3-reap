@@ -1,0 +1,19 @@
+
+The user wants to know how many values are below 40 in the "Unfavorable" graph.
+Looking at the chart:
+The "Unfavorable" graph is the orange line (bottom line initially, then top line later).
+Wait, let's identify the orange line values:
+In 2005: 35
+In 2006: 29
+In 2007: 39
+In 2008: 39
+In 2009: 38
+In 2010: 36
+In 2011: 36
+In 2012: 40
+In 2013: 52
+In 2014: 55
+In 2015: 54
+
+Let's check the values below 40 for the orange line (Unfavor
+
