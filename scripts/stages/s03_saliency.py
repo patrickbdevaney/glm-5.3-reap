@@ -409,6 +409,15 @@ FIXED_GIB = STATES_GIB + RESIDENT_GIB
 # 9 layers projected 71.5 GiB against a 72.0 GiB cap and was SIGKILLed, so the true overshoot is
 # small but nonzero and there is no swap (MemorySwapMax=0) to absorb it.
 MARGIN_GIB = 8.0
+# Reclaim as soon as headroom falls below this, regardless of batch count. Set well above the
+# observed 0.8 GiB trough and far above memguard's 250 MB kill floor.
+RECLAIM_FLOOR_GIB = float(os.environ.get("S03_RECLAIM_FLOOR", "30.0"))
+# If a full reclaim cannot get back above this, stop rather than be SIGKILLed mid-write.
+HARD_FLOOR_GIB = float(os.environ.get("S03_HARD_FLOOR", "6.0"))
+
+
+class MemFenceError(RuntimeError):
+    """Raised inside the batch loop so Python unwinds and frees, instead of being SIGKILLed."""
 # Derived from the ceiling that actually binds, NOT hardcoded. An explicit override still wins so
 # the equivalence gate can force an unblocked reference arm, but it is preflighted like any other.
 LAYERS_PER_BLOCK = int(os.environ.get("S03_LAYERS_PER_BLOCK", "0")) or None
@@ -949,12 +958,30 @@ def run() -> dict:
                 finally:
                     SS.set_valid_mask(None)
                 bi_seen += 1
-                if bi_seen % 25 == 0:
+                # ADAPTIVE, not every-N. MEASURED on layer 4 (first linear_attention + MoE
+                # layer), sampling MemAvailable every 3 s through a full sweep:
+                #
+                #   t= 48..216s   ~52 GiB   plateau, batch loop perfectly stable
+                #   t=242s          7.4     40 GiB gone in 26 s
+                #   t=267s          0.8     <- 550 MB above memguard's 250 MB kill floor
+                #   t=347s        105.0     recovers only when the layer is torn down
+                #
+                # A fixed every-25-batches reclaim cannot see that coming: the collapse happens
+                # inside one interval. Standalone the run survived at 0.8 GiB; under the service
+                # the orchestrator and memguard's own footprint push the same dip below the kill
+                # floor, which is why layer 4 died 42 times there and succeeded here.
+                #
+                # So: watch every batch (a /proc/meminfo read is microseconds) and reclaim the
+                # moment the floor is approached, rather than on a schedule that can miss it.
+                if bi_seen % 25 == 0 or _avail_gib() < RECLAIM_FLOOR_GIB:
                     torch.cuda.empty_cache()
                     # empty_cache() returns ~nothing on this board (0.03 GiB against 13.54).
-                    # The pool is only released by drop_caches=3, and it has to happen HERE --
-                    # waiting until the layer ends means the box is already exhausted.
+                    # The pool is only released by drop_caches=3.
                     _reclaim_nvmap()
+                    if _avail_gib() < HARD_FLOOR_GIB:
+                        raise MemFenceError(
+                            f"chunk {CI} layer {li} batch {bi_seen}: {_avail_gib():.1f} GiB left "
+                            f"after a full reclaim. Refusing to continue into the kill floor.")
             SS.set_current_layer(None)
             del layer
             reader.release()      # tear down shard mmaps so their pages become reclaimable
