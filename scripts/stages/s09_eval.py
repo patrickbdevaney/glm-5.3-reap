@@ -47,7 +47,38 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import memfence as MF  # noqa: E402
+import memceiling as MC  # noqa: E402
 from common import ROOT, ARTIFACTS, log, metric, kv_get, publish  # noqa: E402
+import os
+
+# Reclaim the nvmap pool mid-sweep. This is what let s03_saliency complete.
+#
+# MEASURED 2026-09-28/29: on this integrated board torch.cuda.empty_cache() returns ~nothing
+# (0.03 GiB against 13.54 consumed), but `drop_caches 3` returns the GPU pool -- +91.5 GiB in one
+# measurement, with every worker dead and no process holding anything. That is why a 45-layer
+# single-process sweep is survivable after all: the pool can be released WITHOUT the process
+# exiting, so the block-per-process rewrite this stage's comment called for is not required here.
+#
+# And it must be driven by the FLOOR, not a counter: s03 layer 4 held a stable ~52 GiB plateau
+# then lost 40 GiB in 26 s, entirely inside one fixed 25-batch interval.
+RECLAIM_FLOOR_GIB = float(os.environ.get("S09_RECLAIM_FLOOR", "30.0"))
+HARD_FLOOR_GIB = float(os.environ.get("S09_HARD_FLOOR", "6.0"))
+LAYER_HEADROOM_GIB = float(os.environ.get("S09_LAYER_HEADROOM", "25.0"))
+
+
+def _reclaim_nvmap() -> float:
+    import subprocess
+    try:
+        subprocess.run(["sync"], timeout=60, check=False)
+        subprocess.run(["sudo", "-n", "sh", "-c", "echo 3 > /proc/sys/vm/drop_caches"],
+                       timeout=60, check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+    time.sleep(2)
+    return MC.host_available_gib()
+
+
 
 STAGE = "s09_eval"
 CORPUS = ROOT / "corpus" / "shards"
@@ -209,9 +240,23 @@ def score_checkpoint(ckpt: Path, rows, mm_rows, tag: str) -> dict:
         # fence makes the stage FAIL rather than wedge the box: nothing outside the process can
         # stop a runaway here, because SIGKILL does not land on a process blocked in the GPU
         # driver and cgroup MemoryMax does not bind Tegra unified allocations.
-        MF.require(5.76, f"{tag} layer {li}")
+        # 5.76 GiB was the WEIGHT size, not the footprint: the true host cost of sweeping a
+        # layer is ~53 GiB (MEASURED on s03). Reclaim first, then require real headroom -- with
+        # in-loop reclaim the steady state stays well above this.
+        if MC.host_available_gib() < LAYER_HEADROOM_GIB:
+            _reclaim_nvmap()
+        MF.require(LAYER_HEADROOM_GIB, f"{tag} layer {li}")
         layer = _build_layer(tcfg, li, reader, torch.bfloat16)
+        _seen = 0
         for st in states:
+            if MC.host_available_gib() < RECLAIM_FLOOR_GIB:
+                torch.cuda.empty_cache()
+                a = _reclaim_nvmap()
+                if a < HARD_FLOOR_GIB:
+                    raise MemoryError(
+                        f"{tag} layer {li} batch {_seen}: {a:.1f} GiB after a full reclaim. "
+                        f"Stopping rather than wedging the box.")
+            _seen += 1
             with torch.no_grad():
                 hs = st["hs"].to(DEV)
                 ids = st["ids"].to(DEV)
