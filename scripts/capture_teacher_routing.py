@@ -235,7 +235,22 @@ def worker(lo: int, hi: int) -> int:
         gc.collect()
         torch.cuda.empty_cache()
     else:
-        states = torch.load(STATES, map_location="cpu", weights_only=False)
+        _obj = torch.load(STATES, map_location="cpu", weights_only=False)
+        if isinstance(_obj, dict) and "__next_layer__" in _obj:
+            # The worker advances the states; the ORCHESTRATOR records the ledger. A worker that
+            # finishes and then loses its parent leaves states ahead of the record, and the next
+            # run would re-apply a layer to states that already passed through it -- corrupting the
+            # capture silently. s03_saliency lost two layers to exactly this before it carried a
+            # position marker; this script had none.
+            if _obj["__next_layer__"] != lo:
+                raise RuntimeError(
+                    f"states are positioned at layer {_obj['__next_layer__']} but this block "
+                    f"starts at {lo}. Record the finished block in {LEDGER} (the work IS done) "
+                    f"rather than re-sweeping from a state of unknown position.")
+            states = _obj["states"]
+        else:
+            states = _obj
+        del _obj
 
     n_dense = getattr(tcfg, "first_k_dense_replace", 0)
     _patch_router()
@@ -257,9 +272,18 @@ def worker(lo: int, hi: int) -> int:
                 # memguard logging "nothing reclaimable".
                 #
                 # Checking after a batch is useless when one batch is the whole budget.
-                if _avail_gib() < RECLAIM_FLOOR_GIB:
-                    torch.cuda.empty_cache()
-                    _reclaim()
+                # Reclaim before EVERY row, unconditionally.
+                #
+                # A conditional floor is useless when one unit of work costs more than the floor:
+                # MEASURED at block 3, rows went 101.5 -> 44.5 GiB (57 GiB for one 8192-token
+                # forward) with NO reclaim between them, because 44.5 never fell under the 30 GiB
+                # trigger. By the time headroom drops below a 30 GiB floor there is no room left
+                # for another 57 GiB row, so the capture died at block 23/45 refusing to start a
+                # forward it could not finish. The floor must exceed the cost of one unit, or the
+                # reclaim must simply run every time -- and at ~2 s against a multi-second forward
+                # it is cheap enough to run every time.
+                torch.cuda.empty_cache()
+                _reclaim()
                 a = _avail_gib()
                 if a < BATCH_NEED_GIB:
                     raise RuntimeError(
@@ -304,7 +328,8 @@ def worker(lo: int, hi: int) -> int:
         log(f"layer {li} captured ({li-lo+1}/{hi-lo} in block)", STAGE)
 
     if hi < tcfg.num_hidden_layers:
-        torch.save(states, STATES)
+        torch.save({"__next_layer__": hi, "states": states}, STATES)
+        (OUT / "states_pos.json").write_text(json.dumps({"next_layer": hi}))
     return 0
 
 
