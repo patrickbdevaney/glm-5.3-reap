@@ -63,10 +63,23 @@ FIXED_GIB = 19.73              # reloaded states (17.5) + resident embeddings/vi
 # collapse inside a single 25-batch interval, which a fixed schedule cannot see coming.
 RECLAIM_FLOOR_GIB = float(os.environ.get("S03C_RECLAIM_FLOOR", "30.0"))
 HARD_FLOOR_GIB = float(os.environ.get("S03C_HARD_FLOOR", "6.0"))
+# Headroom one SEQ-token forward through a MoE layer needs. Refuse to begin one without it.
+BATCH_NEED_GIB = float(os.environ.get("S03C_BATCH_NEED", "40.0"))
+# Rows per worker process. Process exit is the only thing that reliably returns the nvmap pool, so
+# this is the real lever when a single layer's rows do not fit one process.
+ROWS_PER_WORKER = int(os.environ.get("S03C_ROWS_PER_WORKER", "0")) or None
 # Real documents only. The corpus caps at 16,384 (corpus_spec.MAX_TOKENS), and concatenating
 # shorter samples to reach a longer sequence would manufacture long-range structure that is not
 # there -- the routing at a fake boundary is not the routing we are asking about.
-SEQ = int(os.environ.get("S03C_SEQ", "16384"))
+# MEASURED 2026-09-29. Attention is quadratic in sequence length, and it -- not the MoE FFN --
+# is what binds here: the routed-activation floor at 16k is only ~1.5 GiB, yet one 16384-token
+# forward through layer 3 died starting from 93.0 GiB of headroom. At 8192 the same forward uses
+# ~57 GiB (101.5 -> 44.5 GiB) and completes, leaving ~44 GiB of margin.
+#
+# 8192 is 4x the 2048 tokens the mask was calibrated at, so affected-rate-versus-position is
+# still measurable over a 4x extrapolation. 16384 is not reachable on a 122 GiB box at any block
+# size, because the unit of work is a single forward and no reclaim can subdivide it.
+SEQ = int(os.environ.get("S03C_SEQ", "8192"))
 N_ROWS = int(os.environ.get("S03C_ROWS", "16"))
 
 
@@ -86,6 +99,35 @@ def _reclaim() -> float:
     time.sleep(3)
     return _avail_gib()
 
+
+
+# The router's own topk_indices, taken by patching its forward -- the same mechanism
+# stream_saliency uses.
+#
+# This script previously read the layer's SECOND return value and treated it as expert ids. That
+# value is the sparse-attention index passthrough (`prev_topk_indices`), not MoE routing, and it
+# is None for these layers -- so `if per_row:` never fired and the capture wrote nothing for ANY
+# MoE layer while still logging "layer N captured". The orchestrator's
+# "exited 0 but wrote nothing" check is what surfaced it, on its own rc=6.
+_CAP = {"layer": None, "rows": []}
+
+
+def _patch_router() -> None:
+    from transformers.models.glm5_next.modeling_glm5_next import Glm5NextTextTopkRouter
+    if getattr(Glm5NextTextTopkRouter, "_capture_patched", False):
+        return
+    orig = Glm5NextTextTopkRouter.forward
+
+    def forward(self, hidden_states):
+        router_logits, topk_weights, topk_indices = orig(self, hidden_states)
+        if _CAP["layer"] is not None and topk_indices is not None:
+            # [tokens, top_k] as int16. Row index IS token position, which is the entire point.
+            _CAP["rows"].append(
+                topk_indices.reshape(-1, topk_indices.shape[-1]).to(torch.int16).cpu())
+        return router_logits, topk_weights, topk_indices
+
+    Glm5NextTextTopkRouter.forward = forward
+    Glm5NextTextTopkRouter._capture_patched = True
 
 def _rows():
     """Longest real samples available, untruncated."""
@@ -196,13 +238,37 @@ def worker(lo: int, hi: int) -> int:
         states = torch.load(STATES, map_location="cpu", weights_only=False)
 
     n_dense = getattr(tcfg, "first_k_dense_replace", 0)
+    _patch_router()
     for li in range(lo, hi):
+        _CAP["layer"] = li if li >= n_dense else None
         MF.require(LAYER_COST_GIB, f"routing capture layer {li}")
         layer = _build_layer(tcfg, li, reader, DT)
         per_row = []
         _seen = 0
         with torch.no_grad():
             for st in states:
+                # Guard BEFORE the forward, not after it.
+                #
+                # MEASURED 2026-09-29: this script uses 16 rows x 16384 tokens, while s03 uses
+                # 166 batches of ~3000. Each batch here is ~5.5x larger, so ONE 16k-token forward
+                # through a 288-expert MoE layer can consume all remaining headroom before any
+                # post-batch check runs. Layers 0-2 (dense) passed; layer 3 -- the first MoE layer
+                # -- drove MemAvailable from 118.5 GiB to ~250 MB and the worker died with
+                # memguard logging "nothing reclaimable".
+                #
+                # Checking after a batch is useless when one batch is the whole budget.
+                if _avail_gib() < RECLAIM_FLOOR_GIB:
+                    torch.cuda.empty_cache()
+                    _reclaim()
+                a = _avail_gib()
+                if a < BATCH_NEED_GIB:
+                    raise RuntimeError(
+                        f"routing capture layer {li} row {_seen}: {a:.1f} GiB free, one "
+                        f"{SEQ}-token forward needs ~{BATCH_NEED_GIB:.1f} GiB. Refusing to start "
+                        f"a forward that cannot finish. Lower S03C_ROWS_PER_WORKER.")
+                if os.environ.get("S03C_TRACE_MEM"):
+                    log(f"  layer {li} row {_seen}: {a:.1f} GiB before forward", STAGE)
+                _CAP["rows"].clear()
                 hs = st["hs"].to(DEV)
                 ids = st["ids"].to(DEV)
                 am = torch.ones(ids.shape[0], ids.shape[1], dtype=torch.bool, device=DEV)
@@ -213,10 +279,9 @@ def worker(lo: int, hi: int) -> int:
                                 past_key_values=None, use_cache=False, prev_topk_indices=tk)
                 st["hs"] = out.cpu()
                 st["topk"] = tk.cpu() if tk is not None else None
-                if li >= n_dense and tk is not None:
-                    # [tokens, top_k] expert ids, int16 -- position is the row index, which is
-                    # the whole point: this is what lets affected-rate be plotted against it.
-                    per_row.append(tk.reshape(-1, tk.shape[-1]).to(torch.int16).cpu())
+                if _CAP["rows"]:
+                    per_row.append(torch.cat(_CAP["rows"], dim=0))
+                    _CAP["rows"].clear()
                 del hs, out, ids, am, pos, tk
                 _seen += 1
                 # Watch the floor every batch, not a batch counter. MEASURED on s03 layer 4:
