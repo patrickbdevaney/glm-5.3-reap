@@ -64,13 +64,13 @@ STAGES: list[Stage] = [
     # s04b CONSUMES AND DELETES source shards, so it must not start until staging is
     # complete. Depending only on s04_sweep let it run alongside a re-download, each
     # destroying what the other was fetching - the tree went 52 -> 29 of 62.
-    Stage("s04b_surgery", "stages.s04b_surgery",  ["s04_sweep", "s01_source"], max_attempts=6,
+    Stage("s04b_surgery", "stages.s04b_surgery",  ["s04_sweep", "s01_source"], max_attempts=10,
           needs_gib=10, background=True),
-    Stage("s05_heal",     "stages.s05_heal",      ["s04b_surgery"],            max_attempts=3,
+    Stage("s05_heal",     "stages.s05_heal",      ["s04b_surgery"],            max_attempts=10,
           needs_gib=10, critical=False, background=True),
-    Stage("s06_emit",     "stages.s06_emit",      ["s04b_surgery"],            max_attempts=3,
+    Stage("s06_emit",     "stages.s06_emit",      ["s04b_surgery"],            max_attempts=8,
           needs_gib=20, soft_deps=["s05_heal"], background=True),
-    Stage("s07_quantize", "stages.s07_quantize",  ["s06_emit"],                max_attempts=3,
+    Stage("s07_quantize", "stages.s07_quantize",  ["s06_emit"],                max_attempts=8,
           needs_gib=100, background=True),
     Stage("s08_document", "stages.s08_document",  ["s07_quantize"],            max_attempts=2,
           needs_gib=1, background=True),
