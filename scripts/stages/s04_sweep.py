@@ -15,6 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from common import ROOT, ARTIFACTS, log, metric, kv_get, publish  # noqa: E402
+from common import layer_dumps  # noqa: E402
 
 STAGE = "s04_sweep"
 SALIENCY = ROOT / "artifacts" / "saliency"
@@ -72,7 +73,7 @@ def _gate_uniform_counts(files, torch) -> None:
 
 def run() -> dict:
     import torch
-    files = sorted(SALIENCY.glob("*.pt"))
+    files = layer_dumps(SALIENCY)
     if not files:
         raise RuntimeError("no saliency accumulators found; stage 3 must run first")
     _gate_uniform_counts(files, torch)

@@ -42,6 +42,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from common import ROOT, ARTIFACTS, log, metric, kv_get, kv_set, publish  # noqa: E402
+from common import layer_dumps  # noqa: E402
 
 STAGE = "s05_heal"
 SALIENCY = ROOT / "artifacts" / "saliency"
@@ -162,7 +163,7 @@ def run() -> dict:
             "renormalisation. Run scripts/heal_refit.py first.", STAGE, "WARN")
 
     gains, skipped = {}, []
-    for f in sorted(SALIENCY.glob("*.pt")):
+    for f in layer_dumps(SALIENCY):
         d = torch.load(f, weights_only=False)
         layer = d["layer"]
         keep = retained.get(layer)

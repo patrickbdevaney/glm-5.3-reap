@@ -29,6 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from common import ROOT, ARTIFACTS, log, metric, kv_get, kv_set, publish, free_gib  # noqa: E402
+from common import layer_dumps  # noqa: E402
 
 STAGE = "s04b_surgery"
 SRC = ROOT / "source" / "GLM-5.3-Flash"
@@ -74,7 +75,7 @@ def _layer_curves():
     if crit not in ("mass", "mean"):
         raise ValueError(f"GLM5_REAP_CRITERION must be 'mass' or 'mean', got {crit!r}")
     out = {}
-    for f in sorted(SALIENCY.glob("*.pt")):
+    for f in layer_dumps(SALIENCY):
         d = torch.load(f, weights_only=False)
         c = d["count"].double()
         m = torch.where(c > 0, d["sum_saliency"].double() / c.clamp(min=1),
@@ -341,7 +342,7 @@ def compute_retained(ratio: float, uniform: bool = True) -> dict[str, list[int]]
 
 def _original_expert_count() -> int:
     import torch
-    for f in sorted(SALIENCY.glob("*.pt")):
+    for f in layer_dumps(SALIENCY):
         return int(torch.load(f, weights_only=False)["num_experts"])
     raise RuntimeError("no saliency files; cannot determine original expert count")
 

@@ -163,3 +163,26 @@ def run(cmd: list[str], stage: str, log_name: str | None = None, env: dict | Non
         fh.flush()
         return subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, env=e,
                               timeout=timeout, check=False)
+
+
+def layer_dumps(d):
+    """Per-layer saliency dumps only, sorted by LAYER INDEX.
+
+    artifacts/saliency holds two different things: 42 per-layer dumps named
+    model__language_model__layers__N__mlp.pt, and accumulators.pt, the rolled-up file s04_sweep
+    writes. Fifteen call sites globbed "*.pt" and assumed every match was a per-layer dump --
+    true until s04_sweep ran, after which `sorted(glob("*.pt"))[0]` is accumulators.pt, which has
+    none of the per-layer keys. s04b_surgery died on KeyError: 'num_experts' reading exactly that.
+
+    Sorting by layer index rather than filename also fixes a quieter bug: lexicographic order puts
+    layer 10 before layer 3, so anything that zipped a dump list against a layer range was
+    misaligned.
+    """
+    from pathlib import Path
+    import re
+    out = []
+    for f in Path(d).glob("model__*__mlp.pt"):
+        m = re.search(r"layers__(\d+)__", f.name)
+        if m:
+            out.append((int(m.group(1)), f))
+    return [f for _, f in sorted(out)]
