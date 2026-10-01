@@ -217,7 +217,37 @@ def _retained_hope(ratio: float) -> dict[str, list[int]]:
             "dropping an expert only one thin domain uses -- which is how pass 2 lost ballast. "
             "Write conf/protect_frac_override.txt to set it.", STAGE, "WARN")
     out = ARTIFACTS / "masks" / "mask.json"
-    res = select_run(accf, out, ratio, "hope", "reap_1_1_1", protect_frac=pf)
+    # A dead domain is allowed ONLY when it is structurally unpopulatable, never merely absent.
+    #
+    # assert_domains_live() exists to stop a PARTIAL pass from producing an arbitrary answer, and
+    # its advice ("wait for those buckets' chunks") is right for that case. It cannot help a
+    # domain whose every source is excluded by licence or scope policy -- bio here: 0 of
+    # 866,678,064 routed slots after a COMPLETE pass, because camel-ai/biology is licence_nc,
+    # tattabio/OG is licence_sharealike and PubMedQA/bigbio are scope_clinical. Waving that
+    # through with a blanket allow_dead would also wave through an incomplete pass, so the two
+    # cases are distinguished explicitly and the allowed set is a file someone has to write.
+    _known = ROOT / "conf" / "structurally_empty_domains.txt"
+    _allowed = set()
+    if _known.exists():
+        _allowed = {ln.split("#")[0].strip() for ln in _known.read_text().splitlines()
+                    if ln.split("#")[0].strip()}
+    import reap_select as _rs
+    _acc, _fs, _fc, _bk = _rs.load_acc(accf)
+    _chk = _rs.assert_domains_live(_acc, _bk, "selection", allow_dead=True)
+    _dead = set(_chk["dead"])
+    del _acc, _fs, _fc
+    if _dead and not _dead <= _allowed:
+        raise RuntimeError(
+            f"dead domains {sorted(_dead - _allowed)} are not listed in {_known.name}. A domain "
+            f"with zero routed mass makes worst-domain objectives identically zero, so the "
+            f"selection would be arbitrary. If the pass is incomplete, finish it; if the domain "
+            f"is structurally unpopulatable, add it to that file WITH the reason.")
+    if _dead:
+        log(f"dead domains {sorted(_dead)} are structurally empty (see {_known.name}); scoring "
+            f"the {len(_bk) - len(_dead)} live domains. The shipped model does not claim "
+            f"coverage of {sorted(_dead)}.", STAGE, "WARN")
+    res = select_run(accf, out, ratio, "hope", "reap_1_1_1", protect_frac=pf,
+                     allow_dead=bool(_dead))
     log(f"HOPE mask: worst domain {res['worst_domain']} at {res['worst_retention']:.5f}, "
         f"mean {res['mean_retention']:.5f}, pFp {res['interaction_cost']:.6f} "
         f"(protect_frac {pf})", STAGE)

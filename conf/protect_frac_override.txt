@@ -1,16 +1,51 @@
-0.0
+0.04
 # PER-DOMAIN PROTECTION FRACTION for pass 3's HOPE selection.
 #
-# 0.0 is a PLACEHOLDER, not a decision. The right value is a property of THIS run's
-# accumulators, which do not exist yet: it is read off a measured sweep of worst-domain
-# retention against HOPE's own objective (p^T F p) and set at the knee, the same way MiMo's
-# 0.08 was. Writing a guess here would make that measurement decorative.
+# MEASURED 2026-10-01 by scripts/sweep_protect_frac.py against THIS run's accumulators
+# (s03 complete: 42 layers, 10 chunks, 866,678,064 routed slots). This replaces the 0.0
+# placeholder, which was explicitly "not a decision" because the accumulators did not exist
+# when it was written.
 #
-# Set it after the saliency pass, before s04b_surgery. s04b logs a WARN while this is 0,
-# because 0 means nothing stops the global ranking from dropping an expert that only one thin
-# domain uses -- which is exactly how pass 2 lost ballast (dNLL 0.989, top-1 0.580).
+# Sweep at ratio 0.5, HOPE selection, 7 live domains (bio is dead by LICENCE -- see below):
 #
-# Do NOT assume MiMo's 0.08 transfers. MiMo had 256 experts over 9 domains; this model has 288
-# over 8, a different corpus, and a different F. The curve is also not monotone near zero --
-# on MiMo, pf=0.01 was WORSE than pf=0, because too few protected experts constrain the greedy
-# without covering anything.
+#     pf     worst_ret  mean_ret   icost
+#     0.000   0.5399     0.6486    0.1183
+#     0.005   0.5425     0.6522    0.1188
+#     0.010   0.5447     0.6562    0.1195
+#     0.020   0.5506     0.6650    0.1215
+#     0.030   0.5536     0.6728    0.1239
+#     0.040   0.5580     0.6803    0.1270   <-- knee
+#     0.060   0.5621     0.6940    0.1347
+#     0.080   0.5667     0.7059    0.1452
+#     0.120   INFEASIBLE: protection exceeds the prunable population
+#
+# MARGINAL gain in worst-domain retention per unit of interaction cost (p^T F p):
+#
+#     0.000->0.005   4.52      0.030->0.040   1.41   <-- last step that pays for itself
+#     0.005->0.010   3.14      0.040->0.060   0.54
+#     0.010->0.020   3.03      0.060->0.080   0.43
+#     0.020->0.030   1.23
+#
+# 0.04 is where the next increment stops paying for itself: marginal efficiency is 1.41 into
+# 0.04 and collapses to 0.54 after it. Against pf=0 that buys +0.0181 worst-domain retention
+# (0.5399 -> 0.5580) for +0.0088 interaction cost.
+#
+# Read it MARGINALLY, not cumulatively. Cumulative gain/cost falls monotonically by
+# construction, so its maximum is always the smallest nonzero pf (0.005 here) regardless of the
+# curve's shape -- an artifact of the statistic, not a knee.
+#
+# MiMo's 0.08 does NOT transfer and was not assumed: it sits well past this knee, where marginal
+# efficiency is 0.43. This model has 288 experts over 8 domains (7 live), a different corpus and
+# a different F.
+#
+# The curve IS monotone near zero here, unlike MiMo where pf=0.01 was worse than pf=0. The grid
+# was deliberately dense below 0.02 to test that rather than assume it.
+#
+# WORST DOMAIN IS 'general' (17.58% of the corpus) at every pf, not a thin domain. The
+# protection still helps it, because protecting each domain's top slice separately stops the
+# global ranking from dropping experts that general shares with thin domains.
+#
+# bio: 0 of 866,678,064 routed slots. Not a partial pass -- every bio source is in
+# corpus_spec.EXCLUDED (camel-ai/biology licence_nc, tattabio/OG licence_sharealike,
+# PubMedQA/bigbio scope_clinical). No recomputation can populate it, so selection scores the 7
+# live domains and the shipped model does not claim bio coverage.

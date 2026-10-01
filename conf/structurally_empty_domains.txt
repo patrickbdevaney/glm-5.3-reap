@@ -1,0 +1,18 @@
+bio
+# Domains that CANNOT be populated by this corpus, as opposed to domains that merely have not
+# been populated YET.
+#
+# assert_domains_live() refuses to rank against a zero-mass domain, and its message says to
+# "wait for those buckets' chunks" -- correct advice for a partial pass, and the reason that
+# guard exists. But waiting cannot help a domain whose every source is excluded by policy, so
+# without this distinction the only way past the guard would be a blanket --allow-dead-domains
+# that would also wave through a genuinely incomplete pass.
+#
+# bio: 0 of 866,678,064 routed slots after a COMPLETE pass (42 layers, 10 chunks). Every bio
+# source is in corpus_spec.EXCLUDED:
+#     camel-ai/biology        licence_nc
+#     tattabio/OG             licence_sharealike
+#     qiaojin/PubMedQA        scope_clinical
+#     bigbio/pubmed_qa        scope_clinical
+# No amount of recomputation populates it. Selection scores the 7 live domains, and the shipped
+# model must not claim bio coverage.
