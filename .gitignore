@@ -33,3 +33,6 @@ artifacts/qt_*.bin
 artifacts/glm5_tiny/
 artifacts/*.safetensors
 vendor/dsa/*.bin
+
+# live sampler output -- appended continuously, never belongs in git
+logs/*.csv
