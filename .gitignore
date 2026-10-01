@@ -21,3 +21,15 @@ artifacts/saliency_pass1/
 artifacts/eval/
 *.pt
 artifacts/saliency_pass2/
+
+# Build binaries -- these are published to HF, never to git. A `git add -A` swept 5.07 GiB of
+# them into 22 commits on 2026-10-01 and GitHub rejected the push outright:
+# "fatal: pack exceeds maximum allowed size (2.00 GiB)".
+gguf/*.gguf
+artifacts/*.bundle
+artifacts/*.bundle.prev
+artifacts/imatrix-*
+artifacts/qt_*.bin
+artifacts/glm5_tiny/
+artifacts/*.safetensors
+vendor/dsa/*.bin
