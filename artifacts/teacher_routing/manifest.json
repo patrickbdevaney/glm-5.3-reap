@@ -1,0 +1,7 @@
+{
+  "seq": 8192,
+  "rows": 16,
+  "layers_captured": 42,
+  "source": "unpruned GLM-5.3-Flash, pre-surgery",
+  "topk": 8
+}

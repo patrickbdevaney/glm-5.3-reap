@@ -5,8 +5,8 @@
   "experts_original": 288,
   "tensors_kept": 38956,
   "tensors_dropped": 37152,
-  "bytes": 172441041123,
+  "bytes": 172441041397,
   "gib": 160.6,
   "path": "/home/patrickd/glm-5.3-reap/output/pruned-fp8",
-  "free_gib_after": 216.0
+  "free_gib_after": 272.8
 }

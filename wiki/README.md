@@ -25,6 +25,7 @@ scrollback, not only in a chat reply.
 | [10-target-model.md](10-target-model.md) | GLM-5.3-Flash: verified architecture and parameter accounting |
 | [20-host-thor.md](20-host-thor.md) | Jetson AGX Thor: measured capability and storage envelope |
 | [30-reap.md](30-reap.md) | REAP method, published results, toolkit landscape |
+| [31-pass3-hope-method.md](31-pass3-hope-method.md) | Pass 3: HOPE selection, measured protect_frac, what shipped |
 | [40-hybrid-fragility.md](40-hybrid-fragility.md) | The central risk: pruning hybrid linear-attention + mHC models |
 | [50-multimodal.md](50-multimodal.md) | Vision preservation under expert pruning |
 | [60-quantization.md](60-quantization.md) | FP8 → NVFP4 path, Thor SM110a support |

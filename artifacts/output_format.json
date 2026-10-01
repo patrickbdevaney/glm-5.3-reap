@@ -1,20 +1,20 @@
 {
-  "checkpoint": "/home/patrickd/glm-5.3-reap/output/glm-5.3-flash-reap50-nvfp4",
+  "checkpoint": "/home/patrickd/glm-5.3-reap/output/glm-5.3-flash-reap50-nvfp4-pass2-attnkda",
   "format": "compressed-tensors",
   "shards": 62,
-  "tensors": 56277,
+  "tensors": 57808,
   "tensor_dtypes": {
-    "BF16": 1177,
-    "F32": 18560,
-    "F8_E4M3": 18270,
-    "U8": 18270
+    "F32": 19098,
+    "BF16": 1096,
+    "F8_E4M3": 18807,
+    "U8": 18807
   },
   "tensors_by_group": {
-    "other": 477,
+    "routed_expert": 55728,
+    "other": 492,
     "mhc": 270,
-    "attention": 664,
-    "router": 87,
-    "routed_expert": 54432,
+    "attention": 882,
+    "router": 89,
     "vision": 347
   },
   "quantization_config": {
@@ -25,8 +25,9 @@
       "re:.*lm_head.*",
       "re:.*embed_tokens.*",
       "re:.*visual.*",
-      "re:.*linear_attn.*",
-      "re:.*self_attn.*",
+      "re:.*self_attn\\.(o_proj|q_a_proj|q_b_proj|kv_a_proj_with_mqa|kv_b_proj|f_a_proj|f_b_proj|g_a_proj|g_b_proj|b_proj)\\..*",
+      "re:.*self_attn\\..*_conv1d.*",
+      "re:.*indexer.*",
       "re:.*hc_.*",
       "re:.*mapping_proj.*",
       "re:.*mlp\\.gate\\..*",

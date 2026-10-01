@@ -1,11 +1,11 @@
 {
   "path": "/home/patrickd/glm-5.3-reap/output/glm-5.3-flash-reap50-nvfp4-pass2-attnkda",
-  "bytes": 100500617826,
+  "bytes": 100500613365,
   "gib": 93.6,
   "tensors_nvfp4": 18807,
   "tensors_bf16": 1387,
   "tensors_fp8_passthrough": 0,
   "keep_fp8_passthrough": false,
-  "minutes": 29.6,
+  "minutes": 26.2,
   "fits_thor": true
 }
