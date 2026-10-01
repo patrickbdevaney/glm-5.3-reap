@@ -7,6 +7,74 @@ multimodal) from the published weights to a **REAP-pruned FP8 checkpoint**, on a
 The output is a pruned FP8 checkpoint that can then be quantised to NVFP4 (included) or
 converted to GGUF (downstream, not included).
 
+## Weights: which version is which, and where
+
+Three selection passes have shipped. **Each is a different mask, not a re-run of the same one.**
+Older weights are never overwritten — a new pass lands in its own subdirectory.
+
+| | method | healing | where |
+|---|---|---|---|
+| **v1** | REAP scalar criterion | scalar | `*-FP8-v2` / `*-NVFP4-v2` — superseded, see note |
+| **v2** | refined REAP mask | **per-expert** | repo **root** of each weight repo |
+| **v3** | **HOPE** — interaction-aware, `protect_frac=0.04` | per-expert | subdir **`pass3-hope/`** |
+
+| artifact | repo |
+|---|---|
+| FP8 (160.6 GiB) | [`patrickbdevaney/GLM-5.3-Flash-REAP50-FP8-v2`](https://huggingface.co/patrickbdevaney/GLM-5.3-Flash-REAP50-FP8-v2) |
+| NVFP4 (93.6 GiB) | [`patrickbdevaney/GLM-5.3-Flash-REAP50-NVFP4-v2`](https://huggingface.co/patrickbdevaney/GLM-5.3-Flash-REAP50-NVFP4-v2) |
+| GGUF | [`patrickbdevaney/GLM-5.3-Flash-REAP50-GGUF`](https://huggingface.co/patrickbdevaney/GLM-5.3-Flash-REAP50-GGUF) |
+
+> The repo names carry a `-v2` suffix from the pass-2 release and are now just names. The
+> **subdirectory** tells you the version: root = v2, `pass3-hope/` = v3.
+
+All three keep **144 of 288 experts** (REAP50). What differs is *which* 144.
+
+### What each pass actually bought — measured, not claimed
+
+**v1 → v2.** A better mask on its own terms: reconstruction residual 0.2730 → 0.2663 (−2.5%),
+winning in 30 of 42 layers, with the two masks agreeing on 91.0% of experts. End to end, against
+241,516 held-out tokens and the same cached teacher, it was **zero to within noise**:
+
+| metric | v1 | v2 | Δ |
+|---|---|---|---|
+| top-1 agreement | 0.8370 | 0.8369 | **−0.0001** (SE 0.00075) |
+| ΔNLL mean | 0.1979 | 0.1940 | −0.0039 (−2.0%) |
+| top-k KL | 0.6948 | 0.6939 | −0.0009 |
+
+Per domain it was a *redistribution*, not a lift — agentic +0.0079 (5.8 σ), science −0.0069
+(4.1 σ), ballast −0.0054 (2.3 σ). And it is **confounded**: v2 changed the mask and the healing
+method together, so neither can be credited alone.
+
+The honest lesson is about the proxy. Even after healing the relative reconstruction residual is
+**0.27** — the intermediate error is dominated by information genuinely deleted with the experts,
+so shaving 8% off it leaves the argmax where it already was. Tokens whose top-1 was going to flip
+had already flipped.
+
+**v2 → v3.** Two specific defects in v2, each addressed:
+
+1. **A per-expert ranking cannot see interactions.** [arXiv 2609.18916] shows scalar REAP is
+   exactly HOPE with the off-diagonal of `F` zeroed: two experts that duplicate each other are
+   cheap to drop together, two that complement each other are not. v3 minimises `pᵀFp` — the
+   output error a prune set actually causes — over the same accumulators, with no extra forward
+   passes.
+2. **Nothing protected a thin domain.** v2 ran with no domain floor and lost ballast. v3 sets
+   `protect_frac = 0.04`, **measured** off this run's accumulators at the knee of worst-domain
+   retention against interaction cost — not guessed, and not inherited from MiMo's 0.08, which
+   sits where marginal efficiency is 0.43.
+
+v3 is calibrated on **866,678,064 routed slots** (42 layers × 10 chunks) and heals to a median
+gain of 0.766 across 42 layers with none skipped.
+
+> **v3 has no bio coverage.** The bio domain saw **0** of 866,678,064 routed slots, because every
+> bio source is excluded by licence or clinical scope (`camel-ai/biology`, `tattabio/OG`,
+> `PubMedQA`). Selection scored the 7 live domains. This is a property of the corpus, not a bug,
+> and no amount of recomputation changes it.
+
+> **Long-context assurance for v3 is at 8192 tokens, not the intended 16384.** A single
+> 16384-token forward needs >93 GiB — attention is quadratic in sequence length and one forward is
+> indivisible, so no amount of blocking or memory reclaim helps. 8192 is still 4× the 2048 tokens
+> the mask was calibrated at. See [wiki/31-pass3-hope-method.md](wiki/31-pass3-hope-method.md).
+
 ## Why this is not a normal compression job
 
 | | |
