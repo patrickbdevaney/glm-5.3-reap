@@ -235,3 +235,7 @@ Weights. Calibration corpora. Anything under `corpus/`, `output/`, `source/`,
 
 Pipeline code: MIT. `zai-org/GLM-5.3-Flash` is MIT, and the calibration corpus is
 permissive-licence-only by design so a derivative can stay MIT.
+
+## Related: DeepSeek-V4.1-Flash for Thor (design)
+The 1T-class compression research (`reports/Compressing 1T MoE for Thor.md`) now lives in its own repo:
+[deepseek-v4.1-flash-reap-thor](https://github.com/patrickbdevaney/deepseek-v4.1-flash-reap-thor).
