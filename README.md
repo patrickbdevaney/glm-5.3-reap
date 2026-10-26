@@ -1,241 +1,236 @@
 # glm-5.3-reap
 
-End-to-end pipeline that takes **`zai-org/GLM-5.3-Flash`** (321B params, MoE, natively
-multimodal) from the published weights to a **REAP-pruned FP8 checkpoint**, on a single
-**NVIDIA Jetson AGX Thor** — 122 GiB of unified memory, no cloud, no second machine.
+GLM-5.3-Flash (321B parameters, mixture of experts, natively multimodal) pruned to 144 of 288 routed experts per
+layer, then quantized to NVFP4 and GGUF so it runs on one 128 GB NVIDIA Jetson AGX Thor. The entire pipeline ran on
+that single Thor, with no cloud and no second machine. The checkpoint never fits in memory, so every stage streams
+one decoder layer at a time and performs the prune as tensor surgery on the safetensors files.
 
-The output is a pruned FP8 checkpoint that can then be quantised to NVFP4 (included) or
-converted to GGUF (downstream, not included).
+## Status (2026-10-26)
 
-## Weights: which version is which, and where
+Research release. The recipe was carried forward, with pre-registered gates, into
+[deepseek-v4.1-flash-reap-thor](https://github.com/patrickbdevaney/deepseek-v4.1-flash-reap-thor). The weights are
+usable for evaluation and local serving. They are not a drop-in replacement for the unpruned model: top-1 agreement
+with it is 0.84 on held-out text, and general-knowledge text drops to 0.58.
 
-Three selection passes have shipped. **Each is a different mask, not a re-run of the same one.**
-Older weights are never overwritten — a new pass lands in its own subdirectory.
+**Use v2.** Three selection passes shipped. Each is a different expert mask, and none overwrote another.
 
-| | method | healing | where |
+| Pass | Selection | Healing | Where | End-to-end evidence |
+|---|---|---|---|---|
+| **v2 (recommended)** | Refined REAP mask | Per-layer scalar, measured by router replay | Root of each weight repo | top-1 **0.8425**, FP8 (241,516 tokens) |
+| v1 | REAP scalar criterion | Per-layer scalar | `GLM-5.3-Flash-REAP50-FP8` / `-NVFP4` (no `-v2`) | top-1 0.8370, FP8 |
+| v3 | HOPE (interaction-aware), `protect_frac = 0.04` | First-moment fallback (see below) | `pass3-hope/` subdirectory | **None.** Never evaluated end to end |
+
+> **Correction (2026-10-24).** Earlier versions of this README and of the model cards described v3 as per-expert
+> healed. That was wrong, for three reasons:
+> - The heal stage's keep-set guard detected that the measured gains had been fitted to the v2 keep-set. A broad
+>   `except Exception` downgraded that to a warning, so v3 shipped with a first-moment per-layer fallback (median
+>   gain 0.766) and no per-expert tensors.
+> - v3 has never been scored end to end, so nothing shows that it beats v2.
+> - The v3 NVFP4 also quantizes the linear-attention (KDA) q/k/v projections. That mode measured −0.0023 top-1
+>   (z = 5.8) on v2 and had been deliberately left out of the v2 release.
+>
+> The planned fix is to re-heal v3 with a guard that fails instead of warning, then run a paired v3-vs-v2 evaluation.
+
+| Artifact | Repository | Size |
+|---|---|---|
+| FP8 master | [`GLM-5.3-Flash-REAP50-FP8-v2`](https://huggingface.co/patrickbdevaney/GLM-5.3-Flash-REAP50-FP8-v2) | 160.6 GiB |
+| NVFP4 (compressed-tensors, vLLM) | [`GLM-5.3-Flash-REAP50-NVFP4-v2`](https://huggingface.co/patrickbdevaney/GLM-5.3-Flash-REAP50-NVFP4-v2) | v2 98.2 GiB, v3 93.6 GiB |
+| GGUF (from the v2 FP8) + vision `mmproj` | [`GLM-5.3-Flash-REAP50-GGUF`](https://huggingface.co/patrickbdevaney/GLM-5.3-Flash-REAP50-GGUF) | IQ3_M to Q4_K_M |
+| CUDA server for the NVFP4 build | [`glm-5.3-flash-cuda-server`](https://github.com/patrickbdevaney/glm-5.3-flash-cuda-server) | — |
+
+The `-v2` suffix in the repository names dates from the pass-2 release and is now only a name. The subdirectory
+identifies the pass.
+
+## Results
+
+Teacher-forced, paired evaluation against the unpruned model on identical inputs. It uses **241,516 held-out
+tokens** that calibration never saw, with image-placeholder positions excluded. Top-1 is agreement with the teacher's
+argmax. KL is over the teacher's top-k. Paired differences use McNemar tests on the same tokens.
+
+| Checkpoint | top-1 | top-k KL | ΔNLL mean / median |
 |---|---|---|---|
-| **v1** | REAP scalar criterion | scalar | `*-FP8-v2` / `*-NVFP4-v2` — superseded, see note |
-| **v2** | refined REAP mask | **per-expert** | repo **root** of each weight repo |
-| **v3** | **HOPE** — interaction-aware, `protect_frac=0.04` | per-expert | subdir **`pass3-hope/`** |
+| **v2 FP8** | **0.8425** | **0.650** | 0.176 / 0.001 |
+| v2 NVFP4 (released) | 0.8386 | 0.673 | 0.184 / 0.002 |
+| v2 NVFP4 with KDA attention quantized (the v3 NVFP4 mode) | 0.8363 | 0.686 | 0.191 / 0.002 |
+| v1 FP8 | 0.8370 | 0.695 | 0.198 / 0.002 |
+| v2 mask with per-expert healing (reverted) | 0.8369 | 0.694 | 0.194 / 0.001 |
 
-| artifact | repo |
-|---|---|
-| FP8 (160.6 GiB) | [`patrickbdevaney/GLM-5.3-Flash-REAP50-FP8-v2`](https://huggingface.co/patrickbdevaney/GLM-5.3-Flash-REAP50-FP8-v2) |
-| NVFP4 (93.6 GiB) | [`patrickbdevaney/GLM-5.3-Flash-REAP50-NVFP4-v2`](https://huggingface.co/patrickbdevaney/GLM-5.3-Flash-REAP50-NVFP4-v2) |
-| GGUF | [`patrickbdevaney/GLM-5.3-Flash-REAP50-GGUF`](https://huggingface.co/patrickbdevaney/GLM-5.3-Flash-REAP50-GGUF) |
+Per domain (v2 FP8):
 
-> The repo names carry a `-v2` suffix from the pass-2 release and are now just names. The
-> **subdirectory** tells you the version: root = v2, `pass3-hope/` = v3.
-
-All three keep **144 of 288 experts** (REAP50). What differs is *which* 144.
-
-### What each pass actually bought — measured, not claimed
-
-**v1 → v2.** A better mask on its own terms: reconstruction residual 0.2730 → 0.2663 (−2.5%),
-winning in 30 of 42 layers, with the two masks agreeing on 91.0% of experts. End to end, against
-241,516 held-out tokens and the same cached teacher, it was **zero to within noise**:
-
-| metric | v1 | v2 | Δ |
+| Domain | Tokens | top-1 | ΔNLL |
 |---|---|---|---|
-| top-1 agreement | 0.8370 | 0.8369 | **−0.0001** (SE 0.00075) |
-| ΔNLL mean | 0.1979 | 0.1940 | −0.0039 (−2.0%) |
-| top-k KL | 0.6948 | 0.6939 | −0.0009 |
+| Math | 66,558 | 0.920 | +0.022 |
+| Code | 15,821 | 0.920 | +0.052 |
+| Agentic | 69,202 | 0.873 | +0.137 |
+| Science | 45,034 | 0.830 | +0.125 |
+| Finance | 22,215 | 0.755 | +0.181 |
+| General knowledge ("ballast") | 22,154 | 0.580 | +0.989 |
+| Vision | 532 | not measured (too few text tokens) | — |
 
-Per domain it was a *redistribution*, not a lift — agentic +0.0079 (5.8 σ), science −0.0069
-(4.1 σ), ballast −0.0054 (2.3 σ). And it is **confounded**: v2 changed the mask and the healing
-method together, so neither can be credited alone.
+- **Retention is predictable from routing statistics.** Per-domain retention computed from routing statistics,
+  before any token was scored, predicts measured agreement at Pearson r = 0.942 (pass 1). The prune put its damage
+  on general-knowledge text, the capability retrieval can most easily restore. Code, math and agentic behaviour,
+  which retrieval cannot supply, stay at or above 0.87.
+- **Long-context retrieval is intact.** On the Q4_K_M GGUF, needle-in-a-haystack retrieval succeeded at 2K, 8K and
+  32K tokens and at depths 0.1, 0.5 and 0.9: 9 of 9 cases
+  ([`artifacts/niah_GLM-5.3-Flash-REAP50-Q4_K_M.json`](artifacts/niah_GLM-5.3-Flash-REAP50-Q4_K_M.json)).
+- **Serving speed.** The NVFP4 build reaches 11.69 tok/s decode on Thor in the companion CUDA server, with an NVFP4
+  dense overlay that costs +1.56% perplexity.
 
-The honest lesson is about the proxy. Even after healing the relative reconstruction residual is
-**0.27** — the intermediate error is dominated by information genuinely deleted with the experts,
-so shaving 8% off it leaves the argmax where it already was. Tokens whose top-1 was going to flip
-had already flipped.
+### What each pass bought
 
-**v2 → v3.** Two specific defects in v2, each addressed:
+**v1 → v2: two real effects of opposite sign that cancelled.** Pass 2 changed the mask and the healing method
+together. The first measurement showed no change (0.8369 vs 0.8370). An ablation that isolated the two found:
 
-1. **A per-expert ranking cannot see interactions.** [arXiv 2609.18916] shows scalar REAP is
-   exactly HOPE with the off-diagonal of `F` zeroed: two experts that duplicate each other are
-   cheap to drop together, two that complement each other are not. v3 minimises `pᵀFp` — the
-   output error a prune set actually causes — over the same accumulators, with no extra forward
-   passes.
-2. **Nothing protected a thin domain.** v2 ran with no domain floor and lost ballast. v3 sets
-   `protect_frac = 0.04`, **measured** off this run's accumulators at the knee of worst-domain
-   retention against interaction cost — not guessed, and not inherited from MiMo's 0.08, which
-   sits where marginal efficiency is 0.43.
+| Change, other factor held fixed | Δ top-1 | Paired z |
+|---|---|---|
+| Pass-2 mask vs pass-1 mask (scalar healing) | **+0.0055** | 9.3 |
+| Per-layer scalar vs per-expert healing (pass-2 mask) | **+0.0056** | 11.8 |
 
-v3 is calibrated on **866,678,064 routed slots** (42 layers × 10 chunks) and heals to a median
-gain of 0.766 across 42 layers with none skipped.
+Per-expert healing reduced held-out reconstruction residual in 41 of 42 layers, yet it was worse end to end. It fits
+`c_j = gate before pruning / gate after`, so it suppresses exactly the experts the post-prune router relies on most.
+v2 ships the per-layer scalar ([`research/HEALING_ABLATION.md`](research/HEALING_ABLATION.md)). This is the fourth
+time on this project that an end-to-end arm caught what layer-level validation missed. Reconstruction residual is not
+a sufficient proxy for selection or healing.
 
-> **v3 has no bio coverage.** The bio domain saw **0** of 866,678,064 routed slots, because every
-> bio source is excluded by licence or clinical scope (`camel-ai/biology`, `tattabio/OG`,
-> `PubMedQA`). Selection scored the 7 live domains. This is a property of the corpus, not a bug,
-> and no amount of recomputation changes it.
+**v2 → v3: unproven.** v3 targets two real gaps in v2.
+- **Interactions.** Scalar REAP is HOPE with the off-diagonal of `F` zeroed (arXiv 2609.18916). v3 minimises `pᵀFp`
+  over the same accumulators, with no extra forward passes.
+- **Protecting thin domains.** v3 sets `protect_frac = 0.04`, measured at the knee of worst-domain retention against
+  interaction cost.
 
-> **Long-context assurance for v3 is at 8192 tokens, not the intended 16384.** A single
-> 16384-token forward needs >93 GiB — attention is quadratic in sequence length and one forward is
-> indivisible, so no amount of blocking or memory reclaim helps. 8192 is still 4× the 2048 tokens
-> the mask was calibrated at. See [wiki/31-pass3-hope-method.md](wiki/31-pass3-hope-method.md).
+It is calibrated on 866,678,064 routed slots. Because of the healing fallback and the missing evaluation above, its
+value is a hypothesis, not a result ([`wiki/31-pass3-hope-method.md`](wiki/31-pass3-hope-method.md)).
 
-## Why this is not a normal compression job
+## Method
 
-| | |
+| Fact | Value |
 |---|---|
-| Model on disk | **328.3 GB** (FP8 E4M3, 128×128 block scales — *not* BF16) |
-| Routed experts | **311.7B params = 96.99% of the model** |
+| Source checkpoint | 328.3 GB, FP8 E4M3 with 128×128 block scales (not BF16) |
+| Routed experts | 311.7B parameters, 96.99% of the model |
 | Host memory | 122 GiB unified (CPU and GPU share one pool) |
-| Free disk | ~110–160 GiB after staging the source |
+| Free disk during the run | ~110–160 GiB after staging the source |
 
-The model **cannot be placed** — not in RAM, not via disk offload, not by any
-`device_map`. So the pipeline never loads it. It streams one decoder layer at a time from
-mmap'd shards, and performs the prune as tensor surgery on safetensors directly.
-
-## Pipeline
+The checkpoint cannot be placed in memory or offloaded with any `device_map`. Pruning in FP8 is lossless on every
+retained weight, because each expert is its own tensor with its own `weight_scale_inv`.
 
 ```
 s00_smoke      structural validation, no real weights
 s01_source     stage 328.3 GB FP8, resumable, byte-verified
-s01b_load      decide placement strategy by arithmetic (verdict here: "stream")
-s02_corpus     build the calibration corpus (runs in parallel with staging)
-s03_saliency   REAP saliency by layer streaming -> raw accumulators per layer
+s01b_load      placement decided by arithmetic (verdict: stream)
+s02_corpus     calibration corpus, permissive licences only
+s03_saliency   REAP saliency by layer streaming -> per-layer, per-domain accumulators
 s04_sweep      re-rank every prune ratio from cached scores; go/no-go gate
-s04b_surgery   tensor-level prune; deletes each source shard once its survivors are written
-s05_heal       first-moment output-scale correction (applied to block scales)
-s06_emit       healed FP8 + adapters  <-  PRIMARY DELIVERABLE
+s04b_surgery   tensor-level prune; each source shard deleted once its survivors are written
+s05_heal       output-scale correction folded into block scales
+s06_emit       healed FP8  <-  primary deliverable
 s07_quantize   NVFP4A16 via compressed-tensors
-s08_document   per-tensor layout + precision map for downstream kernel work
+s08_document   per-tensor layout and precision map for kernel work
 ```
 
-Run it:
+Every stage is idempotent and resumable. State lives in SQLite (`state/state.db`), and the orchestrator retries with
+backoff under `systemd --user`, so it survives SSH loss.
+
+## Engineering findings
+
+- **Unified-memory OOM is invisible to the kernel's accounting.** A touched 2,048 MiB `cudaMalloc` charges 42 MiB to
+  the calling cgroup. The OOM killer therefore never selects the real consumer, and `memory.max` cannot bound it.
+  [`scripts/memguard.sh`](scripts/memguard.sh) polls `MemAvailable` at 2 Hz, drops page cache first, and kills only
+  this project's own stage processes. It never kills by largest RSS, because RSS is the number shown not to reflect
+  who holds the memory ([`wiki/94-memguard-killed-the-wrong-process.md`](wiki/94-memguard-killed-the-wrong-process.md)).
+- **Image-placeholder positions must be excluded from every loss.** Scoring them put teacher NLL at 16.94 against
+  1.00 on real text, and it inverted the sign of every headline number until 2026-08-28
+  ([`wiki/97-evaluation.md`](wiki/97-evaluation.md)).
+- **Attention is Kimi-Linear-style:** 34 KDA linear-attention layers interleaved 3:1 with 11 MLA+DSA layers. A KDA
+  forward needs ~13 GiB of transient memory per 2,048-token sequence. That bounds calibration batch size, and a
+  single 16,384-token forward needs more than 93 GiB.
+- **Expert outputs are near-orthogonal and mostly token-dependent.** The mean |cos(μᵢ, μⱼ)| is 0.091, and only 3.4%
+  of an expert's output energy is its mean. A fixed rescaling can do no better than one coefficient per expert.
+- **Framework support.** `transformers` does not instantiate the MTP block (layer 45). The GGUF keeps it and the
+  safetensors path leaves it unmodified. `llm-compressor` needs a shim for `glm5_next`
+  ([`scripts/glm5_next_support.py`](scripts/glm5_next_support.py)).
+
+## Getting started
+
+**llama.cpp (GGUF).** Stock llama.cpp cannot load these files: GLM-5.3 uses hyper-connections, four residual streams
+mixed by a Sinkhorn-normalised matrix. Use the fork branch the files were validated against:
 
 ```bash
-bash scripts/build_env.sh                       # torch cu130 + transformers 5.16.1 + llm-compressor@main
-systemctl --user enable --now glm53-memguard.service   # see "Memory" below - not optional
+git clone --branch glm5-next-reap50-gguf-v1 https://github.com/patrickbdevaney/llama.cpp
+cmake -S llama.cpp -B llama.cpp/build -DGGML_CUDA=ON && cmake --build llama.cpp/build -j --target llama-server
+llama.cpp/build/bin/llama-server -m GLM-5.3-Flash-REAP50-Q4_K_M.gguf --port 8080
+```
+
+The GGUF model card lists the required flags, memory limits on 128 GB machines, the vision `mmproj`, and the MTP
+draft model.
+
+**Rebuilding the pipeline.** Requires a Jetson AGX Thor or a comparable ≥ 122 GiB unified-memory system, plus about
+500 GB of disk (the 328 GB source plus working space).
+
+```bash
+bash scripts/build_env.sh                               # torch cu130, transformers 5.16.1, llm-compressor@main
+systemctl --user enable --now glm53-memguard.service    # required, see Engineering findings
 systemctl --user enable --now glm53-reap.service
-.venv/bin/python scripts/status.py              # one-screen view, safe any time
+.venv/bin/python scripts/status.py                      # one-screen view, safe at any time
 ```
 
-State lives in `state/state.db` (SQLite: stages, metrics, events, kv). Every stage is
-idempotent and resumable; the orchestrator retries with backoff and survives SSH loss under
-`systemd --user` with lingering enabled.
+## Compatibility
 
-## Memory: why `glm53-memguard.service` is mandatory
-
-Measured on this box (and independently by the DSpark project, 2026-08-20): **a touched
-2048 MiB `cudaMalloc` charges 42 MiB to the calling cgroup.** Tegra unified memory comes from
-the driver's allocator, not the page allocator, so:
-
-- the OOM killer scores by RSS and **never selects the real consumer** — failures leave *no*
-  `oom-kill` line in dmesg
-- the pages are driver-pinned: not page cache, not swappable, not reclaimable
-- `memory.max` cannot bound it, and this kernel has no PSI, so `systemd-oomd` cannot run
-
-`memguard.sh` polls `MemAvailable` at 2 Hz, drops page cache first (this workload's dominant
-term is reclaimable mmap cache), and only then kills — and only ever this project's own
-`run_stage.py` children. It never picks the largest RSS, because RSS is precisely the number
-proven not to reflect who holds the memory.
-
-Two thresholds were tuned **down**, against intuition: the level floor sits *below* the measured
-healthy plateau (2–3 GiB available), because a floor above it kills working runs.
-
-## Measured, against the unpruned teacher
-
-Teacher-forced paired evaluation, **241,516 held-out tokens** the calibration never saw, scored
-against the unpruned model on identical inputs. Figures below are the **pass-1** REAP-50 FP8
-(the published checkpoint); pass 2 supersedes it.
-
-| | |
+| Runtime | State |
 |---|---|
-| **Top-1 agreement** | **0.837** |
-| ΔNLL (student − teacher), mean / median | +0.198 / +0.001 |
-| Top-k KL (teacher ‖ student) | 0.695 |
+| llama.cpp fork `glm5-next-reap50-gguf-v1` on Jetson AGX Thor | Tested: text, vision `mmproj`, MTP draft |
+| Companion CUDA server (NVFP4) on Jetson AGX Thor | Tested: 11.69 tok/s decode |
+| vLLM with compressed-tensors NVFP4 | The format targets it; not tested in this repository |
+| Upstream llama.cpp, other runtimes | Not supported (no hyper-connection operator) |
 
-| domain | predicted retention | measured top-1 | ΔNLL |
-|---|---|---|---|
-| code | 0.728 | **0.921** | +0.048 |
-| math | 0.713 | **0.919** | +0.026 |
-| agentic | 0.747 | **0.863** | +0.182 |
-| science | 0.720 | **0.829** | +0.138 |
-| finance | 0.651 | **0.741** | +0.220 |
-| general / ballast | 0.487 | **0.572** | +1.021 |
-| vision | 0.682 | *532 tokens — unmeasured* | |
+## Limitations
 
-**Pass 2 measures 0.8425 — `+0.0055` over pass 1, 9.3σ paired** — and that number took two corrections
-to arrive at. Pass 2 changed the mask *and* the healing method (per-layer scalar → per-expert
-least-squares vector) together, and first measured 0.8369: a wash. An ablation isolating the two
-`[MEAS 2026-08-29]` found they were two real effects of opposite sign that had cancelled:
+- **General knowledge** drops to 0.58 top-1, the largest loss of any domain. This is by design: it is the
+  capability retrieval can repair.
+- **Vision is unmeasured,** not measured and fine. The held-out image-text records carry ~19 text tokens each against
+  ~3,450 image placeholders.
+- **No biology coverage in v3.** Every biology source was excluded by licence or clinical scope, so the bio domain
+  saw 0 of 866,678,064 routed slots.
+- **v3 long-context assurance is at 8,192 tokens,** not the intended 16,384, because one 16,384-token forward exceeds
+  memory ([`wiki/99-long-context-assurance.md`](wiki/99-long-context-assurance.md)).
+- **Evaluation scope.** All quality numbers are agreement with the teacher, not downstream task benchmarks.
+  Agreement measures how far the student moved, not how capable it is.
+- **Speculative decoding** with the native MTP head (72.3% acceptance) is a net slowdown on both the GGUF and the
+  CUDA server. The cost is the MoE batch curve, not the head
+  (see the [CUDA server](https://github.com/patrickbdevaney/glm-5.3-flash-cuda-server)'s speculation section).
 
-| | mask | healing | top-1 |
-|---|---|---|---|
-| pass 1 (published) | pass 1 | scalar | 0.8370 |
-| **pass 2 (ships)** | **pass 2** | **scalar** | **0.8425** |
-| pass 2, as first built | pass 2 | per-expert | 0.8369 |
+## Repository map
 
-Per-expert healing was **11.8σ worse end-to-end** (McNemar, paired on identical tokens) despite reducing held-out reconstruction residual
-in 41 of 42 layers — it is `c_j = (gate before pruning)/(gate after)`, so it suppresses exactly the
-experts the post-prune router leans on hardest. It has been reverted off the checkpoint; the
-shipped correction is the per-layer scalar. Full analysis in `research/HEALING_ABLATION.md`, and
-it is the fourth time on this project that an end-to-end arm caught something five layers of
-internal validation did not.
+| Path | Contents |
+|---|---|
+| [`scripts/`](scripts/) | Orchestrator (`pipeline.py`), one module per stage (`stages/`), `memguard.sh`, `status.py` |
+| [`wiki/`](wiki/) | Append-only knowledge base. Claims are tagged `[EST]` established, `[VEN]` vendor claim, `[EXT]` our extrapolation, `[OPEN]` no source exists; corrections are appended, never overwritten. `00-log.md` is the running record |
+| [`research/`](research/) | Phase-0 findings, tensor inventory, pass-2 plan and findings, and the negative results; `HEALING_ABLATION.md` is the one to read |
+| [`artifacts/`](artifacts/) | Evaluation JSONs, paired tests, masks, criterion shoot-out, NIAH results |
+| [`gguf_README.md`](gguf_README.md) | Source of the GGUF model card |
+| [`PLAN.md`](PLAN.md), [`STATE.md`](STATE.md) | Implementation plan with revisions; pipeline state |
+| [`systemd/`](systemd/) | The two user services |
+| [`reports/`](reports/), [`research_notes/`](research_notes/) | The 1T-class compression research that led to the DeepSeek-V4.1 project |
 
-**Per-domain retention was computed from routing statistics before any of these tokens were
-scored, and predicts the measured agreement at Pearson r = 0.942.** That is the strongest
-validation here of REAP itself — and it confirms empirically what the prune was designed to do:
-the damage lands on generic ballast (0.572), the one capability retrieval can repair, while code,
-maths and agentic behaviour — which retrieval cannot supply — hold above 0.86.
-
-Two things this is **not**. It is teacher-forced agreement, not capability: it measures how far
-the student moved, not whether it is smart. And vision is *unmeasured*, not measured-and-fine —
-the held-out image-text records carry ~19 real text tokens each against ~3,450 image placeholders.
-See `wiki/97-evaluation.md`, including the bug that made every one of these numbers wrong until
-2026-08-28.
-
-## Hard-won facts
-
-- **The published checkpoint is FP8, not BF16.** The 642 GB BF16 repo elsewhere on the Hub is a
-  dequantised upcast carrying no extra information. Pruning in FP8 is *lossless* on every
-  retained weight — experts are per-expert tensors with their own `weight_scale_inv`.
-- **The attention stack is Kimi Linear's**: 34 KDA linear-attention layers interleaved 3:1 with
-  11 MLA+DSA layers. That gives REAP a published precedent on this architecture family.
-- **A KDA forward costs ~13 GiB of transient memory per 2048-token sequence**, linear in batch.
-  This bounds calibration batch size independently of the weights, and is a concrete argument
-  for hand-written kernels in any serving work.
-- **transformers does not instantiate the MTP block** (layer 45). It is excluded and left
-  unmodified upstream rather than inconsistently pruned.
-- **Image-placeholder positions must be excluded from any loss you compute.** Their embedding is
-  replaced by an image feature before layer 0 and the training objective masks them; scoring them
-  put teacher NLL at 16.94 against 1.00 on real text and inverted the sign of every headline
-  evaluation number. See `wiki/97-evaluation.md`.
-- **Expert outputs are near-orthogonal and mostly token-dependent**: mean |cos(μ_i,μ_j)| = 0.091,
-  and only 3.4% of an expert's output energy is its mean. Together these say a *fixed* rescaling
-  cannot do better than one coefficient per expert — which is what healing now fits.
-- `llm-compressor` needs a shim for `glm5_next` (`scripts/glm5_next_support.py`): auto-derivation
-  loses `swiglu_limit`, which `_apply_gate` reads.
-
-## Layout
-
-```
-scripts/            pipeline.py (orchestrator), stages/, memguard.sh, status.py, guard.py
-scripts/stages/     one module per stage, each with run() -> dict
-wiki/               append-only knowledge base; 00-log.md is the running record
-research/           FINDINGS.md (Phase 0), tensor inventory, and the negative results:
-                    HEALING_ABLATION.md is the one worth reading
-PLAN.md             implementation plan and its revisions
-systemd/            the two user services
-```
-
-`wiki/` is the substantive artifact: every claim is tagged `[EST]` established / `[VEN]` vendor
-claim / `[EXT]` our extrapolation / `[OPEN]` no source exists, and corrections are appended
-rather than overwritten.
-
-## Not included
-
-Weights. Calibration corpora. Anything under `corpus/`, `output/`, `source/`,
+Not included: weights, calibration corpora, and anything under `corpus/`, `output/`, `source/` or
 `artifacts/saliency/`.
 
-## Licence
+## License
 
-Pipeline code: MIT. `zai-org/GLM-5.3-Flash` is MIT, and the calibration corpus is
-permissive-licence-only by design so a derivative can stay MIT.
+- **Pipeline code:** MIT ([`LICENSE`](LICENSE)).
+- **Weights:** MIT, inherited from [`zai-org/GLM-5.3-Flash`](https://huggingface.co/zai-org/GLM-5.3-Flash).
+- **Calibration corpus:** permissive licences only, by design, so that the derivative can stay MIT.
 
-## Related: DeepSeek-V4.1-Flash for Thor (design)
-The 1T-class compression research (`reports/Compressing 1T MoE for Thor.md`) now lives in its own repo:
-[deepseek-v4.1-flash-reap-thor](https://github.com/patrickbdevaney/deepseek-v4.1-flash-reap-thor).
+## Citation
+
+```bibtex
+@misc{devaney2026glm53reap,
+  title  = {glm-5.3-reap: GLM-5.3-Flash pruned to 144 experts for a single Jetson AGX Thor},
+  author = {Devaney, Patrick},
+  year   = {2026},
+  url    = {https://github.com/patrickbdevaney/glm-5.3-reap}
+}
+```
+
+This work builds on REAP (router-weighted expert activation pruning, Lasby et al., 2025, arXiv:2510.13999), HOPE
+(arXiv:2609.18916), Z.ai's GLM-5.3-Flash, llm-compressor, and llama.cpp.
